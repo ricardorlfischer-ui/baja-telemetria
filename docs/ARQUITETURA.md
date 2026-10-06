@@ -148,6 +148,50 @@ melhor largada, Crr/CdA, T máx da CVT, regime previsto...). Chaves estáveis (e
 `susp.travel.FL`, `cvt.tmax`) porque a página "Comparar sessões" e o servidor guardam isso.
 Mudou a conta? Aumente `SUMMARY_VERSION` (o servidor recalcula).
 
+### 3.8 Explicações e sensores (`sensors.ts`, `explain.ts`) — **requisito central**
+
+Todo número, gráfico e correlação usado para o projeto do carro novo diz **de quais sensores
+ele saiu**, para a equipe e para mostrar aos juízes que a aquisição serve ao projeto.
+
+- `SENSORS`: catálogo dos sensores e entradas do carro, cada um com `id`, nome, onde fica,
+  como chega no log (canal da FT / CAN), taxa, resolução e para que serve. Ids:
+  `gps` (módulo GPS → PIC → expander, entradas 7/8 da FT; ou lat/lon no BUSMASTER),
+  `shock_fl`, `shock_fr`, `shock_rl`, `shock_rr` (potenciômetros lineares; a FT também
+  grava a velocidade), `wheel` (velocidade da roda), `cvt_temp` (temperatura da CVT),
+  `logger` (FT450: relógio e taxa de gravação), `car_data` (medidas do carro digitadas:
+  massa, geometria, relação roda/amortecedor), e os **sugeridos** (ainda não instalados,
+  `planned: true`): `engine_rpm`, `imu`, `brake_pressure`, `steering`, `throttle` — com o
+  que cada um destravaria (ex.: rotação + roda = relação da CVT).
+- `sensorAvailability(ctx)`: quais sensores este log tem (pelos papéis de `dataQuality`).
+- `EXPLAIN`: catálogo de explicações por id (`susp.naturalFreq`, `power.wheelPower`,
+  `cvt.thermalModel`, `chart.gg`, ...). Cada entrada: `title`, `what` (o que mostra),
+  `sensors: { id, need: 'required' | 'alternative' | 'improves', why }[]`, `how`
+  (como é calculado, com a fórmula), `design` (como usar no projeto do carro do ano que
+  vem — concreto: que peça/decisão isso dimensiona), `limits`, `test` (ensaio para medir
+  melhor), `related` (outros ids). Texto em português, claro para um juiz de projeto.
+- Os relatórios (3.4) e o resumo (3.6) marcam cada linha, bloco, métrica e gráfico com
+  `explain: '<id>'` e `sensors: SensorId[]` (os que **de fato** entraram na conta nesta
+  sessão — ex.: aceleração pela roda ou pelo GPS). Teste: todo `explain` usado existe no
+  catálogo e todo sensor citado existe em `SENSORS`.
+- `sensorMatrix()`: sensor → análises que ele permite → decisões de projeto (para a página
+  de aquisição e a apresentação).
+
+```ts
+type SensorId = 'gps' | 'shock_fl' | 'shock_fr' | 'shock_rl' | 'shock_rr' | 'wheel' | 'cvt_temp' | 'logger' | 'car_data'
+              | 'engine_rpm' | 'imu' | 'brake_pressure' | 'steering' | 'throttle';
+interface Sensor { id: SensorId; name: string; short: string; where: string; signal: string; rate: string;
+  resolution?: string; purpose: string; planned?: boolean }
+const SENSORS: Record<SensorId, Sensor>;
+interface ExplainSensor { id: SensorId; need: 'required' | 'alternative' | 'improves'; why: string }
+interface ExplainEntry { id: string; title: string; what: string; sensors: ExplainSensor[]; how: string;
+  design: string; limits?: string; test?: string; related?: string[] }
+const EXPLAIN: Record<string, ExplainEntry>;
+getExplain(id: string): ExplainEntry | undefined;
+sensorAvailability(ctx: SessionContext): Record<SensorId, 'present' | 'absent' | 'planned'>;
+sensorMatrix(): { sensor: SensorId; items: { explain: string; decision: string }[] }[];
+// em linhas/blocos/métricas/gráficos dos relatórios:  { ..., explain?: string; sensors?: SensorId[] }
+```
+
 ### 3.7 Fórmulas (`formulas.ts`)
 
 Canais calculados pelo usuário, sem `eval`: parser próprio com `+ - * / ^`, parênteses,
@@ -242,6 +286,22 @@ existir) e `remote.ts` (API do servidor, token Bearer). Modo remoto quando o app
 pelo próprio servidor (`/api/info` responde) ou quando há um endereço salvo em
 Preferências; senão local. Ao adicionar uma sessão local, o resumo é calculado no
 navegador; no remoto, pelo servidor.
+
+### 4.6 Cards de explicação (requisito central)
+
+- Componente `ExplainCard` (Drawer do Mantine à direita, ~480 px; tela cheia no celular)
+  aberto por `useExplain().open(id, { sensors })`. Mostra: título; "O que mostra";
+  **"Sensores usados"** (chips com ícone de cada sensor: verde = presente neste log,
+  cinza = ausente, tracejado = sugerido, e o porquê de cada um); "Como é calculado"
+  (fórmula); **"Para o carro do ano que vem"**; "Limitações"; "Teste para medir melhor";
+  "Veja também" (links para outros cards).
+- **Todo** gráfico (`ChartCard`), bloco de número (`StatTile`), linha da ficha do projeto,
+  métrica da comparação e item de qualidade tem o botão ⓘ e o próprio título clicável que
+  abre o card. Os chips dos sensores também aparecem pequenos ao lado do título dos
+  gráficos e nas linhas da ficha.
+- Página Aquisição tem a aba **"Sensores e projeto"**: matriz sensor × análise × decisão
+  de projeto (`sensorMatrix`), com cada célula abrindo o card — pronta para mostrar aos juízes.
+- A Ficha do carro exportada (CSV e impressão) inclui a coluna "Sensores".
 
 ### 4.5 Visual
 
