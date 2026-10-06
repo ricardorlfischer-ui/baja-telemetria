@@ -25,8 +25,15 @@ const afterTable = (html: string) => decode(html.includes('</table>') ? html.sli
 const elText = (id: string) => { const e = L.el(id); return e.innerHTML ? decode(e.innerHTML) : e.textContent; };
 
 /** Spec do relatório sem os campos que o antigo não tem (ids/papéis/explicações). */
-const IGN = ['color', 'colors', 'id', 'role', 'roles', 'key', 'title', 'explain', 'sensors'];
+const IGN = ['color', 'colors', 'id', 'role', 'roles', 'key', 'title', 'explain', 'sensors', 'tipX', 'fmtY', 'barTips'];
 const cmpPlot = (legacySpec: unknown, p: SuspPlot) => same(legacySpec, p, { ignore: IGN });
+/** Tooltips: o tipBar antigo de cada barra = <b>title</b><br>text do relatório. */
+const tipDiffs = (spec: any, p: SuspPlot): string[] => {
+  const out: string[] = [];
+  if (!!spec?.tipBar !== !!p.barTips) out.push('tipBar ≠ barTips');
+  if (spec?.tipBar && p.barTips) p.barTips.forEach((b, j) => { const o = spec.tipBar(j), n = `<b>${b.title}</b><br>${b.text}`; if (o !== n) out.push(`tipBar(${j}): ${o} ≠ ${n}`); });
+  return out;
+};
 
 /* ------------------------------------------------------------------ sessões */
 interface Case { label: string; O: LegacyState; N: SessionContext }
@@ -109,6 +116,7 @@ function compare(O: LegacyState, N: SessionContext, w: Win): { rep: SuspensionRe
   chk('títulos curso', pt, rep.posHist.map(p => p.title));
   rep.velHist.forEach(p => plot(p.key, L.el(p.key).plot, p));
   rep.posHist.forEach(p => plot(p.key, L.el(p.key).plot, p));
+  [...rep.velHist, ...rep.posHist].forEach(p => { const t = tipDiffs(L.el(p.key).plot, p); if (t.length) d.push(`${p.key} tooltips: ${t.slice(0, 3).join(' | ')}`); });
   /* rolagem e arfagem */
   chk('grNote', L.el('grNote').textContent, rep.body.note);
   chk('grRollT', elText('grRollT'), rep.body.rollTitle);

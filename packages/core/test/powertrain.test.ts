@@ -52,7 +52,7 @@ function compare(O: LegacyState, N: SessionContext, w: Win, opts: PowertrainOpts
   expectPlot(o.slip, r.slip, `${where} pwSlip`);
   /* coast-down */
   const c = r.coast!;
-  expect(o.cdSel.options.map((x: any) => [x.value, x.text]), `${where} cdSel`).toEqual(c.options.map(x => [x.value, x.label]));
+  expect((o.cdSel.options as any[]).map((x: any) => [x.value, x.text]), `${where} cdSel`).toEqual(c.options.map(x => [x.value, x.label]));
   expect(o.cdSel.value, `${where} cdSel.value`).toBe(c.selected);
   expect(o.cdApply, `${where} cdApply`).toBe(!c.fit);
   if (!c.fit) expect(strip(o.cdRes), `${where} cdRes`).toBe(c.empty);

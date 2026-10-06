@@ -71,7 +71,8 @@ export interface DesignAxleFacts {
   p95C: number;                  /* mm/s, média dos p95 de compressão (NaN sem dados) */
   p95R: number;                  /* mm/s, média dos p95 de extensão */
   vmaxC: number;                 /* mm/s, máx. compressão */
-  sensors: SensorId[];
+  sensors: SensorId[];           /* do curso usado */
+  bottomSensors: SensorId[];     /* das batidas no fim de curso ([] sem curso) */
 }
 
 /** Números crus da ficha (NaN/null = não deu para calcular). Reaproveitados pelo resumo. */
@@ -220,18 +221,20 @@ export function designReport(ctx: SessionContext, i0: number, i1: number): Desig
       const tS = sens(kS, stroke > 0 && 'car_data');
       row('Suspensão', `Curso usado ${nm}`, `${used.toFixed(0)} mm${stroke > 0 ? ` (${(used / stroke * 100).toFixed(0)} % de ${stroke})` : ''}`, 'máx. − mín. da posição no trecho', `curso mínimo sugerido: ${sug} mm (+15 %)`,
         'susp.travelUsed', tS);
-      let nbOut: number | null = null;
+      let nbOut: number | null = null, bS: SensorId[] = [];
       if (stroke > 0) {
         const nb = nbOut = bottomOuts(t, A.susp, car, i0, i1).filter(b => ks.some(k => k.id === b.id)).length;
-        /* o fim de curso usa a posição absoluta: estático medido parado (GPS) entra na conta */
-        const bS = sens(tS, ks.some(k => k.staticFromStop) && sg.stop);
+        /* o fim de curso usa a posição absoluta = estático + deslocamento: com compPos o
+         * estático cancela (é a própria posição); com a compressão invertida vale
+         * 2·estático − posição e o estático medido parado (GPS) entra na conta */
+        bS = sens(tS, !A.cfg.susp.compPos && ks.some(k => k.staticFromStop) && sg.stop);
         if (nb) rec(`A ${nm === 'diant.' ? 'dianteira' : 'traseira'} bateu no fim de curso ${nb} vez(es): aumentar o curso, a rigidez ou usar batente progressivo. Curso usado ${used.toFixed(0)} de ${stroke} mm.`, 'susp.bottomOut', bS);
         else if (used / stroke < 0.6) rec(`A ${nm === 'diant.' ? 'dianteira' : 'traseira'} usou só ${(used / stroke * 100).toFixed(0)} % do curso: dá para amaciar a mola ou baixar o carro (se a pista do log for representativa).`, 'susp.travelUsed', tS);
       }
       const vS = sens(kS, mv && sg.stop);
       row('Suspensão', `Velocidade do amortecedor ${nm}`, `${fx(mean(vc), 0)} comp. / ${fx(mean(vr), 0)} ext. mm/s (p95)`, `máx. compressão ${vmaxC.toFixed(0)} mm/s`, 'faixa de trabalho das válvulas',
         'susp.shockVelocity', vS);
-      facts.axle[ax] = { used, stroke, pct: stroke > 0 ? used / stroke * 100 : null, suggested: sug, bottomOuts: nbOut, p95C: mean(vc), p95R: mean(vr), vmaxC, sensors: tS };
+      facts.axle[ax] = { used, stroke, pct: stroke > 0 ? used / stroke * 100 : null, suggested: sug, bottomOuts: nbOut, p95C: mean(vc), p95R: mean(vr), vmaxC, sensors: tS, bottomSensors: bS };
     });
     const gr = gradients(A.ang || {}, A.acc || {}, mv, i0, i1);
     if (gr.roll) {
@@ -253,7 +256,8 @@ export function designReport(ctx: SessionContext, i0: number, i1: number): Desig
       const top = J.reduce((a, b) => (b.T > a.T ? b : a));
       let vl = 0;
       J.forEach(j => Object.values(j.shock).forEach(s => { if (s.vmax > vl) vl = s.vmax; }));
-      const jS = sens(actS, sg.vel);
+      /* o limiar de "no ar" é relativo ao estático (medido parado pelo GPS, se deu) */
+      const jS = sens(actS, sg.vel, act.some(k => k.staticFromStop) && 'gps');
       facts.jumps = { n: J.length, T: top.T, h: top.h, vland: top.vland, vShock: vl };
       row('Suspensão', 'Saltos', `${J.length} · maior ${(top.T * 1000).toFixed(0)} ms no ar, ${(top.h * 100).toFixed(0)} cm`, 'todos os amortecedores estendidos ao mesmo tempo', `pouso a ${top.vland.toFixed(1)} m/s; amortecedor até ${vl.toFixed(0)} mm/s`,
         'susp.jumps', jS);

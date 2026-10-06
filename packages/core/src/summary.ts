@@ -55,7 +55,7 @@
  *   power.launch20kmh         s      2  power.launch            0–20 km/h da mesma largada
  *   power.launchSlip          %      0  power.launch            escorregamento médio nos 10 m
  *   power.brakeMax            g      2  dyn.gg                  frenagem máxima
- *   power.latMax              g      2  dyn.gg                  aceleração lateral máxima
+ *   power.latMax              g      2  dyn.gg                  aceleração lateral máxima (null sem GPS)
  *   power.crr                 —      3  power.coastDown         coeficiente de resistência ao rolamento
  *   power.cda                 m²     2  power.coastDown         área de arrasto (null se o ajuste deu ≤ 0)
  *   CVT
@@ -75,8 +75,10 @@ import { quant } from './analysis';
 import { SENSORS, SENSOR_IDS, sensorAvailability } from './sensors';
 import { designReport, type DesignReport } from './reports/design';
 
-/** Versão das contas do resumo (o servidor recalcula resumos com versão antiga). */
-export const SUMMARY_VERSION = 1;
+/** Versão das contas do resumo (o servidor recalcula resumos com versão antiga).
+ *  2: power.latMax = null sem aceleração lateral (antes 0); sensores das largadas (distância
+ *     do GPS com roda de tração), dos saltos (estático medido parado) e do fim de curso. */
+export const SUMMARY_VERSION = 2;
 
 export type SummaryGroup = 'Sessão' | 'Suspensão' | 'Trem de força' | 'CVT' | 'Qualidade';
 
@@ -148,9 +150,12 @@ export function sessionSummary(ctx: SessionContext, design?: DesignReport): Sess
     m(SU, `susp.velComp95.${ax}`, `Vel. amortecedor p95 compressão ${nm}`, a?.p95C, 'mm/s', 0, 'susp.shockVelocity', vS);
     m(SU, `susp.velExt95.${ax}`, `Vel. amortecedor p95 extensão ${nm}`, a?.p95R, 'mm/s', 0, 'susp.shockVelocity', vS);
     m(SU, `susp.velCompMax.${ax}`, `Vel. máx. de compressão ${nm}`, a?.vmaxC, 'mm/s', 0, 'susp.shockVelocity', vS);
-    m(SU, `susp.bottomOuts.${ax}`, `Batidas no fim de curso ${nm}`, a?.bottomOuts, '', 0, 'susp.bottomOut', tS);
+    m(SU, `susp.bottomOuts.${ax}`, `Batidas no fim de curso ${nm}`, a?.bottomOuts, '', 0, 'susp.bottomOut', a ? a.bottomSensors : []);
   });
-  const J = f.jumps, jS = sens(f.shocks.map(id => 'shock_' + id.toLowerCase() as SensorId), velS);
+  /* saltos: amortecedores (o limiar de "no ar" é relativo ao estático, medido parado pelo GPS
+   * se deu) + velocidade do carro */
+  const J = f.jumps, jS = sens(f.shocks.map(id => 'shock_' + id.toLowerCase() as SensorId), velS,
+    ctx.susp.shocks.some(k => k.active && k.staticFromStop) && 'gps');
   m(SU, 'susp.jumps', 'Saltos', J?.n, '', 0, 'susp.jumps', jS);
   m(SU, 'susp.jumpAirMax', 'Maior tempo no ar', J && J.T * 1000, 'ms', 0, 'susp.jumps', jS);
   m(SU, 'susp.jumpHeightMax', 'Altura do maior salto', J && J.h * 100, 'cm', 0, 'susp.jumps', jS);
@@ -198,14 +203,17 @@ export function sessionSummary(ctx: SessionContext, design?: DesignReport): Sess
   }
   m(PT, 'power.traction', 'Força trativa máx.', Ftr, 'N', 0, 'power.tractionForce', sens(velS, 'car_data'));
   const lS = rowS('Melhor largada');
-  m(PT, 'power.launches', 'Largadas', f.launches, '', 0, 'power.launch', velS);
+  /* a largada só conta quando chega a 10 m: a distância é a do GPS com roda de tração e GPS ok
+   * (como na ficha), senão a integral da velocidade */
+  m(PT, 'power.launches', 'Largadas', f.launches, '', 0, 'power.launch', sens(velS, car.wheelDriven && track.ok && 'gps'));
   m(PT, 'power.launch30', 'Melhor 0–30 m', f.launch30, 's', 2, 'power.launch', lS);
   m(PT, 'power.launch20kmh', '0–20 km/h (melhor largada)', f.launch20kmh, 's', 2, 'power.launch', lS);
   m(PT, 'power.launchSlip', 'Escorregamento na largada (10 m)', f.launchSlip !== null ? f.launchSlip * 100 : null, '%', 0, 'power.launch', sens('wheel', 'gps'));
-  /* lateral: roda × guinada do GPS quando há roda, senão a trajetória do GPS (A.acc.lat) */
+  /* lateral: roda × guinada do GPS quando há roda, senão a trajetória do GPS (A.acc.lat). Sem
+   * aceleração lateral nenhuma (sem GPS) a ficha antiga escreve "0.00 g"; aqui é null (não medido) */
   const latS: SensorId[] = veh.wheel && veh.ay ? ['gps', 'wheel'] : ctx.acc.lat ? ['gps'] : [];
   m(PT, 'power.brakeMax', 'Frenagem máx.', f.brakeMax, 'g', 2, 'dyn.gg', sens(velS));
-  m(PT, 'power.latMax', 'Aceleração lateral máx.', f.latMax, 'g', 2, 'dyn.gg', latS);
+  m(PT, 'power.latMax', 'Aceleração lateral máx.', ctx.acc.lat ? f.latMax : null, 'g', 2, 'dyn.gg', latS);
   const kS = rowS('Resistência ao rolamento e arrasto');
   m(PT, 'power.crr', 'Crr (resistência ao rolamento)', f.coast?.crr, '', 3, 'power.coastDown', kS);
   m(PT, 'power.cda', 'CdA (área de arrasto)', f.coast && f.coast.cda > 0 ? f.coast.cda : null, 'm²', 2, 'power.coastDown', kS);

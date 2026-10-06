@@ -134,7 +134,7 @@ export function expectPlot(spec: any, p: RepPlot | null, where: string): void {
   chk(spec.tipX, p!.tipX, true, 'tipX');
   chk(spec.fmtY, p!.fmtY, false, 'fmtY');
   expect(!!spec.tipBar, `${where} tipBar`).toBe(!!p!.barTips);
-  if (spec.tipBar) p!.barTips!.forEach((l, j) => expect(spec.tipBar(j), `${where} tipBar(${j})`).toBe(`<b>${l[0]}</b><br>${l[1]}`));
+  if (spec.tipBar) p!.barTips!.forEach((l, j) => expect(spec.tipBar(j), `${where} tipBar(${j})`).toBe(`<b>${l.title}</b>${l.note ? ' ' + l.note : ''}<br>${l.text}`));
   expect(!!spec.onClick, `${where} onClick`).toBe(!!p!.clickSeek);
 }
 

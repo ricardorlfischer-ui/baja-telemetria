@@ -37,10 +37,11 @@ export interface LapReport {
   sensors: SensorId[];
 }
 
+/* estado vazio: nada foi calculado, então nenhum sensor entrou na conta (o card diz o que falta) */
 const emptyLaps = (msg: string): LapReport => ({
   ok: false, empty: msg, options: [], best: -1, cmp: -1, ref: -1, lap: null, refLap: null, summary: '', fin: NaN,
   compare: null, profileCmp: null, profileRef: null, seg: null, speed: null, delta: null, sectors: null,
-  explain: 'laps.compare', sensors: LAP_SENSORS,
+  explain: 'laps.compare', sensors: [],
 });
 
 /** Comparação de duas voltas (= renderLaps). cmp/ref: índices escolhidos nos seletores
@@ -55,7 +56,10 @@ export function lapReport(ctx: Pick<SessionContext, 'S' | 'track' | 'laps'>, cmp
   const options = laps.map((l, k) => ({ value: k, label: `Volta ${l.n} · ${fmtTime(l.time)}${k === best ? ' (melhor)' : ''}` }));
   const has = (k: number | null | undefined): k is number => k !== null && k !== undefined && !!laps[k];
   const kr = has(ref) ? ref : best;
-  const kc = has(cmp) ? cmp : selLap >= 0 && selLap !== best ? selLap : best === 0 ? 1 : 0;
+  /* volta selecionada que não existe: o <select> do antigo fica sem valor ('') e a conta usa
+   * laps[+''] = a volta 0 */
+  const k0 = selLap >= 0 && selLap !== best ? selLap : best === 0 ? 1 : 0;
+  const kc = has(cmp) ? cmp : laps[k0] ? k0 : 0;
   const lr = laps[kr], lc = laps[kc];
   const pr = lapProfile(ctx.S, tr, lr), pc = lapProfile(ctx.S, tr, lc);
   const c = compareLaps(pr, pc, 1);
@@ -81,7 +85,7 @@ export function lapReport(ctx: Pick<SessionContext, 'S' | 'track' | 'laps'>, cmp
     bars: { x0: 0.5, w: 1, y: ab, roles: Array.from(seg, v => (v > 0 ? 'pos' : 'neg')) },
     legend: [{ label: 'perdeu tempo', role: 'pos' }, { label: 'ganhou tempo', role: 'neg' }],
     xLabel: 'trecho (1 = logo após a largada)', yLabel: '|Δ| no trecho (s)',
-    barTips: Array.from(seg, (s, k) => [`Trecho ${k + 1} (${(D * k / N).toFixed(0)}–${(D * (k + 1) / N).toFixed(0)} m)`, `${s > 0 ? 'perdeu' : 'ganhou'} ${Math.abs(s).toFixed(2)} s`]),
+    barTips: Array.from(seg, (s, k) => ({ title: `Trecho ${k + 1}`, note: `(${(D * k / N).toFixed(0)}–${(D * (k + 1) / N).toFixed(0)} m)`, text: `${s > 0 ? 'perdeu' : 'ganhou'} ${Math.abs(s).toFixed(2)} s` })),
   };
   return {
     ok: true, options, best, cmp: kc, ref: kr, lap: lc, refLap: lr, summary, fin,
@@ -123,7 +127,7 @@ export interface LapTableReport extends Omit<RepTable, 'rows'> {
 /** Tabela de voltas da barra lateral (= buildLaps de app.js). selLap = volta selecionada. */
 export function lapTable(ctx: Pick<SessionContext, 'track' | 'laps' | 'cfg'>, selLap = -1): LapTableReport {
   const base = { id: 'laps', explain: 'laps.table', sensors: LAP_SENSORS, columns: ['Volta', 'Tempo', 'Δ melhor', 'V máx', 'V média', 'Dist.'] };
-  const fail = (msg: string): LapTableReport => ({ ...base, ok: false, empty: msg, rows: [], best: NaN, note: '' });
+  const fail = (msg: string): LapTableReport => ({ ...base, sensors: [], ok: false, empty: msg, rows: [], best: NaN, note: '' });
   if (!ctx.track || !ctx.track.ok) return fail('Sem trajetória de GPS neste log.');
   if (!ctx.cfg.line) return fail('Defina a linha de largada no mapa (“Desenhar” ou “Automática”) para separar as voltas.');
   if (!ctx.laps.length) return fail('Nenhuma volta completa cruzando a linha. Ajuste a linha ou a volta mínima.');

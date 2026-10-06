@@ -160,7 +160,7 @@ function recompute(BT: any, S: any, cfg: any): LegacyState {
   if (A.ang.rollF) A.susp.channels.push(sc('susp:rollF', 'Rolagem diant. (+ = esq. comprimida)', '°', A.ang.rollF));
   if (A.ang.rollR) A.susp.channels.push(sc('susp:rollR', 'Rolagem tras. (+ = esq. comprimida)', '°', A.ang.rollR));
   const rough = BT.roughness(S.t, A.susp);
-  if (rough) A.susp.channels.push(sc('susp:rough', 'Rugosidade (vel. amortecedores RMS 1 s)', 'mm/s', rough));
+  if (rough) A.susp.channels.push(sc('susp:rough', 'Rugosidade (vel. amortecedores, RMS 1 s)', 'mm/s', rough));
   const derived = buildDerived(BT, A);
   A.all = derived.concat(A.veh.channels, A.susp.channels, S.channels);
   A.all.forEach((c: any) => { c.group = c.group || (c.src === 'gps' ? GPS_GROUP : 'Do log'); });

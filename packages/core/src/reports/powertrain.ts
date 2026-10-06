@@ -13,8 +13,9 @@ import { quant } from '../analysis';
 import { idxAt, range } from '../util';
 
 /* ================================================================ tipos comuns */
-/** Formato de um número no tooltip: v.toFixed(dec) + suffix (sign: '+' na frente se ≥ 0). */
-export interface RepFmt { dec: number; suffix: string; sign?: boolean }
+/** Formato de um número no tooltip: v.toFixed(dec) + suffix (sign: '+' na frente se ≥ 0;
+ *  prec: v.toPrecision(prec) no lugar do toFixed, como nos espectros do antigo). */
+export interface RepFmt { dec: number; suffix: string; sign?: boolean; prec?: number }
 
 /** Bloco de número (tile do app antigo): rótulo, valor em negrito e o texto pequeno embaixo. */
 export interface RepTile {
@@ -34,6 +35,8 @@ export interface RepBars { x0: number; w: number; y: Float64Array; roles?: strin
 export interface RepHLine { id: string; role?: string; y: number; label: string }
 export interface RepMarker { x: number; id?: string; role?: string; label?: string }
 export interface RepLegend { label: string; role: string }
+/** Tooltip de uma barra: <b>title</b> note<br>text. */
+export interface RepBarTip { title: string; note?: string; text: string }
 
 /** Spec de gráfico no formato do BT.Plot (legacy/js/plots.js), sem cores nem callbacks. */
 export interface RepPlot {
@@ -57,7 +60,7 @@ export interface RepPlot {
   legend?: RepLegend[];          /* legenda explícita (senão: séries com rótulo, se > 1) */
   tipX?: RepFmt;                 /* 1ª linha do tooltip: <b>texto</b> */
   fmtY?: RepFmt;
-  barTips?: string[][];          /* tooltip de cada barra: 1ª linha em negrito */
+  barTips?: RepBarTip[];         /* tooltip de cada barra */
   clickSeek?: boolean;           /* clique no gráfico = ir ao ponto (ver laps.ts) */
 }
 
@@ -76,7 +79,7 @@ export interface RepTable { id: string; explain: string; sensors: SensorId[]; co
 export interface RepText { text: string; explain: string; sensors: SensorId[] }
 
 /** Texto do tooltip/eixo no formato RepFmt (a página usa para tipX/fmtY). */
-export const fmtRep = (f: RepFmt, v: number): string => (f.sign && v >= 0 ? '+' : '') + v.toFixed(f.dec) + f.suffix;
+export const fmtRep = (f: RepFmt, v: number): string => (f.sign && v >= 0 ? '+' : '') + (f.prec ? v.toPrecision(f.prec) : v.toFixed(f.dec)) + f.suffix;
 
 /** Junta listas de sensores sem repetir (aceita false/null para os condicionais). */
 export const mergeSensors = (...l: (SensorId | SensorId[] | false | null | undefined)[]): SensorId[] => {

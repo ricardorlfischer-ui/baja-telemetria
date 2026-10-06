@@ -1,21 +1,22 @@
 /* Pipeline da sessão: configuração com os padrões + recompute() do app antigo
- * (legacy/js/app.js: setSession(), recompute(), buildDerived(), lapTimeArray()) e o trecho
- * analisado (Analysis.range() de legacy/js/analysisui.js).
+ * (legacy/js/app.js: setSession(), recompute(), buildDerived(), lapTimeArray()), o trecho
+ * analisado (Analysis.range() de legacy/js/analysisui.js), o CSV processado (exportCSV()) e
+ * os textos do diálogo de Pista e GPS (cfgInfo()).
  *
  * Ordem do recompute (a mesma do app antigo, os números não mudam):
  *   trajetória → voltas → parado → dinâmica pelo GPS → veículo (roda/GPS)
  *   → parado pela velocidade (sem GPS) → acelerações → suspensão → ângulos
  *   → canais susp:pitch/rollF/rollR/rough → derivados do GPS
  *   all = derivados do GPS + veículo + suspensão + log (+ fórmulas do usuário no fim). */
-import type { AnalysisConfig, CarConfig, Channel, Formula, Session, SuspConfig, TrackConfig } from './types';
+import type { AnalysisConfig, CarConfig, Channel, Formula, SensorId, Session, SuspConfig, TrackConfig } from './types';
 import type { Lap, Track } from './gps';
 import type { Dyn, Susp } from './analysis';
 import type { Acc, Angles, Veh } from './vehicle';
-import { DEFAULT_CFG, guessGpsChannels, computeTrack, computeLaps, autoLine, smooth } from './gps';
+import { DEFAULT_CFG, guessGpsChannels, computeTrack, computeLaps, autoLine, smooth, spanOf } from './gps';
 import { DEFAULT_SUSP, stoppedMask, gpsDynamics, suspPrep, deltaToBest } from './analysis';
 import { DEFAULT_CAR, vehPrep, bodyAngles, roughness } from './vehicle';
 import { finishChannel } from './parsers';
-import { idxAt } from './util';
+import { idxAt, decimalsFor } from './util';
 import { applyFormulas, type FormulaIssue } from './formulas';
 
 /** Configuração como vem da interface/armazenamento: qualquer campo pode faltar (e as
@@ -156,3 +157,63 @@ export const rangeOf = (ctx: Pick<SessionContext, 'S' | 'laps'>, mode: RangeMode
 
 /** Canal pela chave (A.channel do app antigo). */
 export const getChannel = (ctx: Pick<SessionContext, 'all'>, key: string): Channel | undefined => ctx.all.find(c => c.key === key);
+
+/** Textos do diálogo de Pista e GPS (cfgInfo() de legacy/js/app.js), sem HTML: vão coberto e
+ *  resolução por passo do código 0–255, de onde a posição está sendo lida e a nota da
+ *  calibração das entradas 7/8 na FT. */
+export interface TrackConfigInfo {
+  span: { x: number; y: number };    /* m, vão coberto (spanOf) */
+  stepX: number;                     /* cm por passo do código em X (vão ÷ 255) */
+  stepY: number;
+  resolution: { text: string; explain: string; sensors: SensorId[] };
+  source: string;                    /* de onde vem a posição (ou o motivo de não ter trajetória) */
+  calibration: { title: string; items: string[]; explain: string; sensors: SensorId[] };
+}
+
+/** Textos de cfgInfo() para a configuração (e a sessão aberta, se houver). Passe o ctx. */
+export function trackConfigInfo(ctx: { S?: Session | null; cfg: TrackConfig; track?: Track | null }): TrackConfigInfo {
+  const c = ctx.cfg, sp = spanOf(c), tr = ctx.track;
+  const text = `Vão coberto: ${sp.x} × ${sp.y} m → resolução ${(sp.x / 255 * 100).toFixed(1)} cm (X) e ${(sp.y / 255 * 100).toFixed(1)} cm (Y) por passo.` +
+    (c.centerFixed ? '' : ' Centro automático: o vão é o dobro do tamanho (o carro pode ligar na borda da pista).');
+  let source: string;
+  if (ctx.S && ctx.S.gps) source = 'Log do BUSMASTER: a posição vem direto da latitude/longitude do módulo GPS (0x028).';
+  else if (tr && tr.fmt) source = `Lendo ${tr.source}.` + (c.fmt === 'auto' ? ' Formato detectado automaticamente.' : '');
+  else source = tr && tr.msg ? tr.msg : '';
+  const half = sp.x / 2;
+  return {
+    span: sp, stepX: sp.x / 255 * 100, stepY: sp.y / 255 * 100,
+    resolution: { text, explain: 'track.gpsPosition', sensors: ['gps'] },
+    source,
+    calibration: {
+      title: 'Calibração na FT (FT Manager, entrada linear 0–5 V) para as entradas 7 e 8:',
+      items: [
+        '0,00 V = 0 e 5,00 V = 5 → o log fica em volts e o app converte (código = V × 51). É o recomendado.',
+        `Evite “1 V = 1”: o PIC trava o valor no ponto mínimo da calibração, então tudo abaixo de 1 V (código < 51, mais de ~${((128 - 51) * sp.x / 255).toFixed(0)} m a Oeste/Sul do centro) vira 1,000.`,
+        `Metros direto (0 V = −${half} m, 5 V = +${half} m) não cabe nesses canais: a FT guarda com 3 casas em 16 bits (máx. ±32,767).`,
+      ],
+      explain: 'quality.gpsCalibration', sensors: ['gps'],
+    },
+  };
+}
+
+/** CSV processado (botão "Exportar CSV" do app antigo, exportCSV() de legacy/js/app.js):
+ *  TIME + todos os canais de ctx.all na mesma ordem (os do log pela chave; os calculados por
+ *  "nome_unidade" sem acento), lat/lon do GPS (se houver) e o número da volta. Casas: as de
+ *  decimalsFor (no mínimo 2 nos calculados); célula vazia = sem dado. O texto é o mesmo que o
+ *  antigo baixava; a página só salva. */
+export function processedCsv(ctx: Pick<SessionContext, 'S' | 'track' | 'laps' | 'all'>): { fileName: string; text: string } {
+  const S = ctx.S, tr = ctx.track;
+  const head = (c: Channel) => c.src === 'log' ? c.key
+    : (c.name + (c.unit ? '_' + c.unit : '')).normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^\w]+/g, '_').replace(/^_|_$/g, '');
+  const cols: [string, ArrayLike<number>, number][] = [['TIME', S.t, 3]];
+  ctx.all.forEach(c => cols.push([head(c), c.data, Math.max(decimalsFor(c.lo, c.hi), c.src === 'log' ? 0 : 2)]));
+  if (tr && tr.ok) {
+    if (tr.lat) cols.push(['GPS_lat', tr.lat, 7], ['GPS_lon', tr.lon!, 7]);
+    const ln = new Float64Array(S.t.length).fill(NaN);
+    ctx.laps.forEach(l => { for (let i = l.i0; i <= l.i1; i++) ln[i] = l.n; });
+    cols.push(['Lap', ln, 0]);
+  }
+  let o = cols.map(c => c[0]).join(',') + '\n';
+  for (let i = 0; i < S.t.length; i++) o += cols.map(c => { const v = c[1][i]; return v === v ? v.toFixed(c[2]) : ''; }).join(',') + '\n';
+  return { fileName: S.name.replace(/\.(csv|txt|log)$/i, '') + '_processado.csv', text: o };
+}

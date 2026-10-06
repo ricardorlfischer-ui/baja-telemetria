@@ -147,13 +147,14 @@ const SENSOR_ROLES: Partial<Record<SensorId, ChannelRole[]>> = {
  *  o canal existe e tem sinal (não constante). GPS: X e Y com sinal, ou lat/lon válida no
  *  BUSMASTER. Logger: há base de tempo. Carro: massa, relação roda/amortecedor, curso e massa
  *  suspensa informados. Sugeridos sem canal no log = 'planned'. */
-export function sensorAvailability(ctx: Pick<SessionContext, 'S' | 'cfg'>): Record<SensorId, SensorState> {
+export function sensorAvailability(ctx: Pick<SessionContext, 'S' | 'cfg'> & { track?: { ok: boolean } }): Record<SensorId, SensorState> {
   const S = ctx.S, roles = detectRoles(S, ctx.cfg);
   const live = (role: ChannelRole) => { const k = roles[role]; const c = k ? S.channels.find(x => x.key === k) : undefined; return !!c && !c.constant && c.count > 0; };
   const out = {} as Record<SensorId, SensorState>;
   for (const id of SENSOR_IDS) {
     let on: boolean;
-    if (id === 'gps') on = S.gps ? S.gps.lat.some(v => v === v) : live('gps_x') && live('gps_y');
+    /* trajetória válida = o GPS entrou nas contas, mesmo com X/Y parados o log inteiro */
+    if (id === 'gps') on = !!(ctx.track && ctx.track.ok) || (S.gps ? S.gps.lat.some(v => v === v) : live('gps_x') && live('gps_y'));
     else if (id === 'logger') on = S.t.length >= 2;
     else if (id === 'car_data') {
       const c = ctx.cfg.car;
@@ -167,61 +168,134 @@ export function sensorAvailability(ctx: Pick<SessionContext, 'S' | 'cfg'>): Reco
 /** Linha da matriz sensor → análises → decisões de projeto (página Aquisição e apresentação). */
 export interface SensorMatrixRow { sensor: SensorId; items: { explain: string; decision: string }[] }
 
-/* Itens por sensor. Os ids de explicação existem no catálogo (explain.ts); quem acrescentar
- * análises novas acrescenta aqui também. */
+/* Itens por sensor: análise (id do card em explain.ts) → decisão do carro novo que ela
+ * sustenta. Todo id existe no catálogo e o card cita o sensor da linha (o teste confere);
+ * quem acrescentar análises novas acrescenta aqui também. */
+const shockItems = (ax: 'F' | 'R'): [string, string][] => {
+  const eixo = ax === 'F' ? 'dianteira' : 'traseira', amort = ax === 'F' ? 'amortecedor dianteiro' : 'amortecedor traseiro';
+  return [
+    ['susp.travelUsed', `curso mínimo do ${amort} (+15 % sobre o usado) e curso de roda da geometria`],
+    ['susp.bottomOut', `batente progressivo / mais curso na ${eixo}; casos de carga do chassi`],
+    ['susp.velocityP95', `faixa de velocidade em que a curva do ${amort} precisa ser acertada`],
+    ['susp.velocityBands', 'peso dos ajustes de baixa × alta velocidade (amortecedor de 2 ou 4 vias)'],
+    ['susp.velocityHistogram', 'curva força × velocidade do amortecedor e efeito de cada acerto'],
+    ['susp.naturalFreq', ax === 'F' ? 'mola e amortecimento da dianteira (fₙ, ζ)' : 'mola traseira 10–20 % acima da dianteira em frequência (flat ride)'],
+    ['susp.rideRates', `mola (N/mm) e amortecimento (N·s/m) da ${eixo} do carro novo`],
+    ['susp.rollGradient', 'rigidez de rolagem: molas e barra estabilizadora'],
+    ['susp.pitchGradient', ax === 'F' ? 'geometria anti-mergulho (frenagem)' : 'geometria anti-agachamento (aceleração)'],
+    ['susp.jumps', 'energia dos pousos: válvula de alta, batente e cargas do chassi'],
+    ['channel.roughness', 'trechos duros da pista para os testes de durabilidade'],
+    ['freq.speedSplit', 'separar ressonância do carro de excitação da pista'],
+    ['freq.criticalSpeed', `fₙ da ${eixo} para tirar a ressonância da faixa de velocidade da prova`],
+  ];
+};
+
 const MATRIX: [SensorId, [string, string][]][] = [
   ['gps', [
-    ['track.gpsPosition', 'mapa da pista e onde cada fenômeno acontece (cor por canal)'],
+    ['track.gpsPosition', 'mapa da pista: onde cada fenômeno acontece'],
+    ['chart.trackMap', 'mapa colorido por canal: onde a suspensão bate e a CVT esquenta'],
+    ['track.channelMap', 'mini-mapas por canal: localiza cada problema na pista'],
+    ['track.distance', 'quilometragem do carro e das peças (manutenção e durabilidade)'],
+    ['laps.lapTimes', 'meta de tempo de volta e comparação de acertos'],
     ['laps.delta', 'traçado e trechos onde se ganha ou perde tempo por volta'],
-    ['dyn.gg', 'aceleração lateral máx. → bitola, entre-eixos e altura do CG (capotamento)'],
-    ['power.tireCalibration', 'circunferência certa do pneu na FT (referência de distância)'],
+    ['laps.sectors', 'trechos da pista que mais pesam no tempo → prioridade de projeto'],
+    ['laps.speedTrace', 'velocidade de curva, frenagem e saída: aderência × tração × potência'],
+    ['dyn.gg', 'envelope de aderência usado por carro e piloto'],
+    ['dyn.latMax', 'aceleração lateral máx. → bitola mínima e altura máx. do CG (capotamento)'],
+    ['dyn.minRadius', 'raio de giro, ângulo de esterço e entre-eixos máximo'],
+    ['dyn.speedHistogram', 'faixa de velocidade para otimizar redução final e CVT'],
+    ['power.tireCalibration', 'circunferência certa do pneu na FT (raio efetivo para a redução)'],
+    ['power.launchSlip', 'escorregamento na largada → engate da CVT e pneu'],
     ['freq.roadWavelength', 'distância entre ondulações da pista → velocidades de ressonância'],
+    ['freq.criticalSpeed', 'velocidade em que a pista excita a carroceria → escolha da mola'],
+    ['freq.speedSplit', 'separar o que é do carro do que é da pista no espectro'],
+    ['susp.staticHeight', 'altura de rodagem e sag reais (carro parado)'],
+    ['freq.dropTest', 'acha o teste de queda com o carro parado'],
     ['quality.gpsBorder', 'tamanho da área e centro no track_config.h'],
   ]],
-  ['shock_fl', [
-    ['susp.travelUsed', 'curso mínimo do amortecedor dianteiro e batente'],
-    ['susp.naturalFreq', 'mola e amortecimento da dianteira (fₙ, ζ)'],
-    ['susp.rollGradient', 'barra estabilizadora e mola para limitar a rolagem'],
-    ['channel.roughness', 'trechos duros da pista para os testes de durabilidade'],
-  ]],
-  ['shock_fr', [
-    ['susp.travelUsed', 'curso mínimo do amortecedor dianteiro e batente'],
-    ['susp.naturalFreq', 'mola e amortecimento da dianteira (fₙ, ζ)'],
-    ['susp.rollGradient', 'barra estabilizadora e mola para limitar a rolagem'],
-  ]],
-  ['shock_rl', [
-    ['susp.travelUsed', 'curso mínimo do amortecedor traseiro e batente'],
-    ['susp.naturalFreq', 'mola traseira 10–20 % acima da dianteira em frequência (flat ride)'],
-    ['susp.rollGradient', 'barra estabilizadora e mola para limitar a rolagem'],
-    ['freq.roadWavelength', 'qual ondulação da pista excita a carroceria e a que velocidade'],
-  ]],
-  ['shock_rr', [
-    ['susp.travelUsed', 'curso mínimo do amortecedor traseiro e batente'],
-    ['susp.naturalFreq', 'mola traseira 10–20 % acima da dianteira em frequência (flat ride)'],
-    ['channel.roughness', 'trechos duros da pista para os testes de durabilidade'],
-  ]],
+  ['shock_fl', shockItems('F')],
+  ['shock_fr', shockItems('F')],
+  ['shock_rl', shockItems('R')],
+  ['shock_rr', shockItems('R')],
   ['wheel', [
-    ['power.wheelPower', 'potência que chega na roda → redução final e CVT'],
-    ['power.tireCalibration', 'circunferência do pneu e escorregamento na largada'],
+    ['power.speedSource', 'velocidade e aceleração limpas para todas as contas de trem de força'],
+    ['power.tireCalibration', 'circunferência do pneu e raio efetivo sob carga'],
+    ['power.wheelPower', 'potência que chega na roda → eficiência da CVT e da redução'],
+    ['power.powerCurve', 'redução final e calibração da CVT para a faixa de velocidade da prova'],
+    ['power.tractiveForce', 'limite de tração e força de projeto de semi-eixos e cubos'],
+    ['power.launch', 'tempos 0–30 m: rotação de engate da CVT, redução e pneu'],
+    ['power.launchSlip', 'escorregamento da roda de tração na largada'],
+    ['power.coastDown', 'Crr e CdA reais para o simulador do carro novo'],
+    ['power.braking', 'desaceleração máx. → dimensionar cilindros, pinças e discos'],
+    ['power.vmax', 'velocidade máxima × relação de transmissão'],
+    ['cvt.thermalModel', 'potência e ventilação que entram no modelo térmico da CVT'],
+    ['susp.jumps', 'roda disparando no ar → tranco no trem de força no pouso'],
     ['dyn.gg', 'aceleração longitudinal precisa (frenagem e tração)'],
   ]],
   ['cvt_temp', [
+    ['cvt.maxTemp', 'margem até o limite da correia e onde a CVT esquenta na pista'],
+    ['cvt.heatRate', 'comparar dutos e calibrações no mesmo trajeto'],
+    ['cvt.coolRate', 'se vale abertura que funcione parado ou ventilação forçada'],
+    ['cvt.steadyState', 'temperatura de regime no enduro × limite'],
+    ['cvt.timeConstant', 'quanto tempo de prova até o regime; duração mínima dos testes'],
+    ['cvt.enduranceProjection', 'se a CVT aguenta o enduro inteiro'],
+    ['cvt.reachLimit', 'em que minuto da prova a CVT passaria do limite'],
+    ['cvt.coolingNeed', 'meta de troca de calor para o duto de ar do carro novo'],
     ['cvt.thermalModel', 'entrada de ar/dutos da CVT para o enduro não passar do limite'],
   ]],
   ['logger', [
     ['quality.sampleRate', 'taxa de gravação de cada canal (o que dá para enxergar)'],
+    ['freq.sampleRate', 'gravar amortecedores a ≥ 100 Hz no carro novo para ver a roda'],
+    ['quality.timeGaps', 'alimentação e chicote da FT sem quedas'],
+    ['quality.validSamples', 'conferir todos os sensores antes de cada teste'],
+    ['laps.delta', 'base de tempo das voltas e do delta'],
+    ['design.duration', 'tempo de teste acumulado do carro'],
+    ['chart.stackedChannels', 'correlações entre canais no mesmo instante'],
   ]],
   ['car_data', [
+    ['susp.rideRates', 'rigidez e amortecimento na roda (precisa da massa suspensa e do MR)'],
     ['susp.rollGradient', 'rolagem em graus (precisa de bitola e relação roda/amortecedor)'],
-    ['susp.naturalFreq', 'rigidez e amortecimento na roda (precisa da massa suspensa)'],
+    ['susp.pitchGradient', 'arfagem em graus (precisa de entre-eixos e relação roda/amortecedor)'],
+    ['susp.bottomOut', 'fim de curso (precisa do curso total do amortecedor)'],
     ['power.wheelPower', 'força e potência (precisa da massa com piloto, Crr e CdA)'],
-    ['quality.carData', 'medidas que faltam medir na oficina'],
+    ['power.tractiveForce', 'força trativa em N (precisa da massa com piloto)'],
+    ['power.coastDown', 'Crr e CdA (precisa da massa e da densidade do ar)'],
+    ['power.resistances', 'parâmetros do simulador de desempenho do carro novo'],
+    ['cvt.thermalModel', 'limite da correia, ambiente e duração do enduro'],
+    ['quality.carData', 'medidas que faltam medir na oficina (comparar com o CAD)'],
   ]],
-  ['engine_rpm', [['sensor.engine_rpm', 'relação da CVT em tempo real → pesos e molas da CVT']]],
-  ['imu', [['sensor.imu', 'cargas de pouso para o chassi; g-g sem depender do GPS']]],
-  ['brake_pressure', [['sensor.brake_pressure', 'cilindros mestres e balanço de freio']]],
-  ['steering', [['sensor.steering', 'relação de direção e subesterço']]],
-  ['throttle', [['sensor.throttle', 'curva de potência só em aceleração plena']]],
+  ['engine_rpm', [
+    ['sensor.engine_rpm', 'relação da CVT em tempo real → pesos e molas da CVT'],
+    ['power.powerCurve', 'potência do motor × roda = eficiência do trem de força'],
+    ['power.launch', 'rotação de engate da CVT na largada'],
+    ['cvt.steadyState', 'correia patinando, que esquenta a CVT'],
+  ]],
+  ['imu', [
+    ['sensor.imu', 'cargas de pouso para o chassi; g-g sem depender do GPS'],
+    ['susp.jumps', 'aceleração vertical real nos pousos → cargas de projeto'],
+    ['susp.bottomOut', 'carga real das batidas no batente'],
+    ['dyn.latMax', 'lateral medida direto → limite de capotamento'],
+    ['dyn.accelMax', 'aceleração medida direto, sem derivar velocidade'],
+    ['dyn.brakeMax', 'desaceleração medida direto'],
+  ]],
+  ['brake_pressure', [
+    ['sensor.brake_pressure', 'cilindros mestres e balanço de freio'],
+    ['power.braking', 'pressão × desaceleração → dimensionar o sistema de freio'],
+    ['dyn.brakeMax', 'pressão usada na frenagem máxima'],
+    ['power.coastDown', 'coast-down sem nenhum toque no freio'],
+    ['susp.pitchGradient', 'arfagem em frenagem × pressão → anti-mergulho'],
+  ]],
+  ['steering', [
+    ['sensor.steering', 'relação de direção e subesterço'],
+    ['dyn.minRadius', 'ângulo de esterço usado nas curvas mais fechadas'],
+    ['dyn.latMax', 'gradiente de subesterço (volante × aceleração lateral)'],
+  ]],
+  ['throttle', [
+    ['sensor.throttle', 'curva de potência só em aceleração plena'],
+    ['power.powerCurve', 'curva de potência sem trechos de pé parcial'],
+    ['power.coastDown', 'confirmar o pé fora no coast-down'],
+    ['laps.speedTrace', 'onde o piloto tira o pé: curvas que limitam a volta'],
+  ]],
 ];
 
 /** Sensor → análises que ele permite → decisão de projeto. */

@@ -38,6 +38,11 @@ docs/              esta arquitetura, guia de uso e de implantação
 npm workspaces, Node ≥ 22.12, TypeScript 5.9 estrito. Comandos na raiz: `npm run dev`
 (servidor + web), `npm run build`, `npm run typecheck`, `npm test`.
 
+Em desenvolvimento (`npm run dev:web`), `/__fixtures/` lista e `/__fixtures/<nome>` devolve
+os logs de `packages/core/test/fixtures` e `samples/`, e `window.__baja.session` é o estado
+da sessão: dá para abrir um log real no navegador com
+`window.__baja.session.getState().openText(await (await fetch('/__fixtures/ft_log3_shocks_compact.csv')).text(), 'ft_log3_shocks_compact.csv')`.
+
 **Dependências:** não instale pacotes novos sem necessidade real; se precisar, use
 `npm install -w <pacote>` uma vez e registre aqui o porquê.
 
@@ -114,7 +119,11 @@ Cada `render*` do app antigo mistura conta e HTML. A conta vai para uma função
 gráficos, avisos), e a página só desenha. Assinaturas:
 
 ```ts
-designReport(ctx, i0, i1)        -> { rows: { grp, item, val, how, read }[]; recs: string[] }   // renderDesign
+designReport(ctx, i0, i1)        -> { rows: { grp, item, val, how, read, explain, sensors }[];
+                                      recs: { text, explain, sensors }[]; groups; facts }  // renderDesign
+designRecTexts(report) -> string[] ; designCsv(report, nome) -> CSV com a coluna "sensores"
+processedCsv(ctx) -> { name, text }   // exportCSV() do app antigo (todos os canais calculados)
+trackConfigInfo(ctx)                  // cfgInfo(): vão, resolução, origem da posição, nota de calibração 7/8
 suspensionReport(ctx, i0, i1)    -> ...                                                          // renderSusp + renderSuspExtra
 resonanceReport(ctx, i0, i1, o)  -> ...   // renderFreq + showDrop + showPsd + analyzeManual + renderRoadRes
 powertrainReport(ctx, i0, i1)    -> ...   // renderPower + renderCoast + showCoast
@@ -146,7 +155,7 @@ com os números de projeto (duração, distância, voltas, melhor volta, v máx,
 canto, batidas no fim de curso, saltos, frequência natural e ζ, gradientes, potência máx,
 melhor largada, Crr/CdA, T máx da CVT, regime previsto...). Chaves estáveis (ex.:
 `susp.travel.FL`, `cvt.tmax`) porque a página "Comparar sessões" e o servidor guardam isso.
-Mudou a conta? Aumente `SUMMARY_VERSION` (o servidor recalcula).
+Mudou a conta? Aumente `SUMMARY_VERSION` (o servidor recalcula). Hoje: **2**.
 
 ### 3.8 Explicações e sensores (`sensors.ts`, `explain.ts`) — **requisito central**
 
@@ -164,7 +173,9 @@ ele saiu**, para a equipe e para mostrar aos juízes que a aquisição serve ao 
   que cada um destravaria (ex.: rotação + roda = relação da CVT).
 - `sensorAvailability(ctx)`: quais sensores este log tem (pelos papéis de `dataQuality`).
 - `EXPLAIN`: catálogo de explicações por id (`susp.naturalFreq`, `power.wheelPower`,
-  `cvt.thermalModel`, `chart.gg`, ...). Cada entrada: `title`, `what` (o que mostra),
+  `cvt.thermalModel`, `dyn.gg`, ...). Ids sempre `<área>.<item>`; canais usam
+  `channelExplainId(key)` (ex.: `gps:speed` → `channel.gps_speed`) e `sensorsOfChannel(ctx, key)`
+  dá os sensores de um canal. Cada entrada: `title`, `what` (o que mostra),
   `sensors: { id, need: 'required' | 'alternative' | 'improves', why }[]`, `how`
   (como é calculado, com a fórmula), `design` (como usar no projeto do carro do ano que
   vem — concreto: que peça/decisão isso dimensiona), `limits`, `test` (ensaio para medir

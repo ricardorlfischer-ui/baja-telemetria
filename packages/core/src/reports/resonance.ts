@@ -322,6 +322,7 @@ function showDrop(A: SessionContext, rep: ResonanceReport, ev: { res: (FreeDecay
   d.plot = {
     key: 'frDropPlot', title: 'Teste de queda', explain: 'freq.dropTest', sensors: suspJoinSensors(ev.res.map(r => suspCornerSensor(r.id)), evS),
     series, xLabel: 's depois do pico', yLabel: 'mm (em relação à base)', zeroY: true, xRange: [-0.2, 1.6],
+    tipX: { dec: 2, suffix: ' s' }, fmtY: { dec: 1, suffix: ' mm' },
   };
 }
 
@@ -347,7 +348,7 @@ function showPsd(rep: ResonanceReport, act: ActiveShock[], drop: { res: (FreeDec
   }
   const base = { key: 'frPsd', title: 'Espectro com o carro andando', explain: 'freq.spectrum', sensors };
   return series.length
-    ? { ...base, series, logY: true, xLabel: 'Hz', yLabel: 'mm²/Hz', markers, xRange: [0, series[0].x[series[0].x.length - 1]] }
+    ? { ...base, series, logY: true, xLabel: 'Hz', yLabel: 'mm²/Hz', markers, xRange: [0, series[0].x[series[0].x.length - 1]], tipX: { dec: 2, suffix: ' Hz' }, fmtY: { dec: 0, suffix: '', prec: 2 } }
     : { ...base, empty: 'trecho andando curto demais para o espectro (precisa de ≥ 5 s seguidos)' };
 }
 
@@ -398,5 +399,11 @@ function roadRes(A: SessionContext, i0: number, i1: number, rep: ResonanceReport
     logY: true, legend: [], xRange: [0, 1.25],
     markers: peaks.map((p, k) => ({ x: p.f, role: 'peak', label: `${(1 / p.f).toFixed(1)} m`, row: k % 3 })),
     xLabel: 'ciclos por metro (1/λ)', yLabel: 'mm²·m',
+    fmtY: { dec: 0, suffix: '', prec: 2 },        /* a 1ª linha do tooltip é resRoadTip(x) */
   };
 }
+
+/** 1ª linha do tooltip do espectro da pista (rrPlot): <b>title</b> note, com o comprimento
+ *  de onda (1/x) e os ciclos por metro, como no antigo. */
+export const resRoadTip = (x: number): { title: string; note: string } =>
+  ({ title: `${x > 0 ? (1 / x).toFixed(2) : '∞'} m`, note: `(${x.toFixed(2)} ciclos/m)` });

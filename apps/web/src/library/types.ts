@@ -3,22 +3,9 @@
 import type { CarConfig, SensorId, SuspConfig, TrackConfig } from '@baja/core';
 
 /* ---------------------------------------------------------------- resumo da sessão
- * TODO: trocar por `import type { SessionSummary } from '@baja/core'` quando summary.ts existir
- * (ARQUITETURA 3.6). Este tipo local é compatível com o contrato. */
-export interface SummaryMetric {
-  key: string;                 /* estável: 'susp.travel.FL', 'cvt.tmax'... */
-  group: string;
-  label: string;
-  value: number | null;
-  unit: string;
-  text?: string;
-  explain?: string;
-  sensors?: SensorId[];
-}
-export interface SessionSummary {
-  version: number;             /* SUMMARY_VERSION do core */
-  metrics: SummaryMetric[];
-}
+ * Mesmo tipo do core (ARQUITETURA 3.6): o servidor e o navegador usam a mesma conta. */
+export type { SessionSummary, SummaryMetric } from '@baja/core';
+import type { SessionSummary } from '@baja/core';
 
 export type SessionKind = 'FT' | 'BUSMASTER';
 
@@ -30,13 +17,19 @@ export interface SessionMeta {
   size: number;                /* bytes do texto do log */
   createdAt: string;           /* ISO */
   uploadedBy?: string;         /* nome de quem enviou (servidor) */
-  date?: string;               /* data do teste (AAAA-MM-DD) */
+  date?: string;               /* data do teste: AAAA-MM-DD ou AAAA-MM-DDTHH:MM */
   trackId?: string;
   carId?: string;
   driver?: string;
   tags: string[];
   notes?: string;
   summary?: SessionSummary;
+  /* só no servidor (ARQUITETURA 5.3) */
+  sha256?: string;
+  uploadedById?: string;
+  summaryVersion?: number;
+  summaryError?: string | null;  /* análise falhou (ex.: passou do limite de memória/tempo) */
+  summaryOutdated?: boolean;     /* resumo de uma versão antiga das contas */
 }
 
 /** Campos que o usuário edita (dados da sessão). */

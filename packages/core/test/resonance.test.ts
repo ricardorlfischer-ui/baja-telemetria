@@ -10,7 +10,8 @@ import { parseLog, parseCSV } from '../src/parsers';
 import { demoCSV, DEMO_CAR } from '../src/demo';
 import { dropTests } from '../src/analysis';
 import { computeSession, rangeOf, type SessionContext, type AnalysisConfigInput } from '../src/pipeline';
-import { resonanceReport, type ResonanceOptions, type ResonanceReport, type ResEventValue } from '../src/reports/resonance';
+import { resonanceReport, resRoadTip, type ResonanceOptions, type ResonanceReport, type ResEventValue } from '../src/reports/resonance';
+import { fmtRep } from '../src/reports/powertrain';
 import type { SuspPlot } from '../src/reports/suspension';
 import { SENSORS } from '../src/sensors';
 import { EXPLAIN_AREAS } from '../src/explain';
@@ -23,7 +24,23 @@ const decode = (s: string) => s.replace(/<[^>]*>/g, '').replace(/&lt;/g, '<').re
 const tableRows = (html: string): string[][] =>
   [...html.matchAll(/<tr[^>]*>([\s\S]*?)<\/tr>/g)].map(m => [...m[1].matchAll(/<t[hd][^>]*>([\s\S]*?)<\/t[hd]>/g)].map(c => decode(c[1])));
 const afterTable = (html: string) => decode(html.includes('</table>') ? html.slice(html.lastIndexOf('</table>') + 8) : html);
-const IGN = ['color', 'colors', 'id', 'role', 'roles', 'key', 'title', 'explain', 'sensors'];
+const IGN = ['color', 'colors', 'id', 'role', 'roles', 'key', 'title', 'explain', 'sensors', 'tipX', 'fmtY', 'barTips'];
+/** Tooltips: tipX/fmtY antigos = <b>fmtRep(tipX)</b> / fmtRep(fmtY) do relatório; no rrPlot a
+ *  1ª linha é resRoadTip(x). */
+const XS = [0, 0.37, 1, 1.234, 12.345, -3.5, 100.05, 1e-4];
+function tipDiffs(spec: any, p: SuspPlot, road = false): string[] {
+  const out: string[] = [];
+  if (!spec || p.empty) return out;
+  for (const x of XS) {
+    if (spec.tipX) {
+      const n = road ? (t => `<b>${t.title}</b> ${t.note}`)(resRoadTip(x)) : p.tipX ? `<b>${fmtRep(p.tipX, x)}</b>` : '(sem tipX)';
+      if (spec.tipX(x) !== n) out.push(`tipX(${x}): ${spec.tipX(x)} ≠ ${n}`);
+    } else if (p.tipX) out.push('tipX sobrando');
+    if (spec.fmtY) { const n = p.fmtY ? fmtRep(p.fmtY, x) : '(sem fmtY)'; if (spec.fmtY(x) !== n) out.push(`fmtY(${x}): ${spec.fmtY(x)} ≠ ${n}`); }
+    else if (p.fmtY) out.push('fmtY sobrando');
+  }
+  return out;
+}
 
 /** <select> falso: innerHTML novo → valor = 1ª opção; options = opções do innerHTML. */
 const parseOptions = (html: string) => [...html.matchAll(/<option value="([^"]*)">([^<]*)<\/option>/g)].map(m => ({ value: m[1], text: decode(m[2]) }));
@@ -120,7 +137,10 @@ function compare(O: LegacyState, N: SessionContext, w: Win, o: ResonanceOptions)
   const rep = resonanceReport(N, i0, i1, o);
   const d: string[] = [];
   const chk = (what: string, a: unknown, b: unknown) => { const r = same(a, b); if (r.length) d.push(`${what}: ${r.slice(0, 5).join(' | ')}`); };
-  const plot = (what: string, a: unknown, p: SuspPlot) => { const r = same(a, p, { ignore: IGN }); if (r.length) d.push(`${what}: ${r.slice(0, 5).join(' | ')}`); };
+  const plot = (what: string, a: unknown, p: SuspPlot) => {
+    const r = same(a, p, { ignore: IGN }); if (r.length) d.push(`${what}: ${r.slice(0, 5).join(' | ')}`);
+    const t = tipDiffs(a, p, what === 'rrPlot'); if (t.length) d.push(`${what} tooltips: ${t.slice(0, 3).join(' | ')}`);
+  };
   chk('frContent.hidden', L.el('frContent').hidden, !rep.hasShocks);
   chk('rrBox.hidden', L.el('rrBox').hidden, !rep.hasShocks);
   if (!rep.hasShocks) {

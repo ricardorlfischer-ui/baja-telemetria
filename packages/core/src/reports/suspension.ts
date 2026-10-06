@@ -2,7 +2,8 @@
  * renderSuspExtra (legacy/js/vehicleui.js). Só a conta: devolve as tabelas (valores e o
  * texto formatado igual ao do app antigo), os gráficos no formato do spec do BT.Plot
  * (legacy/js/plots.js) sem cores nem callbacks (cada série/barra/marcador tem um id/role
- * para a página escolher a cor), as notas e os estados vazios.
+ * para a página escolher a cor; os tooltips vêm como dados: barTips/tipX/fmtY no formato
+ * de RepPlot), as notas e os estados vazios.
  *
  * Cada tabela, coluna, linha e gráfico leva `explain` (id do card em explain.ts) e
  * `sensors` (os sensores que DE FATO entraram naquela conta nesta sessão).
@@ -12,6 +13,7 @@ import type { CarConfig, SensorId } from '../types';
 import type { ActiveShock, CornerId, Shock, VelStats } from '../analysis';
 import type { Gradients, Jump, BottomOut, LinFit } from '../vehicle';
 import type { SessionContext } from '../pipeline';
+import type { RepBarTip, RepFmt } from './powertrain';
 import { velStats, quant, hist } from '../analysis';
 import { gradients, jumps, bottomOuts } from '../vehicle';
 import { niceTicks } from '../util';
@@ -50,6 +52,11 @@ export interface SuspPlot {
   logY?: boolean;
   zeroY?: boolean;
   xRange?: [number, number];
+  /** Tooltips no mesmo formato de RepPlot (powertrain.ts): tipX = 1ª linha (<b>texto</b>),
+   *  fmtY = valor de cada série, barTips = <b>title</b><br>text de cada barra. */
+  tipX?: RepFmt;
+  fmtY?: RepFmt;
+  barTips?: RepBarTip[];
 }
 /** Coluna de tabela: o texto do cabeçalho igual ao antigo e o card que explica a coluna. */
 export interface SuspColumn { key: string; label: string; explain?: string }
@@ -299,6 +306,7 @@ export function suspensionReport(ctx: SessionContext, i0: number, i1: number): S
       legend: [{ label: 'Compressão', role: 'comp' }, { label: 'Extensão', role: 'ext' }],
       markers: [{ x: -knee, role: 'knee' }, { x: knee, role: 'knee' }],
       xLabel: 'mm/s', yLabel: '% do tempo',
+      barTips: Array.from(hv.y, (y, j) => ({ title: `${(hv.lo + j * hv.w).toFixed(0)} … ${(hv.lo + (j + 1) * hv.w).toFixed(0)} mm/s`, text: `${y.toFixed(1)} % do tempo` })),
     });
     const hp = hist(k.disp, i0, i1, null, plo, plo + pnb * pw, pnb);
     rep.posHist.push({
@@ -306,6 +314,7 @@ export function suspensionReport(ctx: SessionContext, i0: number, i1: number): S
       bars: { x0: hp.lo, w: hp.w, y: hp.y, roles: Array.from(hp.y, () => k.id) },
       markers: [{ x: 0, role: 'static', label: 'estático' }],
       xLabel: 'mm (+ = comprimido)', yLabel: '% do tempo',
+      barTips: Array.from(hp.y, (y, j) => ({ title: `${(hp.lo + j * hp.w).toFixed(1)} … ${(hp.lo + (j + 1) * hp.w).toFixed(1)} mm`, text: `${y.toFixed(1)} % do tempo` })),
     });
   });
 
@@ -391,9 +400,15 @@ function suspExtra(A: SessionContext, i0: number, i1: number, rep: SuspensionRep
   const B = bottomOuts(t, A.susp, car, i0, i1);
   const strokeKnown = +car.strokeF > 0 || +car.strokeR > 0;
   const shockS = act.map(k => suspCornerSensor(k.id));
+  /* o estático medido com o carro parado (GPS) entra no limiar de "no ar" dos saltos (o
+   * deslocamento é relativo a ele); o fim de curso usa a posição absoluta = estático +
+   * deslocamento, em que o estático cancela com compPos e só conta com a compressão
+   * invertida (2·estático − posição) */
+  const staticS = act.some(k => k.staticFromStop) && 'gps';
+  const absS = !A.cfg.susp.compPos && staticS;
   const jp = rep.jumps;
   jp.list = J;
-  jp.sensors = suspJoinSensors(shockS, suspSpeedSensors(A), strokeKnown && 'car_data', A.veh && A.veh.slip ? ['wheel', 'gps'] : []);
+  jp.sensors = suspJoinSensors(shockS, staticS, suspSpeedSensors(A), strokeKnown && 'car_data', A.veh && A.veh.slip ? ['wheel', 'gps'] : []);
   jp.columns = [
     { key: 'n', label: '#' }, { key: 't', label: 't' }, { key: 'v', label: 'Vel.', explain: 'susp.jumps' },
     { key: 'T', label: 'No ar', explain: 'susp.jumps' }, { key: 'h', label: 'Altura', explain: 'susp.jumps' },
@@ -401,7 +416,7 @@ function suspExtra(A: SessionContext, i0: number, i1: number, rep: SuspensionRep
     ...act.map(k => ({ key: 'shock' + k.id, label: `${k.id}: vel. / curso`, explain: 'susp.jumps' })),
     { key: 'over', label: 'Roda disparou', explain: 'susp.jumps' },
   ];
-  const rowS = suspJoinSensors(shockS, suspSpeedSensors(A), strokeKnown && 'car_data');
+  const rowS = suspJoinSensors(shockS, staticS, suspSpeedSensors(A), strokeKnown && 'car_data');
   J.forEach((j, n) => {
     jp.rows.push({
       n: n + 1, t: j.t0, seekT: j.t0 - 0.5, jump: j,
@@ -418,7 +433,7 @@ function suspExtra(A: SessionContext, i0: number, i1: number, rep: SuspensionRep
   bo.strokeKnown = strokeKnown;
   bo.events = B;
   bo.counts = act.map(k => ({ id: k.id, n: B.filter(b => b.id === k.id).length }));
-  bo.sensors = strokeKnown ? suspJoinSensors(shockS, 'car_data') : suspJoinSensors(shockS);
+  bo.sensors = strokeKnown ? suspJoinSensors(shockS, absS, 'car_data') : suspJoinSensors(shockS);
   bo.text = strokeKnown
     ? `Fim de curso (≥ 95 % do curso total): ${act.map(k => `${k.id} ${B.filter(b => b.id === k.id).length}×`).join(' · ')}.`
     : 'Informe o curso total dos amortecedores em “Dados do carro” para contar as batidas no fim de curso.';

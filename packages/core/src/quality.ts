@@ -459,9 +459,11 @@ export function dataQuality(S: Session, ctx: Pick<SessionContext, 'cfg' | 'track
     if (noStop.length) {
       add({
         id: 'susp.static', level: 'info',
-        text: `Posição estática de ${noStop.map(k => k.id).join(', ')} tirada da mediana do log inteiro: não houve ≥ 25 amostras com o carro parado${stopped ? '' : ' (sem GPS nem roda para saber quando parou)'}.`,
-        action: 'Grave uns 5 s parado no começo (carro no chão, piloto sentado): o curso passa a ser medido a partir da altura de rodagem real.',
-        explain: 'quality.staticRef', sensors: noStop.map(k => ('shock_' + k.id.toLowerCase()) as SensorId).concat([movSrc]),
+        /* o estático (suspPrep) usa só o "parado" do GPS (andou < 3 m em 3 s): a roda não entra nessa conta */
+        text: `Posição estática de ${noStop.map(k => k.id).join(', ')} tirada da mediana do log inteiro: ` +
+          (tr.ok ? 'não houve ≥ 25 amostras com o carro parado.' : 'sem trajetória do GPS não dá para saber quando o carro estava parado (a velocidade da roda não entra nessa conta).'),
+        action: 'Grave uns 5 s parado no começo (carro no chão, piloto sentado), com o GPS com fix: o curso passa a ser medido a partir da altura de rodagem real.',
+        explain: 'quality.staticRef', sensors: noStop.map(k => ('shock_' + k.id.toLowerCase()) as SensorId).concat(['gps']),
       });
     }
     const calc = act.filter(k => k.vCalc);

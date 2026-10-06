@@ -80,7 +80,7 @@ export function dynamicsReport(ctx: Pick<SessionContext, 'S' | 'track' | 'dyn' |
   const speed: RepPlot = {
     id: 'dySpd', explain: 'dyn.speedHistogram', sensors: gpsS,
     bars: { x0: 0, w: bw, y: hv.y }, xLabel: 'km/h', yLabel: '% do tempo andando',
-    barTips: Array.from(hv.y, (y, j) => [`${j * bw}–${(j + 1) * bw} km/h`, `${y.toFixed(1)} % do tempo`]),
+    barTips: Array.from(hv.y, (y, j) => ({ title: `${j * bw}–${(j + 1) * bw} km/h`, text: `${y.toFixed(1)} % do tempo` })),
   };
   return {
     ok: true, src: { text: ctx.acc.src || '', explain: 'dyn.accelSource', sensors: accS },

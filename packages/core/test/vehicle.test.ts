@@ -42,7 +42,7 @@ function recomputeNew(S: Session, cfg: AnalysisConfig): any {
   if (A.ang.rollF) A.susp.channels.push(sc('susp:rollF', 'Rolagem diant. (+ = esq. comprimida)', '°', A.ang.rollF));
   if (A.ang.rollR) A.susp.channels.push(sc('susp:rollR', 'Rolagem tras. (+ = esq. comprimida)', '°', A.ang.rollR));
   const rough = roughness(S.t, A.susp);
-  if (rough) A.susp.channels.push(sc('susp:rough', 'Rugosidade (vel. amortecedores RMS 1 s)', 'mm/s', rough));
+  if (rough) A.susp.channels.push(sc('susp:rough', 'Rugosidade (vel. amortecedores, RMS 1 s)', 'mm/s', rough));
   const derived: Channel[] = [];
   const tr = A.track;
   if (tr.ok) {
