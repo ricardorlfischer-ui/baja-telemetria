@@ -1,4 +1,4 @@
-# Guia da equipe — como usar o Baja Telemetria
+# Guia da equipe — como usar a Telemetria da Mauá Racing Baja
 
 Este guia é para quem vai **usar** o app: pilotos, pessoal de suspensão, trem de força,
 CVT, dinâmica e quem apresenta o projeto. Para instalar o servidor, veja

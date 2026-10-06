@@ -1,4 +1,4 @@
-# Implantação — como colocar o Baja Telemetria no ar para a equipe
+# Implantação — como colocar a Telemetria da Mauá Racing Baja no ar para a equipe
 
 Guia passo a passo para quem vai cuidar do servidor da equipe. Não precisa ser da
 computação: siga na ordem e copie os comandos. O contrato técnico está em
@@ -27,7 +27,7 @@ computação: siga na ordem e copie os comandos. O contrato técnico está em
 
 ## 1. Visão geral: o app e o servidor
 
-O Baja Telemetria tem duas partes:
+A Telemetria da Mauá Racing Baja tem duas partes:
 
 | Parte | O que faz | Precisa de internet? |
 |---|---|---|

@@ -1,4 +1,4 @@
-# Arquitetura — Baja Telemetria v2
+# Arquitetura — Telemetria da Mauá Racing Baja (v2)
 
 Este documento é o contrato do projeto: quem mexe no código (pessoa ou agente) segue o que
 está aqui. Mudou alguma decisão? Atualize este arquivo no mesmo commit.
@@ -313,8 +313,12 @@ amortecedores: ..."), e os textos explicativos do app antigo (física, como medi
 - O **cursor muda 60×/s** no play: gráficos e mapa assinam com `useSessionStore.subscribe`
   e se redesenham sem re-render do React; componentes de texto usam um seletor com
   limitação (~20×/s).
-- `useRange()` → `[i0, i1, rótulo]` via `rangeOf`. Relatórios são calculados com `useMemo`
-  em cima de `ctx` + trecho.
+- `useRange()` → `[i0, i1, rótulo]` via `rangeOf` (o mesmo trecho devolve o mesmo array).
+  Relatórios são calculados com `useComputed` (`state/heavy.ts`): `useMemo` em logs
+  pequenos; em logs com mais de 50 mil amostras, primeiro o aviso "Calculando…" e a conta
+  depois de pintar. `useQuality()` calcula `dataQuality` uma vez por sessão.
+- Atalhos de teclado só nas páginas com reprodução; uma página com erro mostra a mensagem
+  nela (`PageErrorBoundary`) sem derrubar o menu. `#/pagina?exemplo=1` abre o exemplo.
 - `profiles.ts`: perfis de carro e pista (biblioteca ativa), perfil ativo, fórmulas.
 - `prefs.ts`: tema, servidor, layouts da página Canais (localStorage, sempre com
   try/catch).

@@ -1,4 +1,4 @@
-# Baja Telemetria
+# Telemetria · Mauá Racing Baja
 
 Telemetria do carro de Baja SAE da **Mauá Racing Baja**: transforma os logs da **FuelTech FT450** (CSV do
 FT Manager) e do **BUSMASTER** (CAN) em mapa da pista pelo GPS, gráficos sincronizados e
