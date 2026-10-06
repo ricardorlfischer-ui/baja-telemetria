@@ -259,11 +259,21 @@ export function XYPlot({ spec, height = 280, ref, className, ...rest }: XYPlotPr
       if (m.label) { g.fillStyle = mc; g.font = F(11.5, 600); g.fillText(m.label, x + 4, P.t + 12 + (m.row || 0) * 14); g.font = tickFont; }
     });
     /* linhas horizontais de referência (limites) */
+    /* rótulos de linhas próximas (ex.: limite 100 °C e regime 101 °C) não se sobrepõem: o
+     * seguinte vai para baixo da linha, ou mais para cima */
+    const usedLabelY: number[] = [];
+    const clash = (ly: number) => usedLabelY.some(u => Math.abs(u - ly) < 14);
     (s.hlines || []).forEach(l => {
       const y = Math.round(Y(l.y)) + .5, lc = resolveColor(T, l.color) ?? ink;
       g.strokeStyle = lc; g.lineWidth = 1.25;
       g.beginPath(); g.moveTo(P.l, y); g.lineTo(P.l + pw, y); g.stroke();
-      if (l.label) { g.fillStyle = lc; g.font = F(11.5, 600); g.textAlign = 'right'; g.fillText(l.label, P.l + pw - 4, y - 5); g.textAlign = 'left'; g.font = tickFont; }
+      if (l.label) {
+        let ly = y - 5;
+        if (clash(ly)) ly = y + 15;
+        for (let k = 1; clash(ly) && k < 6; k++) ly = y - 5 - 14 * k;
+        usedLabelY.push(ly);
+        g.fillStyle = lc; g.font = F(12, 600); g.textAlign = 'right'; g.fillText(l.label, P.l + pw - 4, ly); g.textAlign = 'left'; g.font = tickFont;
+      }
     });
     /* ponto atual */
     if (s.hi && s.hi.x === s.hi.x && s.hi.y === s.hi.y) {

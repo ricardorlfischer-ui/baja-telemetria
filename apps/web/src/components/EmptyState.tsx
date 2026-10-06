@@ -20,7 +20,12 @@ export function EmptyState({ title, description, icon: Ico = IconInbox, action, 
         <Ico size={28} stroke={1.6} />
       </ThemeIcon>
       <Title order={3} mt={4}>{title}</Title>
-      {description && <Text c="dimmed" maw={520}>{description}</Text>}
+      {/* texto vira <p>; conteúdo rico (Stack, chips, listas) vai num <div> (HTML válido) */}
+      {description && (
+        <Text c="dimmed" maw={560} component={typeof description === 'string' || typeof description === 'number' ? 'p' : 'div'}>
+          {description}
+        </Text>
+      )}
       {action && <div style={{ marginTop: 8 }}>{action}</div>}
     </Stack>
   );

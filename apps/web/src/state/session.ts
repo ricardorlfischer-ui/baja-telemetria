@@ -17,6 +17,8 @@ import {
   type AnalysisConfig, type AnalysisConfigInput, type Channel, type Pt, type RangeMode, type SensorId, type SensorState, type Session, type SessionContext,
 } from '@baja/core';
 import type { Library, SessionMeta } from '../library/types';
+import { ApiError } from '../library/remote';
+import { LocalDuplicateError } from '../library/local';
 import { configInput, useProfiles } from './profiles';
 import { addLogToLibrary } from './librarySave';
 
@@ -95,6 +97,9 @@ export interface SessionState {
   setColorKey: (k: string) => void;
   setXAxis: (x: XAxis) => void;
   clearError: () => void;
+  /** dados da sessão na biblioteca mudaram (editar, recalcular o resumo): atualiza source.meta
+   *  sem reabrir o log (só se for a mesma sessão aberta) */
+  setSourceMeta: (meta: SessionMeta) => void;
 }
 
 /* ---------------------------------------------------------------- biblioteca registrada
@@ -115,12 +120,15 @@ const yieldFrame = (): Promise<void> => new Promise(res => {
 
 const msgOf = (e: unknown): string => (e instanceof Error ? e.message : String(e));
 
-/* canal que colore o mapa: mantém se existir; senão gps:speed ou o primeiro não constante
- * (recompute() do antigo) */
+/* canal que colore o mapa ao abrir um log: mantém o escolhido se ele existir e variar neste
+ * log; senão gps:speed ou o primeiro não constante (recompute() do antigo). Sem a checagem
+ * de variação, abrir um log sem voltas depois do exemplo deixava o mapa colorido por
+ * "Tempo na volta", todo NaN. */
 function pickColorKey(all: Channel[], cur: string): string {
-  if (all.some(c => c.key === cur)) return cur;
-  if (all.some(c => c.key === 'gps:speed')) return 'gps:speed';
-  return (all.find(c => !c.constant) || all[0] || { key: '' }).key;
+  const varies = (c: Channel | undefined) => !!c && !c.constant && c.count > 0;
+  if (varies(all.find(c => c.key === cur))) return cur;
+  if (varies(all.find(c => c.key === 'gps:speed'))) return 'gps:speed';
+  return (all.find(varies) || all.find(c => c.key === cur) || all[0] || { key: '' }).key;
 }
 
 /* trecho do play: a volta selecionada ou a sessão inteira (playBounds do antigo) */
@@ -264,7 +272,16 @@ export const useSessionStore = create<SessionState>((set, get) => {
             const meta = await addLogToLibrary(opts.saveTo, { name: file.name, text }, {}, get().ctx);
             if (myGen === gen) set(s => ({ source: s.source ? { ...s.source, libraryId: meta.id, meta } : s.source }));
           } catch (e) {
-            notifications.show({ color: 'yellow', title: 'O log abriu, mas não foi guardado na biblioteca', message: msgOf(e) });
+            /* o mesmo log já está guardado (409 do servidor ou sha256 igual no local): liga a
+             * sessão aberta à que já existe, em vez de duplicar */
+            const dupId = e instanceof LocalDuplicateError ? e.existingId : e instanceof ApiError && e.status === 409 ? e.existingId : null;
+            const existing = dupId ? await opts.saveTo.getSession(dupId).catch(() => null) : null;
+            if (existing && myGen === gen) {
+              set(s => ({ source: s.source ? { ...s.source, name: existing.name, libraryId: existing.id, meta: existing } : s.source }));
+              notifications.show({ title: 'Este log já estava na biblioteca', message: `Abri “${existing.name}” sem guardar de novo.`, autoClose: 6000 });
+            } else {
+              notifications.show({ color: 'yellow', title: 'O log abriu, mas não foi guardado na biblioteca', message: msgOf(e) });
+            }
           }
         }
         return ok;
@@ -424,6 +441,9 @@ export const useSessionStore = create<SessionState>((set, get) => {
     setColorKey: k => set({ colorKey: k }),
     setXAxis: x => set({ xAxis: x }),
     clearError: () => set(s => ({ error: null, status: s.status === 'error' ? 'empty' : s.status })),
+    setSourceMeta: meta => set(s => (s.source && s.source.libraryId === meta.id
+      ? { source: { ...s.source, name: meta.name, meta } }
+      : {})),
   };
 });
 

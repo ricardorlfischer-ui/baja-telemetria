@@ -1,0 +1,47 @@
+/* Estilos locais das páginas Suspensão e Ressonância (tokens do tema; nada de cor fixa). */
+
+.num { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.strong { font-weight: 650; color: var(--bt-text-strong); }
+.dim { color: var(--mantine-color-dimmed); white-space: normal; }
+.wrapNum { color: inherit; text-align: right; }
+.numLink {
+  cursor: pointer; border-radius: 4px; padding: 1px 3px; margin: -1px -3px;
+  text-decoration: underline dotted; text-decoration-color: var(--mantine-color-dimmed);
+  text-underline-offset: 4px; font: inherit; color: inherit;
+}
+.numLink:hover { background: var(--bt-sel-row); text-decoration-style: solid; }
+.numLink:focus-visible { outline: 2px solid var(--mantine-primary-color-filled); outline-offset: 2px; }
+
+.swatch { display: inline-block; border-radius: 3px; flex: none; vertical-align: -1px; }
+
+.callout { border-left: 4px solid var(--mantine-primary-color-filled); }
+.calloutWarn { border-left-color: var(--bt-warn); }
+
+/* barra de controles */
+.controls { display: flex; flex-wrap: wrap; gap: 20px 32px; align-items: flex-end; }
+.controlLabel { font-size: 14px; font-weight: 500; margin-bottom: 6px; }
+
+/* tabela por canto (métricas nas linhas, cantos nas colunas) */
+.matrixWrap { overflow-x: auto; border: 1px solid var(--bt-card-border); border-radius: var(--mantine-radius-md); }
+.matrix { width: 100%; border-collapse: collapse; font-size: 15px; }
+.matrix th, .matrix td { padding: 10px 14px; border-bottom: 1px solid var(--bt-card-border); text-align: right; vertical-align: top; }
+.matrix tr:last-child td { border-bottom: 0; }
+.matrix th:first-child, .matrix td:first-child { text-align: left; }
+.matrix thead th { background: var(--mantine-color-default-hover); font-weight: 600; white-space: nowrap; }
+.matrix td:first-child { color: var(--mantine-color-dimmed); font-weight: 500; white-space: nowrap; }
+.matrix .off { color: var(--mantine-color-dimmed); }
+.cornerHead { display: inline-flex; align-items: center; gap: 8px; }
+.cornerSub { display: block; font-size: 12.5px; font-weight: 400; color: var(--mantine-color-dimmed); }
+
+/* cartão por canto (resultado do teste de queda) */
+.cornerCard { height: 100%; border-top: 4px solid var(--corner); }
+.bigRow { display: flex; gap: 28px; flex-wrap: wrap; }
+.big { font-size: 28px; font-weight: 650; line-height: 1.1; color: var(--bt-text-strong); font-variant-numeric: tabular-nums; }
+.bigUnit { font-size: 15px; color: var(--mantine-color-dimmed); margin-left: 4px; }
+.kv { display: grid; grid-template-columns: auto 1fr; gap: 6px 16px; font-size: 14.5px; }
+.kv dt { color: var(--mantine-color-dimmed); }
+.kv dd { margin: 0; text-align: right; }
+
+.prose { font-size: 15px; line-height: 1.6; max-width: 900px; }
+.prose p { margin: 0 0 10px; }
+.prose p:last-child { margin-bottom: 0; }

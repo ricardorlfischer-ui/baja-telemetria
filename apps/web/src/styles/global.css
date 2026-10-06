@@ -93,7 +93,7 @@ body {
   color: var(--mantine-color-dimmed); white-space: nowrap; line-height: 1;
   background: transparent;
 }
-.bt-sensor-chip--xs { font-size: 11.5px; padding: 3px 8px 3px 6px; }
+.bt-sensor-chip--xs { font-size: 12px; padding: 3px 8px 3px 6px; }
 .bt-sensor-chip--sm { font-size: 13px; padding: 4px 10px 4px 8px; }
 .bt-sensor-chip[data-state='present'] {
   border-color: color-mix(in srgb, var(--bt-chip-present) 55%, transparent);
@@ -111,7 +111,7 @@ button.bt-sensor-chip { cursor: pointer; }
 button.bt-sensor-chip:hover { border-color: var(--mantine-primary-color-filled); }
 
 /* tabela */
-.bt-table-wrap { border: 1px solid var(--bt-card-border); border-radius: var(--mantine-radius-md); overflow: hidden; }
+.bt-table-wrap { border: 1px solid var(--bt-card-border); border-radius: var(--mantine-radius-md); overflow-x: auto; overflow-y: hidden; }
 .bt-table td.bt-num, .bt-table th[style*='right'] { text-align: right; }
 .bt-table tr[data-clickable] { cursor: pointer; }
 .bt-table tr[data-selected] { background: var(--bt-sel-row); }

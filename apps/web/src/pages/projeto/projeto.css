@@ -1,0 +1,126 @@
+/* Página Ficha do carro (#/projeto): tabelas grandes da ficha, pontos de atenção, matriz de
+ * sensores e o CSS de impressão (fundo branco, sem menu/cabeçalho/rodapé do app). */
+
+/* ---------------------------------------------------------------- cabeçalho da sessão */
+.bt-ficha-info {
+  display: grid; gap: 14px 28px;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+}
+.bt-ficha-info dt { font-size: 13px; color: var(--mantine-color-dimmed); margin: 0 0 2px; }
+.bt-ficha-info dd { margin: 0; font-size: 16px; font-weight: 600; color: var(--bt-text-strong); overflow-wrap: anywhere; }
+.bt-ficha-info dd small { display: block; font-weight: 400; font-size: 13px; color: var(--mantine-color-dimmed); }
+
+/* ---------------------------------------------------------------- pontos de atenção */
+.bt-ficha-recs { display: grid; gap: 12px; grid-template-columns: 1fr; }
+@media (min-width: 1200px) { .bt-ficha-recs { grid-template-columns: 1fr 1fr; } }
+.bt-ficha-rec {
+  display: flex; gap: 14px; align-items: flex-start;
+  padding: 16px 18px; border-radius: var(--mantine-radius-md);
+  border: 1px solid var(--bt-card-border);
+  border-left: 4px solid var(--bt-warn);
+  background: var(--mantine-color-body);
+  cursor: pointer; text-align: left; width: 100%;
+}
+.bt-ficha-rec:hover { border-color: var(--mantine-primary-color-filled); border-left-color: var(--bt-warn); }
+.bt-ficha-rec:focus-visible { outline: 2px solid var(--mantine-primary-color-filled); outline-offset: 2px; }
+.bt-ficha-rec-icon { color: var(--bt-warn); flex: none; margin-top: 2px; }
+.bt-ficha-rec-text { font-size: 15.5px; line-height: 1.5; color: var(--bt-text-strong); }
+
+/* ---------------------------------------------------------------- tabela da ficha */
+.bt-ficha-group { overflow: hidden; }
+.bt-ficha-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+.bt-ficha-table th {
+  text-align: left; font-size: 13px; font-weight: 600; color: var(--mantine-color-dimmed);
+  padding: 12px 16px; border-bottom: 1px solid var(--bt-card-border);
+  text-transform: none;
+}
+.bt-ficha-table td {
+  padding: 16px; vertical-align: top; border-bottom: 1px solid var(--bt-card-border);
+  font-size: 15px; line-height: 1.5; overflow-wrap: anywhere;
+}
+.bt-ficha-table tbody tr:last-child td { border-bottom: 0; }
+.bt-ficha-table tbody tr { cursor: pointer; }
+.bt-ficha-table tbody tr:hover { background: var(--bt-sel-row); }
+.bt-ficha-table tbody tr:focus-visible { outline: 2px solid var(--mantine-primary-color-filled); outline-offset: -2px; }
+.bt-ficha-item { font-weight: 600; color: var(--bt-text-strong); }
+.bt-ficha-val {
+  font-size: 19px; font-weight: 700; line-height: 1.3; color: var(--bt-text-strong);
+  font-variant-numeric: tabular-nums;
+}
+.bt-ficha-val--missing { font-size: 15px; font-weight: 600; color: var(--mantine-color-dimmed); }
+.bt-ficha-how { color: var(--mantine-color-dimmed); }
+.bt-ficha-cell-label { display: none; }
+
+.bt-ficha-col-item { width: 18%; }
+.bt-ficha-col-val { width: 16%; }
+.bt-ficha-col-how { width: 21%; }
+.bt-ficha-col-read { width: 21%; }
+.bt-ficha-col-sens { width: 24%; }
+
+/* tela estreita: cada linha vira um cartão (sem rolagem horizontal) */
+@media screen and (max-width: 899px) {
+  .bt-ficha-table, .bt-ficha-table tbody, .bt-ficha-table tr, .bt-ficha-table td { display: block; width: 100%; }
+  .bt-ficha-table thead, .bt-ficha-table colgroup { display: none; }
+  .bt-ficha-table tbody tr { padding: 12px 4px; border-bottom: 1px solid var(--bt-card-border); }
+  .bt-ficha-table tbody tr:last-child { border-bottom: 0; }
+  .bt-ficha-table td { border: 0; padding: 4px 14px; }
+  .bt-ficha-cell-label { display: block; font-size: 12.5px; color: var(--mantine-color-dimmed); margin-bottom: 1px; }
+  .bt-ficha-table td:empty { display: none; }
+}
+
+/* ---------------------------------------------------------------- matriz de sensores */
+.bt-ficha-matrix { width: 100%; border-collapse: collapse; table-layout: fixed; }
+.bt-ficha-matrix th { text-align: left; font-size: 13px; font-weight: 600; color: var(--mantine-color-dimmed); padding: 10px 16px; border-bottom: 1px solid var(--bt-card-border); }
+.bt-ficha-matrix td { padding: 12px 16px; border-bottom: 1px solid var(--bt-card-border); vertical-align: top; font-size: 15px; line-height: 1.5; overflow-wrap: anywhere; }
+.bt-ficha-matrix tbody tr:last-child td { border-bottom: 0; }
+.bt-ficha-matrix .bt-ficha-matrix-sensor { width: 30%; }
+.bt-ficha-link {
+  background: none; border: 0; padding: 0; font: inherit; color: inherit; cursor: pointer; text-align: left;
+  text-decoration: underline; text-decoration-color: var(--bt-card-border); text-underline-offset: 3px;
+}
+.bt-ficha-link:hover { text-decoration-color: var(--mantine-primary-color-filled); }
+@media screen and (max-width: 699px) {
+  .bt-ficha-matrix, .bt-ficha-matrix tbody, .bt-ficha-matrix tr, .bt-ficha-matrix td { display: block; width: 100% !important; }
+  .bt-ficha-matrix thead { display: none; }
+  .bt-ficha-matrix td { border: 0; padding: 6px 14px; }
+  .bt-ficha-matrix tr { border-bottom: 1px solid var(--bt-card-border); padding: 6px 0; }
+}
+
+/* ---------------------------------------------------------------- impressão */
+.bt-print-only { display: none; }
+
+@media print {
+  @page { margin: 14mm 12mm; }
+  html.bt-print-ficha, html.bt-print-ficha body {
+    background: #fff !important; color: #000 !important;
+    -webkit-print-color-adjust: exact; print-color-adjust: exact;
+  }
+  html.bt-print-ficha .mantine-AppShell-header,
+  html.bt-print-ficha .mantine-AppShell-navbar,
+  html.bt-print-ficha .mantine-AppShell-footer,
+  html.bt-print-ficha .mantine-Drawer-root,
+  html.bt-print-ficha .mantine-Notifications-root { display: none !important; }
+  html.bt-print-ficha .mantine-AppShell-main {
+    padding: 0 !important; min-height: 0 !important; background: #fff !important;
+  }
+  html.bt-print-ficha .bt-page { max-width: none !important; }
+  html.bt-print-ficha .bt-noprint { display: none !important; }
+  html.bt-print-ficha .bt-print-only { display: block !important; }
+  html.bt-print-ficha .bt-section + .bt-section { margin-top: 18px; }
+  html.bt-print-ficha .mantine-Paper-root { box-shadow: none !important; background: #fff !important; border-color: #bbb !important; }
+  html.bt-print-ficha .bt-ficha-table th, html.bt-print-ficha .bt-ficha-table td,
+  html.bt-print-ficha .bt-ficha-matrix th, html.bt-print-ficha .bt-ficha-matrix td { border-color: #ccc !important; font-size: 10.5pt; padding: 6px 8px; color: #000 !important; }
+  html.bt-print-ficha .bt-ficha-val { font-size: 12pt; }
+  html.bt-print-ficha .bt-ficha-how, html.bt-print-ficha .mantine-Text-root[data-c='dimmed'] { color: #444 !important; }
+  html.bt-print-ficha .bt-ficha-table tr, html.bt-print-ficha .bt-ficha-rec, html.bt-print-ficha .bt-ficha-matrix tr { break-inside: avoid; }
+  html.bt-print-ficha .bt-ficha-table thead { display: table-header-group; }
+  html.bt-print-ficha .bt-ficha-rec { padding: 8px 10px; background: #fff !important; }
+  html.bt-print-ficha .bt-ficha-rec-text { font-size: 10.5pt; color: #000 !important; }
+  html.bt-print-ficha .bt-ficha-recs { grid-template-columns: 1fr; gap: 6px; }
+  html.bt-print-ficha .bt-sensor-chip { color: #000 !important; text-decoration: none !important; }
+  html.bt-print-ficha .mantine-ActionIcon-root { display: none !important; }
+  html.bt-print-ficha h1, html.bt-print-ficha h2, html.bt-print-ficha h3 { color: #000 !important; }
+  .bt-print-head { border-bottom: 2px solid #000; padding-bottom: 8px; margin-bottom: 12px; }
+  .bt-print-head h1 { font-size: 18pt; margin: 0 0 4px; }
+  .bt-print-head p { margin: 0; font-size: 10pt; color: #333; }
+}

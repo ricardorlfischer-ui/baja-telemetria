@@ -1,6 +1,6 @@
-/* Decide a biblioteca (docs/ARQUITETURA.md 4.4): servidor salvo nas preferências >
- * servidor na mesma origem (/api/info responde) > local (IndexedDB). */
-import { getPrefs, normalizeServerUrl } from '../state/prefs';
+/* Decide a biblioteca (docs/ARQUITETURA.md 4.4): servidor salvo nas preferências (ou o padrão
+ * do build, VITE_API_URL) > servidor na mesma origem (/api/info responde) > local (IndexedDB). */
+import { serverUrlInUse } from '../state/prefs';
 import { LocalLibrary } from './local';
 import { RemoteLibrary } from './remote';
 import type { Library, ServerInfo } from './types';
@@ -23,7 +23,7 @@ async function probe(r: RemoteLibrary, ms: number): Promise<ServerInfo | null> {
 
 /** Decide a biblioteca: servidor salvo > servidor na mesma origem > local. */
 export async function detectLibrary(): Promise<Detected> {
-  const saved = normalizeServerUrl(getPrefs().serverUrl);
+  const saved = serverUrlInUse();
   if (saved) {
     const r = new RemoteLibrary(saved);
     const info = await probe(r, 4000);

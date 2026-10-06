@@ -1,7 +1,8 @@
 /* Raiz do app: tema Mantine (escuro por padrão), notificações, biblioteca, estado da sessão
  * (perfis, disponibilidade dos sensores), cards de explicação e o roteador (HashRouter:
  * funciona no GitHub Pages sem configuração). */
-import { MantineProvider } from '@mantine/core';
+import { Suspense } from 'react';
+import { Center, Loader, MantineProvider } from '@mantine/core';
 import { Notifications } from '@mantine/notifications';
 import { HashRouter, Route, Routes } from 'react-router';
 import { IconMapQuestion } from '@tabler/icons-react';
@@ -32,8 +33,17 @@ export function App() {
           <ExplainHost>
             <HashRouter>
               <Routes>
+                {/* login em tela cheia, fora da casca (menu e cabeçalho não ficam por trás) */}
+                {ROUTES.filter(r => r.path === '/login').map(r => {
+                  const C = r.component;
+                  return (
+                    <Route key={r.path} path={r.path.slice(1)} element={
+                      <Suspense fallback={<Center h="100vh"><Loader /></Center>}><C /></Suspense>
+                    } />
+                  );
+                })}
                 <Route element={<AppLayout />}>
-                  {ROUTES.map(r => {
+                  {ROUTES.filter(r => r.path !== '/login').map(r => {
                     const C = r.component;
                     return r.path === '/'
                       ? <Route key={r.path} index element={<C />} />

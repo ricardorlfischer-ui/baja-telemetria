@@ -138,7 +138,7 @@ export default function DevComponentesPage() {
       <PageHeader
         title="Componentes"
         subtitle="Vitrine com dados sintéticos para conferir gráficos, mapa e blocos nos dois temas."
-        explain="dev.componentes" sensors={['gps']}
+        explain="design.sensorCoverage" sensors={['gps']}
         actions={(
           <Button leftSection={playing ? <IconPlayerPause size={16} /> : <IconPlayerPlay size={16} />} onClick={() => setPlaying(p => !p)}>
             {playing ? 'Pausar' : 'Reproduzir'}
@@ -148,10 +148,10 @@ export default function DevComponentesPage() {
 
       <Section title="Blocos de número" description="StatTile: rótulo clicável, valor 28 px, status com ícone e texto, sensores.">
         <SimpleGrid cols={{ base: 1, xs: 2, md: 4 }} spacing="md">
-          <StatTile label="Velocidade máxima" value={43.04} decimals={1} unit="km/h" hint="volta 2" explain="gps.vmax" sensors={['gps']} />
-          <StatTile label="Curso usado (FL)" value={92} decimals={0} unit="%" status="warn" explain="susp.travel" sensors={['shock_fl', 'car_data']} />
+          <StatTile label="Velocidade máxima" value={43.04} decimals={1} unit="km/h" hint="volta 2" explain="power.vmax" sensors={['gps']} />
+          <StatTile label="Curso usado (FL)" value={92} decimals={0} unit="%" status="warn" explain="susp.travelUsed" sensors={['shock_fl', 'car_data']} />
           <StatTile label="T máx da CVT" value={118.4} decimals={1} unit="°C" status="good" statusText="Dentro do limite" explain="cvt.tmax" sensors={['cvt_temp']} />
-          <StatTile label="Relação da CVT" value={null} unit="" status="crit" statusText="Sem sensor" hint="precisa de rotação do motor" explain="cvt.ratio" sensors={['engine_rpm', 'wheel']} />
+          <StatTile label="Relação da CVT" value={null} unit="" status="crit" statusText="Sem sensor" hint="precisa de rotação do motor" explain="sensor.engine_rpm" sensors={['engine_rpm', 'wheel']} />
         </SimpleGrid>
       </Section>
 
@@ -167,16 +167,16 @@ export default function DevComponentesPage() {
       <Section title="Gráficos XY" description="XYPlot: porte do BT.Plot com o mesmo spec.">
         <SimpleGrid cols={{ base: 1, lg: 2 }} spacing="lg">
           <ChartCard title="Posição dos amortecedores" subtitle="Linhas com cor por canto (FL/FR/RL/RR), marcador e limite."
-            explain="susp.position" sensors={SENSORS_SUSP}>
+            explain="susp.travelUsed" sensors={SENSORS_SUSP}>
             <XYPlot spec={lines} />
           </ChartCard>
-          <ChartCard title="Histograma da velocidade do amortecedor" explain="susp.velHist" sensors={['shock_fl']}>
+          <ChartCard title="Histograma da velocidade do amortecedor" explain="susp.velocityHistogram" sensors={['shock_fl']}>
             <XYPlot spec={bars} />
           </ChartCard>
-          <ChartCard title="Diagrama g-g" subtitle="Dispersão com círculos e mesma escala nos eixos." explain="chart.gg" sensors={['gps']}>
+          <ChartCard title="Diagrama g-g" subtitle="Dispersão com círculos e mesma escala nos eixos." explain="dyn.gg" sensors={['gps']}>
             <XYPlot spec={gg} height={340} ref={ggRef} />
           </ChartCard>
-          <ChartCard title="Espectro andando (PSD)" explain="res.psd" sensors={['shock_fl', 'shock_fr', 'gps']}>
+          <ChartCard title="Espectro andando (PSD)" explain="freq.spectrum" sensors={['shock_fl', 'shock_fr', 'gps']}>
             <XYPlot spec={psd} height={340} />
           </ChartCard>
         </SimpleGrid>
@@ -196,7 +196,7 @@ export default function DevComponentesPage() {
             </Button>
           </Group>
         )}>
-        <ChartCard title="Trajetória colorida pela velocidade" explain="map.track" sensors={['gps']} flush
+        <ChartCard title="Trajetória colorida pela velocidade" explain="chart.trackMap" sensors={['gps']} flush
           footer={<MapLegend lo={leg.lo} hi={leg.hi} dark={leg.dark} label="Velocidade (GPS)" unit="km/h" decimals={2} />}>
           <TrackMap source={mapSource} ref={mapRef} height={440} satellite={sat} onSatelliteChange={setSat}
             follow={follow} onFollowChange={setFollow} lineMode={lineMode} onLineModeChange={setLineMode} onLegend={setLeg} />
@@ -205,11 +205,11 @@ export default function DevComponentesPage() {
 
       <Section title="Canais no tempo (uPlot)" description="Dois painéis com cursor sincronizado; arraste para dar zoom, duplo clique volta.">
         <Stack gap="md">
-          <ChartCard title="Velocidade" explain="gps.speed" sensors={['gps']}>
+          <ChartCard title="Velocidade" explain="channel.gps_speed" sensors={['gps']}>
             <UPlotChart ref={upRef} data={uData} series={[{ label: 'Velocidade (km/h)' }]} syncKey="dev" yLabel="km/h" height={200}
               onClick={x => seek(x)} />
           </ChartCard>
-          <ChartCard title="Amortecedores dianteiros" explain="susp.position" sensors={['shock_fl', 'shock_fr']}>
+          <ChartCard title="Amortecedores dianteiros" explain="susp.travelUsed" sensors={['shock_fl', 'shock_fr']}>
             <UPlotChart ref={up2Ref} data={uData2} series={[{ label: 'FL (mm)', id: 'FL' }, { label: 'FR (mm)', id: 'FR' }]}
               syncKey="dev" xLabel="tempo (s)" yLabel="mm" height={220} onClick={x => seek(x)} />
           </ChartCard>

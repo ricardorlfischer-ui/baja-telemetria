@@ -7,7 +7,9 @@
  * - Tema claro/escuro: cores dos eixos/grade de useChartTheme(); série sem `stroke` pega a cor
  *   pelo id/role (FL, ref...) ou pela ordem dos slots da paleta.
  * - syncKey: cursor (hover) sincronizado entre os gráficos com a mesma chave (uPlot.sync).
- * - Arrastar = zoom no eixo X (onZoom); duplo clique = volta ao todo (onZoom(null)). */
+ * - Arrastar = zoom no eixo X (onZoom); duplo clique = volta ao todo (onZoom(null)).
+ * - onCursor/onZoom/onClick são lidos a cada evento (não ficam presos ao 1º render);
+ *   `plugins` do uPlot entram junto com os ganchos daqui (options é mesclado raso). */
 import { useEffect, useImperativeHandle, useLayoutEffect, useRef, type Ref } from 'react';
 import uPlot from 'uplot';
 import 'uplot/dist/uPlot.min.css';
@@ -55,12 +57,14 @@ export interface UPlotChartProps {
   onZoom?: (range: [number, number] | null) => void;
   /** clique sem arrastar: x */
   onClick?: (x: number) => void;
-  /** opções extras do uPlot (mescladas por cima) */
+  /** opções extras do uPlot (mescladas por cima, raso: passar `cursor` troca o objeto todo) */
   options?: Partial<uPlot.Options>;
+  /** plugins do uPlot (ganchos de desenho/interação), somados aos de options.plugins */
+  plugins?: uPlot.Plugin[];
   ref?: Ref<UPlotHandle>;
 }
 
-function buildOpts(p: UPlotChartProps, th: ChartTheme, width: number, cb: { zoomFromUser: { v: boolean }; onScale: () => void }): uPlot.Options {
+function buildOpts(p: UPlotChartProps, th: ChartTheme, width: number, cb: { zoomFromUser: { v: boolean }; onScale: () => void; live: () => UPlotChartProps }): uPlot.Options {
   const axis = (label?: string, fmt?: (v: number) => string): uPlot.Axis => ({
     stroke: th.text,
     grid: { stroke: th.grid, width: 1 },
@@ -92,11 +96,11 @@ function buildOpts(p: UPlotChartProps, th: ChartTheme, width: number, cb: { zoom
       { label: p.xLabel ?? 'x', value: (_u, v) => (v == null ? '—' : p.fmtX ? p.fmtX(v) : v.toFixed(2)) },
       ...p.series.map((s, i) => {
         const { id: _id, role: _role, slot: _slot, ...rest } = s;
-        return { width: 1.5, ...rest, stroke: seriesColor(th, s, i), points: { show: false } } as uPlot.Series;
+        return { width: 1.5, ...rest, stroke: seriesColor(th, { color: s.stroke, ...s }, i), points: { show: false } } as uPlot.Series;
       }),
     ],
     hooks: {
-      setCursor: [u => { const i = u.cursor.idx; p.onCursor?.(i == null ? null : u.posToVal(u.cursor.left ?? -1, 'x'), i ?? null); }],
+      setCursor: [u => { const i = u.cursor.idx; cb.live().onCursor?.(i == null ? null : u.posToVal(u.cursor.left ?? -1, 'x'), i ?? null); }],
       setSize: [() => cb.onScale()],
       setScale: [(u, key) => {
         if (key !== 'x') return;
@@ -105,10 +109,11 @@ function buildOpts(p: UPlotChartProps, th: ChartTheme, width: number, cb: { zoom
         cb.zoomFromUser.v = false;
         const d = u.data[0], x0 = u.scales.x.min!, x1 = u.scales.x.max!;
         const full = d.length && x0 <= d[0] && x1 >= d[d.length - 1];
-        p.onZoom?.(full ? null : [x0, x1]);
+        cb.live().onZoom?.(full ? null : [x0, x1]);
       }],
     },
     ...p.options,
+    plugins: [...(p.plugins ?? []), ...(p.options?.plugins ?? [])],
   };
 }
 
@@ -121,14 +126,21 @@ export function UPlotChart(props: UPlotChartProps) {
   const headT = useRef<number | null>(null);
   const propsRef = useRef(props);
   propsRef.current = props;
-  const flags = useRef({ zoomFromUser: { v: false }, onScale: () => placeHead() });
+  /* largura da área do gráfico: medida no setSize, não a cada quadro do play */
+  const overW = useRef(0);
+  const flags = useRef({
+    zoomFromUser: { v: false },
+    onScale: () => { const u = plotRef.current; if (u) overW.current = u.over.clientWidth; placeHead(); },
+    live: () => propsRef.current,
+  });
 
   const placeHead = () => {
     const u = plotRef.current, el = headRef.current, t = headT.current;
     if (!u || !el) return;
     if (t === null || t !== t) { el.style.display = 'none'; return; }
     const x = u.valToPos(t, 'x');
-    if (!(x >= 0 && x <= u.over.clientWidth)) { el.style.display = 'none'; return; }
+    if (!overW.current) overW.current = u.over.clientWidth;
+    if (!(x >= 0 && x <= overW.current)) { el.style.display = 'none'; return; }
     el.style.display = 'block';
     el.style.transform = `translateX(${Math.round(x)}px)`;
   };
@@ -140,6 +152,7 @@ export function UPlotChart(props: UPlotChartProps) {
     const width = Math.max(100, wrap.clientWidth);
     const u = new uPlot(buildOpts(propsRef.current, th, width, flags.current), propsRef.current.data, wrap);
     plotRef.current = u;
+    overW.current = u.over.clientWidth;
     /* cursor do play: uma linha dentro da área do gráfico */
     const head = document.createElement('div');
     head.className = 'bt-uplot-head';
@@ -170,7 +183,7 @@ export function UPlotChart(props: UPlotChartProps) {
       plotRef.current = null; headRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [th, seriesKey, props.syncKey, props.xLabel, props.yLabel, props.yRange?.[0], props.yRange?.[1], props.legend, props.options, props.fmtX]);
+  }, [th, seriesKey, props.syncKey, props.xLabel, props.yLabel, props.yRange?.[0], props.yRange?.[1], props.legend, props.options, props.plugins, props.fmtX]);
 
   /* dados novos sem recriar */
   const first = useRef(true);

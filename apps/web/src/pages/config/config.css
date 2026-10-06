@@ -1,0 +1,81 @@
+/* Páginas de configuração (Carro, Pista e GPS, Equipe, Preferências, Login): grades largas
+ * e arejadas. 2 colunas a partir de ~1200 px de tela (conteúdo ≥ ~950 px), 1 abaixo. */
+
+.cfg-groups {
+  display: grid;
+  /* no máximo 2 colunas (cada uma com pelo menos 460 px) */
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, max(460px, calc((100% - 24px) / 2))), 1fr));
+  gap: 24px;
+  align-items: start;
+}
+.cfg-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 210px), 1fr));
+  gap: 18px 20px;
+  /* rótulos de 2 linhas não desalinham as caixas da mesma linha */
+  align-items: end;
+}
+.cfg-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 210px), 1fr));
+  gap: 16px;
+}
+.cfg-group { height: 100%; }
+.cfg-note {
+  font-size: 14px; line-height: 1.5; color: var(--mantine-color-dimmed);
+}
+.cfg-note b { color: var(--bt-text-strong); font-weight: 600; }
+.cfg-used-in { display: flex; flex-wrap: wrap; gap: 6px 8px; align-items: center; }
+.cfg-used-in .cfg-link {
+  font-size: 13.5px; padding: 3px 10px; border-radius: 999px;
+  border: 1px solid var(--bt-card-border); color: var(--mantine-color-text);
+}
+.cfg-used-in .cfg-link:hover { border-color: var(--mantine-primary-color-filled); }
+
+/* avisos (qualidade dos dados) */
+.cfg-issue { border-left: 4px solid var(--cfg-issue, var(--bt-card-border)); }
+.cfg-issue-level {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: 13px; font-weight: 650; color: var(--bt-text-strong); white-space: nowrap;
+}
+.cfg-issue-level svg { color: var(--cfg-issue); }
+
+/* mapa de prévia + lateral */
+.cfg-map-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 24px;
+}
+@media (min-width: 1600px) {
+  .cfg-map-layout { grid-template-columns: minmax(0, 1.5fr) minmax(420px, 1fr); }
+}
+
+/* senha temporária / código de convite em destaque */
+.cfg-secret {
+  font-family: var(--mantine-font-family-monospace);
+  font-size: 22px; font-weight: 650; letter-spacing: 0.06em;
+  padding: 10px 16px; border-radius: var(--mantine-radius-md);
+  border: 1px dashed var(--bt-card-border); background: var(--bt-surface);
+  word-break: break-all;
+}
+.cfg-code { font-family: var(--mantine-font-family-monospace); font-weight: 600; letter-spacing: 0.04em; }
+
+/* login: tela cheia sem a casca do app */
+.cfg-login {
+  position: fixed; inset: 0; z-index: 400;
+  overflow-y: auto;
+  display: flex; align-items: flex-start; justify-content: center;
+  padding: 48px 16px;
+  background: var(--mantine-color-body);
+}
+[data-mantine-color-scheme='dark'] .cfg-login { background: var(--mantine-color-dark-8); }
+.cfg-login-card { width: 100%; max-width: 480px; }
+@media (min-height: 760px) { .cfg-login { align-items: center; } }
+
+/* tabelas largas: no celular rolam de lado dentro do cartão (a página não rola) */
+.cfg-table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+.cfg-table-scroll > .bt-table-wrap { min-width: var(--cfg-table-min, 640px); }
+
+/* botões de ação que podem quebrar a linha no celular */
+.cfg-wrap-btn { max-width: 100%; height: auto; min-height: var(--button-height); }
+.cfg-wrap-btn .mantine-Button-label { white-space: normal; text-align: left; line-height: 1.25; padding-block: 6px; }

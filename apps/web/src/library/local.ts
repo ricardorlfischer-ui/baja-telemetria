@@ -2,6 +2,7 @@
  * O texto do log é guardado comprimido com CompressionStream('gzip') quando o navegador tem;
  * senão, como texto puro. Carros, pistas e anotações também ficam aqui. */
 import { openDB, type DBSchema, type IDBPDatabase } from 'idb';
+import { SUMMARY_VERSION } from '@baja/core';
 import type {
   CarProfile, Comment, Library, LogInput, SessionKind, SessionMeta, SessionPatch, SessionQuery, TrackProfile,
 } from './types';
@@ -15,6 +16,13 @@ interface BajaDB extends DBSchema {
   tracks: { key: string; value: TrackProfile };
   comments: { key: string; value: Comment; indexes: { sessionId: string } };
 }
+
+/* resumo calculado com uma versão antiga das contas (como o summaryOutdated do servidor);
+ * o campo só existe na leitura, não é gravado */
+const withFlags = (m: SessionMeta): SessionMeta => {
+  const { summaryOutdated: _old, ...rest } = m;
+  return rest.summary && rest.summary.version !== SUMMARY_VERSION ? { ...rest, summaryOutdated: true } : rest;
+};
 
 const DB_NAME = 'baja-telemetria';
 const DB_VERSION = 1;
@@ -46,6 +54,25 @@ export function guessKind(_name: string, text: string): SessionKind {
 }
 
 const byteLength = (s: string): number => new Blob([s]).size;
+
+/** sha256 do texto do log (hex), como o servidor guarda; null sem crypto.subtle (http sem TLS). */
+export async function sha256Hex(text: string): Promise<string | null> {
+  try {
+    if (typeof crypto === 'undefined' || !crypto.subtle) return null;
+    const h = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
+    return Array.from(new Uint8Array(h), b => b.toString(16).padStart(2, '0')).join('');
+  } catch { return null; }
+}
+
+/** Log repetido na biblioteca local (mesmo comportamento do 409 do servidor). */
+export class LocalDuplicateError extends Error {
+  readonly existingId: string;
+  constructor(message: string, existingId: string) {
+    super(message);
+    this.name = 'LocalDuplicateError';
+    this.existingId = existingId;
+  }
+}
 
 async function readInput(f: LogInput): Promise<{ name: string; text: string }> {
   if (typeof File !== 'undefined' && f instanceof File) return { name: f.name, text: await f.text() };
@@ -92,13 +119,13 @@ export class LocalLibrary implements Library {
   /* ------------------------------------------------------------ sessões */
   async listSessions(q?: SessionQuery): Promise<SessionMeta[]> {
     const all = await (await this.db()).getAll('sessions');
-    return all.filter(m => matches(m, q)).sort((a, b) => (b.date || b.createdAt).localeCompare(a.date || a.createdAt));
+    return all.filter(m => matches(m, q)).sort((a, b) => (b.date || b.createdAt).localeCompare(a.date || a.createdAt)).map(withFlags);
   }
 
   async getSession(id: string): Promise<SessionMeta> {
     const m = await (await this.db()).get('sessions', id);
     if (!m) throw new Error('Sessão não encontrada na biblioteca local');
-    return m;
+    return withFlags(m);
   }
 
   async getSessionText(id: string): Promise<string> {
@@ -109,8 +136,15 @@ export class LocalLibrary implements Library {
     return gunzipToText(f.data as Blob);
   }
 
-  async addSession(file: LogInput, meta: Parameters<Library['addSession']>[1] = {}): Promise<SessionMeta> {
+  /** Guarda o log. Mesmo sha256 de uma sessão já guardada → LocalDuplicateError (a não ser
+   *  com meta.allowDuplicate), como o 409 do servidor. */
+  async addSession(file: LogInput, meta: Parameters<Library['addSession']>[1] & { allowDuplicate?: boolean } = {}): Promise<SessionMeta> {
     const { name, text } = await readInput(file);
+    const sha256 = await sha256Hex(text);
+    if (sha256 && !meta.allowDuplicate) {
+      const dup = (await (await this.db()).getAll('sessions')).find(s => s.sha256 === sha256);
+      if (dup) throw new LocalDuplicateError(`Este log já está na biblioteca ("${dup.name}")`, dup.id);
+    }
     const id = newId();
     const m: SessionMeta = {
       id,
@@ -126,6 +160,7 @@ export class LocalLibrary implements Library {
       ...(meta.driver ? { driver: meta.driver } : {}),
       ...(meta.notes ? { notes: meta.notes } : {}),
       ...(meta.summary ? { summary: meta.summary } : {}),
+      ...(sha256 ? { sha256 } : {}),
     };
     const stored: StoredFile = hasCompression()
       ? { id, gz: true, data: await gzipText(text) }
@@ -140,9 +175,9 @@ export class LocalLibrary implements Library {
     const db = await this.db();
     const m = await db.get('sessions', id);
     if (!m) throw new Error('Sessão não encontrada na biblioteca local');
-    const n = { ...m, ...patch, id };
+    const { summaryOutdated: _o, ...n } = { ...m, ...patch, id } as SessionMeta;
     await db.put('sessions', n);
-    return n;
+    return withFlags(n);
   }
 
   async deleteSession(id: string): Promise<void> {

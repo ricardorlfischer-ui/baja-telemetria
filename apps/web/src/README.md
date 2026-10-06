@@ -21,8 +21,11 @@ Contrato completo: `docs/ARQUITETURA.md` seção 4. Resumo do que já existe:
 ## Regras das páginas
 
 - Comece com `<PageHeader title=… subtitle={route.question} />` (use `routeByPath('/x')`).
-- Sem sessão / sem sensor: `<EmptyState title="…" description="o que fazer" />` (nunca tela em branco).
-- Seções com `<Section title="…" description="…">` (título 18 px, 40 px entre seções).
+- Sem sessão: `<NoSessionState icon description="o que a página mostra" />` (carregando, e os mesmos três caminhos em
+  todas as páginas: dados de exemplo, abrir arquivo, sessões da biblioteca). Sem sensor: `<EmptyState title="…"
+  description="o que falta e o que medir" />` (description pode ter chips/listas: vira `<div>`). Nunca tela em branco.
+- Seções com `<Section title="…" description="…" explain sensors>` (título 18 px, 40 px entre seções; com `explain` o
+  título abre o card e os chips dos sensores aparecem ao lado; `className` extra, ex.: `bt-print-hide`).
 - **Todo gráfico** dentro de `<ChartCard title explain sensors>`; **todo número** em `<StatTile label value unit explain sensors status>`.
   `explain` é o id do catálogo `EXPLAIN` do core; `sensors` são os `SensorId` que **de fato** entraram na conta nesta sessão
   (vêm dos relatórios do core). O título e o ⓘ abrem o card (`useExplain().open(id, { sensors })`).
@@ -41,7 +44,8 @@ Contrato completo: `docs/ARQUITETURA.md` seção 4. Resumo do que já existe:
   Cursor 60×/s: `ref.current.setCursor(t)` (só a camada do carro). `fit()`, `invalidate()`, `zoom(f)`.
   Legenda: `<MapLegend lo hi dark unit decimals={decimalsFor(c.lo, c.hi)} />` com o que vier de `onLegend`.
   `onLineDrawn` recebe os pontos crus: arredonde como o antigo (`+p.x.toFixed(2)`).
-- **`UPlotChart`** (`data`, `series`, `syncKey`, `xLabel`, `yLabel`, `onCursor`, `onZoom`, `onClick`, `ref`): uPlot com tema;
+- **`UPlotChart`** (`data`, `series`, `syncKey`, `xLabel`, `yLabel`, `onCursor`, `onZoom`, `onClick`, `plugins`, `ref`): uPlot com tema
+  (série com `stroke` usa essa cor; callbacks lidos a cada evento; `plugins` somados aos ganchos internos);
   `ref.current.setCursorTime(t)` move a linha do play sem redesenhar; `setXRange`, `resetX`, `getPlot`.
 - **`ChartCard`**, **`StatTile`**, **`SensorChips`** (estado `present/absent/planned` por `availability` ou pelo
   `SensorAvailabilityProvider`; rótulos provisórios em `SENSOR_LABELS` até o catálogo `SENSORS` do core),

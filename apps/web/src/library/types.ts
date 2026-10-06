@@ -1,6 +1,6 @@
 /* Tipos da biblioteca de sessões (docs/ARQUITETURA.md 4.4 e 5.2/5.3). Os mesmos objetos
  * servem para a biblioteca local (IndexedDB) e para o servidor da equipe. */
-import type { CarConfig, SensorId, SuspConfig, TrackConfig } from '@baja/core';
+import type { CarConfig, SuspConfig, TrackConfig } from '@baja/core';
 
 /* ---------------------------------------------------------------- resumo da sessão
  * Mesmo tipo do core (ARQUITETURA 3.6): o servidor e o navegador usam a mesma conta. */
@@ -52,6 +52,9 @@ export interface CarProfile {
   name: string;
   params: CarProfileParams;
   createdBy?: string;
+  /* só no servidor (ARQUITETURA 5.3): nome de quem criou e quantas sessões usam o perfil */
+  createdByName?: string;
+  sessions?: number;
   updatedAt?: string;
 }
 
@@ -61,6 +64,8 @@ export interface TrackProfile {
   name: string;
   params: Partial<TrackConfig>;
   createdBy?: string;
+  createdByName?: string;
+  sessions?: number;
   updatedAt?: string;
 }
 
@@ -88,10 +93,21 @@ export interface Invite {
   code: string;
   role: Role;
   createdBy?: string;
+  createdByName?: string;
   createdAt: string;
   expiresAt?: string | null;
   usedBy?: string | null;
+  usedByName?: string;
+  usedAt?: string | null;
+  /** situação calculada pelo servidor */
+  status?: 'ativo' | 'usado' | 'expirado';
 }
+
+/** Usuário recém-criado: sem senha no pedido, o servidor gera uma e a devolve uma única vez. */
+export type CreatedUser = User & { tempPassword?: string };
+
+/** Dados de uma sessão nova. allowDuplicate: guarda mesmo que o mesmo log (sha256) já exista. */
+export type AddSessionMeta = Partial<Omit<SessionMeta, 'id' | 'createdAt' | 'size' | 'fileName'>> & { allowDuplicate?: boolean };
 
 /** Arquivo a adicionar: um File do navegador ou o texto já lido. */
 export type LogInput = File | { name: string; text: string };
@@ -102,7 +118,7 @@ export interface Library {
   getSession(id: string): Promise<SessionMeta>;
   getSessionText(id: string): Promise<string>;
   /** guarda o log; o resumo é calculado por quem chama (local) ou pelo servidor (remoto) */
-  addSession(file: LogInput, meta?: Partial<Omit<SessionMeta, 'id' | 'createdAt' | 'size' | 'fileName'>>): Promise<SessionMeta>;
+  addSession(file: LogInput, meta?: AddSessionMeta): Promise<SessionMeta>;
   updateSession(id: string, patch: SessionPatch): Promise<SessionMeta>;
   deleteSession(id: string): Promise<void>;
   listCars(): Promise<CarProfile[]>;

@@ -2,18 +2,23 @@
  * do tempo derruba só a thread de análise, não o servidor.
  *
  * Prova do problema (antes da correção): um CSV de 70 kB com um único ponto da roda a 6e8 km/h
- * faz o powerCurve do core criar 3e8 listas; rodando na thread principal, o Node morria com
- * "FATAL ERROR: Reached heap limit" e levava o servidor junto (qualquer membro derrubava). */
+ * fazia o powerCurve do core criar 3e8 listas; rodando na thread principal, o Node morria com
+ * "FATAL ERROR: Reached heap limit" e levava o servidor junto (qualquer membro derrubava).
+ * O powerCurve foi protegido (baldes esparsos), mas o espectro da pista (roadSpectrum, porte fiel)
+ * ainda reamostra a distância a cada 0,25 m: com amortecedores no log, o mesmo pico na roda
+ * (3e9 km/h = 1,7e4 km num passo) pede uma grade de ~7e7 pontos. É esse o log de teste. */
 import { afterEach, describe, expect, it } from 'vitest';
 import { computeSession, parseLog, sessionSummary } from '@baja/core';
 import { auth, fixture, json, makeApp, makeTeam, upload, type TestApp } from './helpers';
 
-/* roda com um pico absurdo num único ponto (sensor com defeito, ou de propósito) */
+/* roda com um pico absurdo num único ponto (sensor com defeito, ou de propósito), mais dois
+ * amortecedores com sinal (para o espectro da pista rodar) */
 function wheelSpikeLog(spike: number): Buffer {
-  let s = 'TIME,Wheel_speed\n';
+  let s = 'TIME,Wheel_speed,Shock_-_Front_Left,Shock_-_Front_Right\n';
   for (let i = 0; i < 3000; i++) {
     const v = i === 1500 ? String(spike) : (20 + 10 * Math.sin(i / 50) + i * 0.01).toFixed(2);
-    s += `${(i * 0.02).toFixed(3)},${v}\n`;
+    const fl = (50 + 10 * Math.sin(i / 7)).toFixed(2), fr = (50 + 10 * Math.cos(i / 9)).toFixed(2);
+    s += `${(i * 0.02).toFixed(3)},${v},${fl},${fr}\n`;
   }
   return Buffer.from(s);
 }
@@ -25,7 +30,7 @@ describe('thread de análise', () => {
   it('log que estoura a memória: só a thread morre; a sessão fica com summaryError e o servidor segue', async () => {
     t = await makeApp({ analysisMemoryMb: 256 });
     const team = await makeTeam(t.app);
-    const r = await upload(t.app, team.member, 'roda_com_pico.csv', wheelSpikeLog(6e8));
+    const r = await upload(t.app, team.member, 'roda_com_pico.csv', wheelSpikeLog(3e9));
     expect(r.statusCode).toBe(201);
     const s = json(r);
     expect(s.kind).toBe('FT');

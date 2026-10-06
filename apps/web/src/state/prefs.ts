@@ -26,6 +26,7 @@ export interface Prefs {
   channelLayouts: Record<string, ChannelLayout>;
   lastChannelLayout: string | null;
   navCollapsed: boolean;                       /* barra lateral recolhida no computador */
+  localOnly: boolean;                          /* escolheu "só este navegador": ignora o servidor padrão do build */
 }
 
 const KEY = 'baja:prefs';
@@ -35,6 +36,7 @@ export const DEFAULT_PREFS: Prefs = {
   channelLayouts: {},
   lastChannelLayout: null,
   navCollapsed: false,
+  localOnly: false,
 };
 
 /* ---------------------------------------------------------------- localStorage seguro */
@@ -58,6 +60,7 @@ function load(): Prefs {
       ...p,
       theme: p.theme === 'light' || p.theme === 'auto' || p.theme === 'dark' ? p.theme : 'dark',
       serverUrl: typeof p.serverUrl === 'string' ? p.serverUrl : '',
+      localOnly: p.localOnly === true,
       channelLayouts: p.channelLayouts && typeof p.channelLayouts === 'object' ? p.channelLayouts : {},
     };
   } catch {
@@ -73,8 +76,8 @@ interface PrefsStore extends Prefs {
 
 export const usePrefs = create<PrefsStore>((set, get) => {
   const save = () => {
-    const { theme, serverUrl, channelLayouts, lastChannelLayout, navCollapsed } = get();
-    lsSet(KEY, JSON.stringify({ theme, serverUrl, channelLayouts, lastChannelLayout, navCollapsed }));
+    const { theme, serverUrl, channelLayouts, lastChannelLayout, navCollapsed, localOnly } = get();
+    lsSet(KEY, JSON.stringify({ theme, serverUrl, channelLayouts, lastChannelLayout, navCollapsed, localOnly }));
   };
   return {
     ...load(),
@@ -102,6 +105,15 @@ export const getPrefs = (): Prefs => usePrefs.getState();
 
 /** Normaliza o endereço do servidor: sem barra no fim; vazio = mesma origem. */
 export const normalizeServerUrl = (u: string): string => u.trim().replace(/\/+$/, '');
+
+/** Servidor padrão desta instalação (VITE_API_URL no build, ex.: o GitHub Pages da equipe);
+ *  '' = nenhum. */
+export const DEFAULT_SERVER_URL: string = normalizeServerUrl(String(import.meta.env.VITE_API_URL ?? ''));
+
+/** Servidor em uso: o salvo em Preferências; sem ele, o padrão do build (a não ser que a
+ *  pessoa tenha escolhido "só este navegador"); '' = detectar na mesma origem ou local. */
+export const serverUrlInUse = (p: Pick<Prefs, 'serverUrl' | 'localOnly'> = getPrefs()): string =>
+  normalizeServerUrl(p.serverUrl) || (p.localOnly ? '' : DEFAULT_SERVER_URL);
 
 /* ---------------------------------------------------------------- tema do Mantine
  * O Mantine guarda o esquema de cor pelo "manager": este grava nas preferências, assim o tema

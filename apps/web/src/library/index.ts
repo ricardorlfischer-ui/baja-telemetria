@@ -4,6 +4,7 @@
  * servido pelo próprio servidor (/api/info responde na mesma origem). Senão, local. */
 export * from './types';
 export { detectLibrary, type Detected } from './detect';
-export { LocalLibrary, gzipText, gunzipToText, hasCompression, newId, guessKind } from './local';
-export { RemoteLibrary, ApiError, getToken, setToken, type AuthResult } from './remote';
+export { LocalLibrary, LocalDuplicateError, gzipText, gunzipToText, hasCompression, newId, guessKind, sha256Hex } from './local';
+export { RemoteLibrary, ApiError, getToken, setToken, type AuthResult, type UploadProgress } from './remote';
 export { LibraryProvider, useLibrary, type LibraryState } from './context';
+export { fmtSessionDate, fmtDateTime, sessionDateText } from './format';

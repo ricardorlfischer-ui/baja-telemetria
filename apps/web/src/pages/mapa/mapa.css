@@ -1,0 +1,96 @@
+/* Páginas Mapa e Voltas: grade mapa + painel "Agora", mini-mapas por canal e a tabela de voltas. */
+
+/* ---------------------------------------------------------------- abas */
+.bt-mapa-tabs .mantine-Tabs-tab { font-size: 15px; padding: 10px 18px; }
+
+/* ---------------------------------------------------------------- mapa + painel */
+.bt-mapa-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 20px;
+  align-items: stretch;
+}
+@media (min-width: 1200px) {
+  .bt-mapa-grid { grid-template-columns: minmax(0, 1fr) 360px; }
+  /* o painel não define a altura da linha: acompanha o card do mapa e rola por dentro */
+  .bt-mapa-side { contain: size; min-height: 0; }
+  .bt-mapa-side .bt-mapa-now { height: 100%; }
+}
+.bt-mapa-bar { padding: 4px 16px 14px; }
+.bt-mapa-map { position: relative; border-top: 1px solid var(--bt-card-border); border-bottom: 1px solid var(--bt-card-border); }
+.bt-mapa-msg {
+  position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+  width: min(520px, calc(100% - 32px)); z-index: 3;
+}
+.bt-mapa-line { padding: 12px 16px; }
+
+/* painel Agora */
+.bt-mapa-now { display: flex; flex-direction: column; overflow: hidden; }
+.bt-mapa-now-scroll { flex: 1 1 auto; min-height: 0; max-height: 440px; }
+@media (min-width: 1200px) { .bt-mapa-now-scroll { max-height: none; } }
+.bt-mapa-gps {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 4px 10px; border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--bt-status) 55%, transparent);
+  background: color-mix(in srgb, var(--bt-status) 14%, transparent);
+  font-size: 14px; font-weight: 600; color: var(--bt-text-strong); white-space: nowrap;
+}
+.bt-mapa-gps svg { color: var(--bt-status); }
+.bt-mapa-hero { display: flex; align-items: baseline; gap: 8px; margin-top: 2px; }
+.bt-mapa-hero-num { font-size: 48px; font-weight: 700; line-height: 1.05; color: var(--bt-text-strong); letter-spacing: -0.02em; }
+.bt-mapa-hero--sm .bt-mapa-hero-num { font-size: 30px; }
+.bt-mapa-hero-unit { font-size: 15px; color: var(--mantine-color-dimmed); }
+.bt-mapa-now-label { font-size: 14px; font-weight: 500; color: var(--mantine-color-dimmed); }
+.bt-mapa-now-grid {
+  display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center;
+  gap: 6px 12px; font-size: 15px;
+}
+.bt-mapa-now-grid > span { text-align: right; color: var(--bt-text-strong); overflow-wrap: anywhere; }
+.bt-mapa-now-table { width: 100%; border-collapse: collapse; font-size: 14px; }
+.bt-mapa-now-table td { padding: 5px 4px; border-bottom: 1px solid var(--bt-card-border); }
+.bt-mapa-now-table tr:not(.bt-mapa-now-grp) { cursor: pointer; }
+.bt-mapa-now-table tr:not(.bt-mapa-now-grp):hover { background: var(--bt-sel-row); }
+.bt-mapa-now-table tr[data-active] { background: var(--bt-sel-row); }
+.bt-mapa-now-table tr[data-active] td:first-child { box-shadow: inset 3px 0 0 var(--mantine-primary-color-filled); }
+.bt-mapa-now-table tr[data-const] td { color: var(--mantine-color-dimmed); }
+.bt-mapa-now-grp td {
+  padding: 12px 4px 4px 16px; font-size: 12px; font-weight: 650; letter-spacing: 0.05em;
+  text-transform: uppercase; color: var(--mantine-color-dimmed); border-bottom: none;
+}
+.bt-mapa-now-name { padding-left: 16px !important; line-height: 1.3; }
+.bt-mapa-now-val { text-align: right; white-space: nowrap; color: var(--bt-text-strong); }
+.bt-mapa-now-unit { margin-left: 4px; color: var(--mantine-color-dimmed); font-size: 12.5px; }
+.bt-mapa-now-i { width: 30px; text-align: right; }
+
+/* ---------------------------------------------------------------- mini-mapas */
+.bt-mm-grid {
+  display: grid; gap: 16px;
+  grid-template-columns: repeat(auto-fill, minmax(290px, 1fr));
+}
+.bt-mm { overflow: hidden; display: flex; flex-direction: column; transition: border-color 0.15s; }
+.bt-mm[data-active] { border-color: var(--mantine-primary-color-filled); box-shadow: 0 0 0 1px var(--mantine-primary-color-filled); }
+.bt-mm-head { padding: 12px 12px 8px 14px; display: flex; flex-direction: column; gap: 4px; }
+.bt-mm-name { font-size: 15px; font-weight: 650; line-height: 1.3; color: var(--bt-text-strong); }
+.bt-mm-box { position: relative; cursor: pointer; background: var(--bt-surface); }
+.bt-mm-box:focus-visible { outline: 2px solid var(--mantine-primary-color-filled); outline-offset: -2px; }
+.bt-mm-canvas { display: block; width: 100%; height: 100%; }
+.bt-mm-foot { display: flex; align-items: center; gap: 10px; padding: 10px 14px 12px; }
+.bt-mm-bar { flex: 1 1 auto; height: 8px; border-radius: 4px; display: block; }
+.bt-mm-val { font-size: 15px; font-weight: 600; color: var(--bt-text-strong); white-space: nowrap; }
+
+/* ---------------------------------------------------------------- voltas */
+.bt-voltas-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 20px; }
+@media (min-width: 1200px) { .bt-voltas-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.bt-voltas-best { display: inline-flex; align-items: center; gap: 6px; font-weight: 650; }
+.bt-voltas-best svg { color: var(--bt-good); }
+.bt-voltas-th { display: inline-flex; align-items: center; gap: 2px; }
+.bt-voltas-cur { color: var(--mantine-primary-color-filled); }
+.bt-voltas-table .bt-table { font-size: 15px; }
+
+/* botões da vista sobre o mapa (canto de baixo à direita: o aviso da linha fica em cima) */
+.bt-mapa-tools {
+  position: absolute; right: 12px; bottom: 30px; left: 120px; z-index: 4;
+  pointer-events: none;
+}
+.bt-mapa-tools > * { pointer-events: auto; }
+.bt-mapa-tools .mantine-Button-root[data-variant='default'] { box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25); }

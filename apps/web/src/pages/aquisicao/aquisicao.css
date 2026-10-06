@@ -1,0 +1,94 @@
+/* Estilos das páginas Aquisição e Dispersão (só o que os componentes compartilhados não têm). */
+
+/* tabelas largas rolam dentro do cartão, nunca a página */
+.bt-acq-hscroll { overflow-x: auto; max-width: 100%; }
+
+/* texto/número que abre o card de explicação */
+.bt-acq-link { font: inherit; color: inherit; }
+.bt-acq-link[data-strong] { font-weight: 600; color: var(--bt-text-strong); }
+
+/* abas grandes */
+.bt-acq-tabs .mantine-Tabs-tab { font-size: 15px; padding: 12px 18px; font-weight: 550; }
+.bt-acq-tabs .mantine-Tabs-list { margin-bottom: 28px; }
+
+/* aviso da qualidade: faixa da cor do nível à esquerda */
+.bt-acq-issue { border-left: 4px solid var(--bt-issue) !important; }
+
+/* cartões dos sensores */
+.bt-acq-sensor[data-state='absent'] { border-color: color-mix(in srgb, var(--bt-crit) 45%, var(--bt-card-border)); }
+.bt-acq-sensor[data-state='planned'] { border-style: dashed; }
+
+/* matriz sensor × área */
+.bt-acq-matrix th { font-size: 13.5px; font-weight: 600; vertical-align: bottom; }
+.bt-acq-matrix tr[data-state='planned'] td:first-child { border-left: 3px dashed var(--bt-card-border); }
+.bt-acq-matrix tr[data-state='absent'] { opacity: 0.75; }
+.bt-acq-mcell[data-n] { background: color-mix(in srgb, var(--mantine-primary-color-filled) 10%, transparent); }
+.bt-acq-mcell[data-sel] { background: color-mix(in srgb, var(--mantine-primary-color-filled) 30%, transparent); }
+.bt-acq-mnum {
+  display: inline-block; min-width: 36px; padding: 4px 8px; border-radius: 6px;
+  font-size: 17px; font-weight: 650; font-variant-numeric: tabular-nums; color: var(--bt-text-strong);
+}
+.bt-acq-mnum:hover { background: color-mix(in srgb, var(--mantine-primary-color-filled) 22%, transparent); }
+.bt-acq-detail td { vertical-align: top; }
+.bt-acq-sensor-cell { background: color-mix(in srgb, var(--mantine-color-dimmed) 6%, transparent); }
+.bt-acq-detail tr[data-first] td { border-top: 2px solid var(--bt-card-border); }
+
+/* fórmulas */
+.bt-acq-mono { font-family: var(--mantine-font-family-monospace); }
+.bt-acq-expr { font-size: 13.5px; white-space: pre-wrap; word-break: break-all; }
+.bt-acq-caret {
+  margin: 0; padding: 8px 12px; border-radius: 6px; overflow-x: auto;
+  font-family: var(--mantine-font-family-monospace); font-size: 14px; line-height: 1.4;
+  background: color-mix(in srgb, var(--bt-crit) 10%, transparent); color: var(--mantine-color-text);
+}
+.bt-acq-caret span { color: var(--bt-crit); font-weight: 800; }
+.bt-acq-chan { display: block; width: 100%; padding: 8px 10px; border-radius: 6px; text-align: left; }
+.bt-acq-chan:hover { background: var(--bt-sel-row); }
+.bt-acq-chan[data-const] { opacity: 0.6; }
+.bt-acq-example[data-off] { opacity: 0.7; }
+.bt-acq-pre {
+  margin: 0; padding: 10px 12px; border-radius: 6px; overflow-x: auto;
+  font-family: var(--mantine-font-family-monospace); font-size: 13.5px; line-height: 1.5;
+  background: color-mix(in srgb, var(--mantine-color-dimmed) 10%, transparent);
+}
+
+/* testes */
+.bt-acq-test[data-done] { opacity: 0.75; }
+.bt-acq-feed {
+  display: inline-block; padding: 3px 10px; border-radius: 999px;
+  border: 1px solid var(--bt-card-border);
+}
+
+/* ---------------------------------------------------------------- dispersão */
+.bt-scatter { position: relative; width: 100%; }
+.bt-scatter canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.bt-scatter-legend { display: flex; flex-wrap: wrap; gap: 6px 16px; padding: 2px 4px 10px; font-size: 13px; }
+.bt-scatter-legend span { display: inline-flex; align-items: center; gap: 6px; }
+.bt-scatter-legend i { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+.bt-preset { cursor: pointer; }
+.bt-preset:hover:not([data-off]) { border-color: var(--mantine-primary-color-filled); }
+.bt-preset:focus-visible { outline: 2px solid var(--mantine-primary-color-filled); }
+.bt-preset[data-active] { outline: 2px solid var(--mantine-primary-color-filled); outline-offset: -1px; }
+.bt-preset[data-off] { opacity: 0.6; cursor: not-allowed; }
+
+/* ---------------------------------------------------------------- impressão da matriz */
+.bt-print-only { display: none; }
+@media print {
+  body.bt-print-matrix .mantine-AppShell-navbar,
+  body.bt-print-matrix .mantine-AppShell-header,
+  body.bt-print-matrix .mantine-AppShell-footer,
+  body.bt-print-matrix .bt-page-header,
+  body.bt-print-matrix .mantine-Tabs-list,
+  body.bt-print-matrix .bt-print-hide { display: none !important; }
+  body.bt-print-matrix .mantine-AppShell-main { padding: 0 !important; min-height: 0 !important; }
+  body.bt-print-matrix, body.bt-print-matrix .mantine-AppShell-main { background: #fff !important; }
+  body.bt-print-matrix .bt-print-only { display: block; margin-bottom: 12px; }
+  body.bt-print-matrix .bt-acq-hscroll { overflow: visible; }
+  body.bt-print-matrix table { min-width: 0 !important; font-size: 11px; }
+  body.bt-print-matrix .bt-page * { color: #000 !important; }
+  body.bt-print-matrix .bt-acq-mcell[data-n] { background: #eef3fb !important; }
+  body.bt-print-matrix tr { break-inside: avoid; }
+}
+
+/* números das tabelas numa linha só */
+.bt-acq-hscroll td.bt-num, .bt-acq-hscroll th { white-space: nowrap; }

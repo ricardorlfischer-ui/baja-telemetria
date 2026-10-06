@@ -944,9 +944,13 @@ describe('revisão: vehicle (fuzz)', () => {
       for (const c of [...(cs || []), { i0, i1 }]) if (bag.cmp('coastFit', BT.coastFit, V.coastFit, [v, a, c.i0, c.i1, g.pick([260, 0, 180]), g.pick([1.15, 0])])) seen.fit++;
     }
     expect(Object.values(seen).every(x => x > 0), JSON.stringify(seen)).toBe(true);
-    /* velocidade infinita: os dois estouram do mesmo jeito */
-    bag.cmp('powerCurve infinita', BT.powerCurve, V.powerCurve, [Float64Array.of(1, Infinity, 2), Float64Array.of(1, 1, 1), Float64Array.of(1, 1, 1), 0, 2]);
     expect(bag.diffs).toEqual([]);
+    /* velocidade infinita: o antigo estourava (RangeError ao criar Infinity baldes); o porte usa
+     * baldes esparsos (test/robustness.test.ts) e devolve a curva vazia, sem travar a aba */
+    const inf = [Float64Array.of(1, Infinity, 2), Float64Array.of(1, 1, 1), Float64Array.of(1, 1, 1), 0, 2] as const;
+    expect(() => BT.powerCurve(...inf)).toThrow(/Invalid array length/);
+    const r = V.powerCurve(...inf);
+    expect([r.x.length, r.y.length, r.n.length]).toEqual([0, 0, 0]);
   });
 
   it('cvtFit em todos os ramos (curto, pouca variação, θ3 < 0, sem resfriamento, ajuste ok)', () => {

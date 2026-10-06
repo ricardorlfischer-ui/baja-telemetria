@@ -33,7 +33,8 @@ export function PageHeader({ title, subtitle, actions, explain, sensors }: PageH
         {subtitle && <Text c="dimmed" size="md" maw={820}>{subtitle}</Text>}
         {sensors && sensors.length > 0 && <SensorChips sensors={sensors} size="sm" />}
       </Stack>
-      {actions && <Group gap="xs" wrap="wrap">{actions}</Group>}
+      {/* ações quebram linha e encolhem (minWidth 0): botões longos não estouram a tela estreita */}
+      {actions && <Group gap="xs" wrap="wrap" style={{ minWidth: 0, maxWidth: '100%', flex: '0 1 auto' }}>{actions}</Group>}
     </Group>
   );
 }

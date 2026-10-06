@@ -1,0 +1,85 @@
+/* Página Comparar sessões (#/comparar): lista de escolha, tabela métricas × sessões e grade
+ * dos gráficos sobrepostos. */
+
+.bt-cmp-grid { display: grid; gap: 20px; grid-template-columns: minmax(0, 1fr); }
+@media (min-width: 1200px) { .bt-cmp-grid { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } }
+
+/* lista de sessões */
+.bt-cmp-pick td { vertical-align: middle; }
+.bt-cmp-pick .bt-cmp-name { font-weight: 600; color: var(--bt-text-strong); overflow-wrap: anywhere; }
+.bt-cmp-pick .bt-cmp-sub { font-size: 13px; color: var(--mantine-color-dimmed); overflow-wrap: anywhere; }
+.bt-cmp-colhead { display: inline-flex; align-items: center; gap: 2px; }
+
+/* bolinha da cor da sessão */
+.bt-cmp-swatch { display: inline-block; width: 12px; height: 12px; border-radius: 3px; flex: none; }
+
+/* tabela métricas × sessões: rola só dentro do cartão (nunca a página) */
+.bt-cmp-scroll { overflow: auto; max-height: 72vh; }
+.bt-cmp-table { width: 100%; border-collapse: separate; border-spacing: 0; min-width: 640px; }
+.bt-cmp-table th, .bt-cmp-table td {
+  padding: 12px 14px; border-bottom: 1px solid var(--bt-card-border); vertical-align: top; text-align: left;
+}
+.bt-cmp-table td:not(.bt-cmp-first) { min-width: 150px; max-width: 240px; }
+.bt-cmp-table thead th {
+  font-size: 13px; font-weight: 600; color: var(--mantine-color-dimmed); background: var(--mantine-color-body);
+  position: sticky; top: 0; z-index: 2;
+}
+.bt-cmp-table .bt-cmp-first {
+  position: sticky; left: 0; z-index: 1; background: var(--mantine-color-body);
+  min-width: 240px; max-width: 320px; box-shadow: inset -1px 0 0 var(--bt-card-border);
+}
+.bt-cmp-table thead .bt-cmp-first { z-index: 3; }
+.bt-cmp-table tr.bt-cmp-grp td {
+  background: color-mix(in srgb, var(--mantine-color-dimmed) 10%, var(--mantine-color-body));
+  font-weight: 700; font-size: 14px; letter-spacing: .02em; color: var(--bt-text-strong); padding: 10px 14px;
+}
+.bt-cmp-table tr.bt-cmp-grp td.bt-cmp-first { background: color-mix(in srgb, var(--mantine-color-dimmed) 10%, var(--mantine-color-body)); }
+.bt-cmp-table tbody tr.bt-cmp-row { cursor: pointer; }
+.bt-cmp-table tbody tr.bt-cmp-row:hover td { background: var(--bt-sel-row); }
+.bt-cmp-table tbody tr.bt-cmp-row[data-selected] td { background: var(--bt-sel-row); }
+.bt-cmp-table tbody tr.bt-cmp-row[data-selected] td.bt-cmp-first { box-shadow: inset 3px 0 0 var(--mantine-primary-color-filled), inset -1px 0 0 var(--bt-card-border); }
+.bt-cmp-label { font-weight: 600; color: var(--bt-text-strong); font-size: 15px; line-height: 1.35; text-align: left; }
+.bt-cmp-val {
+  font-size: 17px; font-weight: 700; color: var(--bt-text-strong); font-variant-numeric: tabular-nums; overflow-wrap: anywhere;
+  background: none; border: 0; padding: 0; cursor: pointer; text-align: left; font-family: inherit;
+}
+.bt-cmp-val:hover { text-decoration: underline; text-underline-offset: 3px; text-decoration-color: var(--mantine-color-dimmed); }
+.bt-cmp-val--missing { color: var(--mantine-color-dimmed); font-weight: 500; font-size: 15px; }
+.bt-cmp-unit { font-size: 13px; font-weight: 500; color: var(--mantine-color-dimmed); margin-left: 4px; }
+.bt-cmp-diff { display: inline-flex; align-items: center; gap: 3px; font-size: 13px; font-variant-numeric: tabular-nums; color: var(--mantine-color-dimmed); margin-top: 3px; }
+.bt-cmp-diff[data-status] { color: var(--bt-text-strong); font-weight: 600; }
+.bt-cmp-diff svg { color: var(--bt-status, currentColor); }
+.bt-cmp-ref { font-size: 12px; color: var(--mantine-color-dimmed); margin-top: 3px; }
+.bt-cmp-sess { display: flex; align-items: flex-start; gap: 8px; min-width: 150px; max-width: 220px; }
+.bt-cmp-sess b { color: var(--bt-text-strong); font-weight: 650; overflow-wrap: anywhere; line-height: 1.3; }
+
+/* chave das sessões embaixo do gráfico de barras */
+.bt-cmp-key { display: flex; flex-wrap: wrap; gap: 6px 20px; font-size: 14px; }
+.bt-cmp-key span { display: inline-flex; align-items: center; gap: 6px; }
+
+/* métrica ao longo das datas: barras horizontais (uma por sessão) */
+.bt-trend { display: flex; flex-direction: column; justify-content: center; gap: 10px; min-height: 260px; padding: 8px 4px; }
+.bt-trend-row {
+  display: grid; grid-template-columns: minmax(160px, 32%) 1fr minmax(90px, auto); align-items: center; gap: 14px;
+  background: none; border: 0; padding: 8px 6px; border-radius: var(--mantine-radius-sm); cursor: pointer; text-align: left;
+  font: inherit; color: inherit;
+}
+.bt-trend-row:hover { background: var(--bt-sel-row); }
+.bt-trend-name { display: flex; align-items: flex-start; gap: 8px; min-width: 0; }
+.bt-trend-name b { display: block; font-weight: 650; color: var(--bt-text-strong); overflow-wrap: anywhere; line-height: 1.3; }
+.bt-trend-name small { display: block; font-size: 12.5px; color: var(--mantine-color-dimmed); }
+.bt-trend-name .bt-cmp-swatch { margin-top: 4px; }
+.bt-trend-track { position: relative; height: 28px; border-radius: 4px; background: color-mix(in srgb, var(--mantine-color-dimmed) 8%, transparent); }
+.bt-trend-bar { position: absolute; top: 3px; bottom: 3px; border-radius: 3px; }
+.bt-trend-zero { position: absolute; top: -3px; bottom: -3px; width: 1px; background: var(--mantine-color-dimmed); }
+.bt-trend-val { font-size: 18px; font-weight: 700; color: var(--bt-text-strong); font-variant-numeric: tabular-nums; white-space: nowrap; text-align: right; }
+.bt-trend-val small { font-size: 13px; font-weight: 500; color: var(--mantine-color-dimmed); }
+.bt-trend-val--missing { font-size: 14px; font-weight: 500; color: var(--mantine-color-dimmed); }
+@media (max-width: 640px) {
+  .bt-trend-row { grid-template-columns: 1fr auto; }
+  .bt-trend-track { grid-column: 1 / -1; grid-row: 2; }
+}
+@media (max-width: 640px) {
+  .bt-cmp-table .bt-cmp-first { min-width: 150px; max-width: 170px; }
+  .bt-cmp-table td:not(.bt-cmp-first) { min-width: 120px; }
+}

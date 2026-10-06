@@ -83,6 +83,8 @@ class MapCtl {
   lineMode = false; linePts: Pt[] = [];
   hover = -1;
   userView = false;
+  /* já enquadrou com o tamanho real do canvas? (o 1º quadro pode medir antes do ResizeObserver) */
+  fitted = false;
   tiles = new Map<string, HTMLImageElement>();
   off = document.createElement('canvas');
   dirty = true;
@@ -124,12 +126,17 @@ class MapCtl {
     const changed = Math.abs(r.width - this.w) > 1 || Math.abs(r.height - this.h) > 1;
     this.w = r.width; this.h = r.height;
     this.dirty = true;
-    if (changed && !this.userView && this.src.t.length) this.fit();     /* sem zoom manual: reenquadra */
+    if ((changed || !this.fitted) && !this.userView) this.fit();     /* sem zoom manual: reenquadra */
     else this.requestRender();
   }
 
   /* enquadra os pontos (do trecho selecionado, ou tudo) */
   fit() {
+    this.fitView();
+    this.invalidate();
+  }
+  /* calcula o enquadramento (sem pedir quadro: draw() usa isto no 1º desenho) */
+  fitView() {
     const tr = this.okTrack;
     let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
     if (tr) {
@@ -144,7 +151,8 @@ class MapCtl {
     this.v.s = Math.max(0.05, Math.min((this.w - 2 * pad) / dw, (this.h - 2 * pad) / dh));
     this.v.cx = (x0 + x1) / 2; this.v.cy = (y0 + y1) / 2;
     this.userView = false;
-    this.invalidate();
+    if (this.w > 0 && this.h > 0) this.fitted = true;
+    this.dirty = true;
   }
 
   sx(x: number) { return this.w / 2 + (x - this.v.cx) * this.v.s; }
@@ -171,6 +179,8 @@ class MapCtl {
   draw() {
     if (!this.w) { const r = this.c.getBoundingClientRect(); this.w = r.width; this.h = r.height; }
     if (!this.w || !this.h) return;
+    /* 1º desenho com o tamanho real: enquadra (o ResizeObserver pode chegar depois sem mudança) */
+    if (!this.fitted && !this.userView) this.fitView();
     if (this.follow && this.okTrack) {
       const p = this.pos(this.cur);
       if (p) { this.v.cx = p.x; this.v.cy = p.y; this.dirty = true; }
@@ -191,7 +201,7 @@ class MapCtl {
     else this.drawGrid(g);
 
     /* área coberta pelos códigos 0..255 (fora disso o valor trava na borda) */
-    if (this.src.t.length && !this.src.hasLatLon) {
+    if ((this.src.t.length || this.src.span) && !this.src.hasLatLon) {
       const sp = this.spanOf();
       g.strokeStyle = showSat ? 'rgba(255,255,255,.55)' : T.axis; g.lineWidth = 1;
       g.setLineDash([4, 4]);
@@ -490,7 +500,7 @@ export function TrackMap(props: TrackMapProps) {
   }, [source]);
   useLayoutEffect(() => {
     const ctl = ctlRef.current;
-    if (ctl && ctl.w) ctl.fit();
+    if (ctl) { if (ctl.w) ctl.fit(); else ctl.fitted = false; }
   }, [source.track, r0, r1, source.selLap, source.laps]);
   useLayoutEffect(() => {
     const ctl = ctlRef.current;

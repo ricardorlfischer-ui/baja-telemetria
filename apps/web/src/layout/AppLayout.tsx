@@ -1,6 +1,6 @@
 /* Casca do app (docs/ARQUITETURA.md 4.2): AppShell com barra lateral de 260 px recolhível
  * (menu no celular), cabeçalho de 60 px e barra de reprodução de 64 px nas páginas com player. */
-import { Suspense } from 'react';
+import { Suspense, useEffect } from 'react';
 import { ActionIcon, AppShell, Burger, Center, Group, Loader, Text, Tooltip } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
 import { Link, Outlet, useLocation } from 'react-router';
@@ -23,6 +23,8 @@ export function AppLayout() {
   const player = !!route?.player;
   /* atalhos do play: espaço, ← → (Shift = 1 s), Home, End */
   useSessionHotkeys();
+  /* página nova começa do topo (o HashRouter não restaura a rolagem sozinho) */
+  useEffect(() => { window.scrollTo(0, 0); }, [pathname]);
 
   return (
     <AppShell

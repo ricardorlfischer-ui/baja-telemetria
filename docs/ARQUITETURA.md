@@ -293,10 +293,19 @@ interface Library {
 ```
 
 `local.ts` (IndexedDB, texto do log comprimido com `CompressionStream('gzip')` quando
-existir) e `remote.ts` (API do servidor, token Bearer). Modo remoto quando o app é servido
-pelo próprio servidor (`/api/info` responde) ou quando há um endereço salvo em
-Preferências; senão local. Ao adicionar uma sessão local, o resumo é calculado no
-navegador; no remoto, pelo servidor.
+existir) e `remote.ts` (API do servidor, token Bearer). Ordem da escolha: endereço salvo em
+Preferências > servidor padrão do build (`VITE_API_URL`, que o `pages.yml` passa; ignorado
+se a pessoa escolheu "só este navegador") > servidor na mesma origem (`/api/info` responde)
+> local. Ao adicionar uma sessão local, o resumo é calculado no navegador; no remoto, pelo
+servidor.
+
+As duas bibliotecas se comportam igual onde a interface precisa: log repetido (mesmo
+sha256) dá erro com o id da sessão que já existe (409 `{ error, id }` no servidor,
+`LocalDuplicateError` no local) e a tela oferece abrir a existente; resumo de uma versão
+antiga das contas vem com `summaryOutdated` (o local marca na leitura) e a tela oferece
+recalcular; `date` da sessão é `AAAA-MM-DD` ou `AAAA-MM-DDTHH:MM` e aparece em pt-BR
+(`library/format.ts`). `changePassword` guarda o token novo; perfis de carro/pista de outra
+pessoa ficam só leitura para quem não é admin (o PUT daria 403).
 
 ### 4.6 Cards de explicação (requisito central)
 

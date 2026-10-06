@@ -1,0 +1,45 @@
+/* Estilos locais das páginas Sessões e Visão geral (só classes bt-ss-*, bt-mini-metric e
+ * bt-session-card; o resto vem de styles/global.css). */
+.bt-mini-metric {
+  display: block;
+  width: 100%;
+  border-radius: var(--mantine-radius-sm);
+  padding: 6px 8px;
+  margin: -6px -8px;
+  text-align: left;
+}
+.bt-mini-metric:hover { background: var(--bt-sel-row); }
+.bt-mini-metric:focus-visible { outline: 2px solid var(--mantine-primary-color-filled); outline-offset: 1px; }
+
+.bt-session-card { height: 100%; transition: border-color 120ms ease; }
+.bt-session-card:hover { border-color: var(--mantine-color-dimmed); }
+
+.bt-dropzone { background: var(--bt-surface); }
+
+/* lista de itens clicáveis (anotações, pontos de atenção, avisos) */
+.bt-ss-item {
+  display: block;
+  width: 100%;
+  border: 1px solid var(--bt-card-border);
+  border-radius: var(--mantine-radius-md);
+  padding: 12px 14px;
+  background: var(--bt-surface);
+}
+.bt-ss-item[data-clickable] { cursor: pointer; }
+.bt-ss-item[data-clickable]:hover { background: var(--bt-sel-row); }
+.bt-ss-time {
+  font-variant-numeric: tabular-nums;
+  font-weight: 650;
+  white-space: nowrap;
+}
+.bt-ss-level {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+}
+
+/* duas seções lado a lado (Visão geral): sem o espaço de "seção depois de seção" na 2ª coluna */
+@media (min-width: 75em) {
+  .bt-ss-pair > .bt-section + .bt-section { margin-top: 0; }
+}

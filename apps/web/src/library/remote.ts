@@ -2,7 +2,7 @@
  * localStorage; erros sempre em português (mensagem do servidor quando vier, senão pelo status). */
 import { lsGet, lsSet } from '../state/prefs';
 import type {
-  CarProfile, Comment, Invite, Library, LogInput, Role, ServerInfo, SessionMeta, SessionPatch, SessionQuery,
+  CarProfile, Comment, CreatedUser, Invite, Library, LogInput, Role, ServerInfo, SessionMeta, SessionPatch, SessionQuery,
   TrackProfile, User,
 } from './types';
 
@@ -13,12 +13,20 @@ export const setToken = (t: string | null): void => lsSet(TOKEN_KEY, t);
 
 export class ApiError extends Error {
   readonly status: number;
-  constructor(message: string, status: number) {
+  /** corpo JSON da resposta de erro (ex.: o 409 de log duplicado traz { error, id }) */
+  readonly body: Record<string, unknown>;
+  constructor(message: string, status: number, body: Record<string, unknown> = {}) {
     super(message);
     this.name = 'ApiError';
     this.status = status;
+    this.body = body;
   }
+  /** id da sessão que já existe (409 de POST /sessions) */
+  get existingId(): string | null { return typeof this.body.id === 'string' ? this.body.id : null; }
 }
+
+/** Etapas do envio de um log ao servidor: enviando (fração 0–1) e o servidor analisando. */
+export type UploadProgress = (phase: 'uploading' | 'server', fraction: number) => void;
 
 const STATUS_MSG: Record<number, string> = {
   400: 'Pedido inválido',
@@ -63,18 +71,21 @@ export class RemoteLibrary implements Library {
       throw new ApiError(`Não consegui falar com o servidor${this.baseUrl ? ` (${this.baseUrl})` : ''}: sem internet ou servidor desligado`, 0);
     }
     if (!res.ok) {
-      let msg = '';
-      try {
-        const j = await res.json() as { error?: string; message?: string };
-        msg = j.error || j.message || '';
-      } catch { /* sem corpo JSON */ }
+      let j: Record<string, unknown> = {};
+      try { j = await res.json() as Record<string, unknown>; } catch { /* sem corpo JSON */ }
       if (res.status === 401 && tok) { setToken(null); this.onUnauthorized?.(); }
-      throw new ApiError(msg || STATUS_MSG[res.status] || `Erro ${res.status} no servidor`, res.status);
+      throw this.error(res.status, j);
     }
     if (opts.raw) return res as unknown as T;
     if (res.status === 204) return undefined as T;
     const ct = res.headers.get('content-type') || '';
     return (ct.includes('json') ? await res.json() : await res.text()) as T;
+  }
+
+  /** Erro em português: a mensagem do servidor ({ error }) ou a do status. */
+  private error(status: number, j: Record<string, unknown>): ApiError {
+    const msg = (typeof j.error === 'string' && j.error) || (typeof j.message === 'string' && j.message) || '';
+    return new ApiError(msg || STATUS_MSG[status] || `Erro ${status} no servidor`, status, j);
   }
 
   /* ------------------------------------------------------------ servidor e contas */
@@ -93,8 +104,12 @@ export class RemoteLibrary implements Library {
   logout(): void { setToken(null); }
   get loggedIn(): boolean { return !!getToken(); }
   me(): Promise<User> { return this.req<User | { user: User }>('GET', '/auth/me').then(r => ('user' in r ? r.user : r)); }
-  changePassword(oldPassword: string, newPassword: string): Promise<void> {
-    return this.req('POST', '/auth/password', { oldPassword, newPassword });
+  /** Troca a senha. O servidor devolve um token novo e o antigo deixa de valer (ARQUITETURA
+   *  5.3): guarda o novo aqui, senão a pessoa seria deslogada na próxima chamada. */
+  async changePassword(oldPassword: string, newPassword: string): Promise<AuthResult> {
+    const r = await this.req<AuthResult>('POST', '/auth/password', { oldPassword, newPassword });
+    if (r && typeof r.token === 'string') setToken(r.token);
+    return r;
   }
 
   /* ------------------------------------------------------------ sessões */
@@ -120,8 +135,13 @@ export class RemoteLibrary implements Library {
     return res.text();
   }
 
-  /** envio multipart: campo `file` + campo `meta` (JSON) */
-  async addSession(file: LogInput, meta: Parameters<Library['addSession']>[1] = {}): Promise<SessionMeta> {
+  /** Envio multipart: campo `file` + campo `meta` (JSON; `allowDuplicate: true` guarda mesmo
+   *  repetido). Log já guardado (mesmo sha256) → ApiError 409 com `existingId`.
+   *  Com onProgress, envia por XMLHttpRequest (o fetch não informa o progresso do envio). */
+  async addSession(
+    file: LogInput, meta: Parameters<Library['addSession']>[1] & { allowDuplicate?: boolean } = {},
+    opts: { onProgress?: UploadProgress } = {},
+  ): Promise<SessionMeta> {
     const fd = new FormData();
     fd.append('meta', JSON.stringify(meta));
     if (typeof File !== 'undefined' && file instanceof File) fd.append('file', file, file.name);
@@ -129,7 +149,27 @@ export class RemoteLibrary implements Library {
       const f = file as { name: string; text: string };
       fd.append('file', new Blob([f.text], { type: 'text/plain' }), f.name);
     }
-    return this.req('POST', '/sessions', undefined, { form: fd });
+    if (!opts.onProgress || typeof XMLHttpRequest === 'undefined') return this.req('POST', '/sessions', undefined, { form: fd });
+    const onProgress = opts.onProgress;
+    return new Promise<SessionMeta>((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open('POST', this.url('/sessions'));
+      const tok = getToken();
+      if (tok) xhr.setRequestHeader('Authorization', `Bearer ${tok}`);
+      onProgress('uploading', 0);
+      xhr.upload.onprogress = e => { if (e.lengthComputable && e.total > 0) onProgress('uploading', e.loaded / e.total); };
+      /* terminou de enviar: o servidor lê e analisa o log (num log grande leva um tempo) */
+      xhr.upload.onload = () => onProgress('server', 1);
+      xhr.onerror = () => reject(new ApiError(`Não consegui falar com o servidor${this.baseUrl ? ` (${this.baseUrl})` : ''}: sem internet ou servidor desligado`, 0));
+      xhr.onload = () => {
+        let j: Record<string, unknown> = {};
+        try { j = JSON.parse(xhr.responseText || '{}') as Record<string, unknown>; } catch { /* sem JSON */ }
+        if (xhr.status >= 200 && xhr.status < 300) { resolve(j as unknown as SessionMeta); return; }
+        if (xhr.status === 401 && tok) { setToken(null); this.onUnauthorized?.(); }
+        reject(this.error(xhr.status, j));
+      };
+      xhr.send(fd);
+    });
   }
   updateSession(id: string, patch: SessionPatch): Promise<SessionMeta> { return this.req('PATCH', `/sessions/${encodeURIComponent(id)}`, patch); }
   deleteSession(id: string): Promise<void> { return this.req('DELETE', `/sessions/${encodeURIComponent(id)}`); }
@@ -160,7 +200,8 @@ export class RemoteLibrary implements Library {
 
   /* ------------------------------------------------------------ equipe (admin) */
   listUsers(): Promise<User[]> { return this.req('GET', '/users'); }
-  createUser(b: { name: string; email: string; password: string; role: Role }): Promise<User> { return this.req('POST', '/users', b); }
+  /** sem `password`, o servidor gera uma senha temporária e a devolve uma única vez (tempPassword) */
+  createUser(b: { name: string; email: string; password?: string; role: Role }): Promise<CreatedUser> { return this.req('POST', '/users', b); }
   updateUser(id: string, patch: Partial<Pick<User, 'name' | 'role' | 'disabled'>> & { password?: string }): Promise<User> {
     return this.req('PATCH', `/users/${encodeURIComponent(id)}`, patch);
   }

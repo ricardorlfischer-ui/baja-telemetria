@@ -1470,6 +1470,50 @@ const MORE: ExplainEntry[] = [
     limits: 'Sem papel reconhecido, não entra nas análises automáticas.',
     related: ['quality.validSamples', 'channel.formula'],
   },
+  /* ================================================================ configuração (perfis) */
+  {
+    id: 'track.startLine',
+    title: 'Linha de largada e volta mínima',
+    what: 'O segmento na pista que separa uma volta da outra (dois pontos em metros, no mesmo sistema X/Y da trajetória) e o tempo mínimo de uma volta, que evita contar duas voltas quando o carro passa perto da linha duas vezes.',
+    sensors: [
+      sn('gps', 'required', 'a trajetória que cruza a linha; sem posição não há cruzamento'),
+      sn('logger', 'required', 'o instante de cada cruzamento (interpolado entre as duas amostras)'),
+    ],
+    how: 'Para cada par de amostras válidas, o app testa se o trecho entre elas cruza a linha; o instante é interpolado na fração do cruzamento. Só valem cruzamentos no mesmo sentido do primeiro, separados por pelo menos a volta mínima (padrão 10 s). Volta = tempo entre dois cruzamentos. Linha automática: no primeiro ponto com o carro acima de 8 m/s, um segmento de 24 m perpendicular ao rumo. A linha desenhada no Mapa é arredondada a 2 casas, como no app antigo.',
+    design: 'Sem voltas não há comparação de volta, delta, trechos onde ganhou ou perdeu tempo, nem tempo de volta para metas do carro novo. Linha num lugar de passagem única (reta de largada), longe de cruzamentos do traçado; a volta mínima um pouco abaixo da volta mais rápida esperada. Guardada no perfil da pista, vale para todas as sessões naquela pista.',
+    limits: 'Com o GPS a 4 Hz e passos de ~0,86 m, o instante do cruzamento tem incerteza de algumas centésimas de segundo; voltas abertas (sem cruzar a linha de novo) não contam. Linha em cima de um trecho onde o carro passa duas vezes conta voltas a mais se a volta mínima for curta.',
+    test: 'Grave duas voltas inteiras passando pela reta de largada; desenhe a linha atravessando a reta no Mapa e confira se o número de voltas e os tempos batem com o cronômetro.',
+    related: ['laps.lapTimes', 'laps.table', 'track.gpsPosition', 'track.profile'],
+  },
+  {
+    id: 'track.profile',
+    title: 'Perfil da pista (track_config.h)',
+    what: 'Os dados que transformam os códigos do GPS em metros e definem as voltas numa pista: centro (latitude/longitude), tamanho da área e margem, canais X/Y e de status, formato do log (V, mV, código ou metros), suavização, volta mínima e linha de largada. É o espelho do track_config.h gravado no PIC.',
+    sensors: [
+      sn('gps', 'required', 'a posição chega como códigos 0–255 (FT, entradas 7/8) ou latitude/longitude (BUSMASTER)'),
+      sn('logger', 'improves', 'o formato dos canais 7/8 na FT (volts ou milivolts) muda a conversão'),
+    ],
+    how: 'Resolução = (tamanho + 2·margem) / 255 m por código com centro fixo, ou (2·tamanho + 2·margem) / 255 com centro automático. metros = (código − 127,5) × resolução; com o centro em lat/lon a trajetória volta para coordenadas (WGS84) e ganha o fundo de satélite. Mudar qualquer campo recalcula a sessão inteira.',
+    design: 'Com a pista certa, voltas, mapas por canal, raio das curvas e comprimento das retas saem da pista real, que é o que dimensiona a relação de transmissão, a faixa de velocidade e onde a suspensão trabalha no carro novo. Guardar um perfil por pista deixa as sessões de datas diferentes comparáveis.',
+    limits: 'Os valores precisam ser os mesmos do track_config.h que estava no PIC no dia do teste: um tamanho ou centro diferente estica ou desloca a pista. Área pequena demais faz a posição travar na borda (código 0 ou 255).',
+    test: 'Ande para o Norte e confira se o Y sobe; ligue o satélite e veja se o traçado cai na pista. Se o GPS ficar na borda em mais de alguns % do tempo, aumente a margem no track_config.h e no perfil.',
+    related: ['track.gpsPosition', 'quality.gpsBorder', 'quality.gpsCalibration', 'track.startLine'],
+  },
+  {
+    id: 'design.carProfile',
+    title: 'Perfil do carro (medidas e acerto)',
+    what: 'As medidas do carro que entram nas contas: massa com piloto, entre-eixos e bitolas, relação roda/amortecedor, curso total do amortecedor e massa suspensa por eixo, canais da roda e da CVT, temperatura ambiente e limite da CVT, duração do enduro, resistências (Crr, CdA, densidade do ar) e potência do motor. Um perfil por carro e acerto (ex.: “BJ26 — setup A”).',
+    sensors: [
+      sn('car_data', 'required', 'as medidas digitadas: massa, geometria, MR, curso, massa suspensa, resistências'),
+      sn('wheel', 'improves', 'o canal da roda escolhido aqui liga a velocidade pela roda (calibrada pelo GPS)'),
+      sn('cvt_temp', 'improves', 'o canal da temperatura da CVT escolhido aqui liga o modelo térmico'),
+    ],
+    how: 'Os valores vão para a configuração em uso e a sessão é recalculada. Massa entra em potência na roda (F = m·a + resistências), força trativa, coast-down e no modelo da CVT; MR e bitolas na rolagem e arfagem; curso total no % do curso e no fim de curso; massa suspensa na rigidez k = m·(2π·fₙ)² e no amortecimento c = 2ζ·√(k·m). Campo em 0 = não informado: a conta que depende dele não sai (e o app diz o que falta).',
+    design: 'É o que transforma o que os sensores mediram em números de projeto (N/mm, N·s/m, kW, °C): os mesmos campos servem de entrada para o carro novo. Comparar perfis (setup A × B) mostra o efeito de cada mudança de acerto nas sessões guardadas.',
+    limits: 'Vale para o carro e o acerto do dia: trocou mola, piloto, pneu ou geometria, crie outro perfil. Valores chutados aparecem nos números como se fossem medidos.',
+    test: 'Balança por roda com o piloto (massa e massa suspensa); suba a roda 10 mm com um macaco e meça quanto o amortecedor comprime (MR); meça o curso do amortecedor de batente a batente.',
+    related: ['quality.carData', 'susp.naturalFreq', 'power.wheelPower', 'cvt.thermalModel'],
+  },
 ];
 /* força trativa: o mesmo card com o id usado pelo resumo (power.tractionForce) e pelo trem de força (power.tractiveForce) */
 const TRACTIVE: Omit<ExplainEntry, 'id'> = {
