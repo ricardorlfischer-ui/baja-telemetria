@@ -4,7 +4,7 @@
  * (Crr e CdA, que podem ir para o carro ativo).
  *
  * Tudo vem de powertrainReport (core); a página só desenha. */
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { Alert, Button, Group, Paper, Select, Stack, Table, Text, Tooltip } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
 import {
@@ -18,7 +18,8 @@ import { useCursorTime, useCtx, useRange, useSessionStore } from '../state/sessi
 import { useProfiles } from '../state/profiles';
 import { useLibrary } from '../library';
 import { resolveColor, useChartTheme } from '../theme';
-import { MissingState, NeedSensors, NoSession, RangeBadge, RepChart, RepTiles, SourceNote, VehStyles, Grid2 } from './veiculo/shared';
+import { ComputingPage, MissingState, NeedSensors, NoSession, RangeBadge, RepChart, RepTiles, SourceNote, VehStyles, Grid2 } from './veiculo/shared';
+import { useComputed } from '../state/heavy';
 import { useProfilePerms } from './config/parts';
 
 const ROUTE = '/trem-de-forca';
@@ -38,7 +39,9 @@ function Body({ ctx, i0, i1, label }: { ctx: SessionContext; i0: number; i1: num
   const view = useSessionStore(s => s.view);
   const [coastSel, setCoastSel] = useState<string | undefined>(undefined);
   const [coastManual, setCoastManual] = useState<{ t0: number; t1: number } | null>(null);
-  const rep = useMemo(() => powertrainReport(ctx, i0, i1, { coastSel, coastManual }), [ctx, i0, i1, coastSel, coastManual]);
+  /* log grande: primeiro o aviso "Calculando…" (useComputed), depois a conta */
+  const rep = useComputed(() => powertrainReport(ctx, i0, i1, { coastSel, coastManual }), [ctx, i0, i1, coastSel, coastManual]);
+  if (!rep) return <ComputingPage title={r.label} subtitle={r.question} label={label} what="a potência, as largadas e o coast-down" />;
 
   const carBtn = (
     <Button variant="default" size="md" leftSection={<IconCar size={18} />} onClick={() => nav('/carro')}>Dados do carro</Button>

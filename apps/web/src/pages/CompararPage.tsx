@@ -38,7 +38,9 @@ function readSel(): string[] {
 export default function CompararPage() {
   const r = routeByPath('/comparar')!;
   const nav = useNavigate();
-  const { lib, version, loading: libLoading, mode } = useLibrary();
+  const { lib, version, loading: libLoading, mode, user, info } = useLibrary();
+  /* servidor sem ninguém conectado: a biblioteca da equipe pede login (a lista daria 401) */
+  const loggedOut = mode === 'remote' && !user;
   const cars = useProfiles(s => s.cars), tracks = useProfiles(s => s.tracks);
   const profRev = useProfiles(s => s.rev);
   const [list, setList] = useState<SessionMeta[] | null>(null);
@@ -53,12 +55,13 @@ export default function CompararPage() {
 
   /* lista da biblioteca */
   useEffect(() => {
-    if (!lib) return;
-    let alive = true;
+    if (!lib || libLoading) return;
     setListErr(null);
+    if (loggedOut) { setList([]); return; }
+    let alive = true;
     lib.listSessions().then(l => { if (alive) setList(l); }).catch(e => { if (alive) { setList([]); setListErr((e as Error).message); } });
     return () => { alive = false; };
-  }, [lib, version]);
+  }, [lib, version, libLoading, loggedOut, user?.id]);
 
   const toggle = (id: string) => setSel(s => {
     const n = s.includes(id) ? s.filter(x => x !== id) : s.length >= MAX ? s : [...s, id];
@@ -130,6 +133,16 @@ export default function CompararPage() {
   /* ------------------------------------------------------------ estados vazios */
   if (libLoading || !lib || list === null) {
     return <>{header}<Center py={80}><Stack align="center"><Loader /><Text c="dimmed">Lendo a biblioteca…</Text></Stack></Center></>;
+  }
+  if (loggedOut) {
+    return (
+      <>
+        {header}
+        <EmptyState icon={IconGitCompare} title="Entre para comparar as sessões da equipe"
+          description={`As sessões ficam no servidor da equipe${info?.name ? ` (${info.name})` : ''}. Entre com a sua conta ou um convite para escolher quais comparar.`}
+          action={<Button size="md" onClick={() => nav('/login', { state: { from: '/comparar' } })}>Entrar</Button>} />
+      </>
+    );
   }
   if (list.length < 2) {
     return (

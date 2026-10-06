@@ -8,7 +8,7 @@ import {
   IconAlertCircle, IconAlertOctagon, IconAlertTriangle, IconCircleCheck, IconCrosshair, IconSearch, type Icon,
 } from '@tabler/icons-react';
 import {
-  channelExplainId, sensorsOfChannel, type Channel, type ChannelQuality, type DataQuality, type SensorId, type SessionContext,
+  SHOCK_STILL_MM, channelExplainId, sensorsOfChannel, type Channel, type ChannelQuality, type DataQuality, type SensorId, type SessionContext,
 } from '@baja/core';
 import { DataTable, InfoButton, Section, SensorChips, StatTile, type Column } from '../../components';
 import { STATUS_COLOR, type Status } from '../../theme';
@@ -23,6 +23,11 @@ function flagsOf(c: ChannelQuality): Flag[] {
   const out: Flag[] = [];
   if (!c.valid) return [{ status: c.role ? 'crit' : 'warn', text: 'Sem nenhum dado', explain: 'quality.validSamples' }];
   if (c.constant) out.push({ status: c.role ? 'crit' : 'warn', text: c.role ? 'Constante: sensor sem sinal' : 'Constante', explain: 'quality.constant' });
+  /* posição do amortecedor com sinal mas quase parada no log inteiro (o mesmo limite do aviso
+   * susp.still do core: máx − mín < SHOCK_STILL_MM) */
+  else if (c.role && c.role.startsWith('shock_pos_') && c.hi - c.lo < SHOCK_STILL_MM) {
+    out.push({ status: 'warn', text: `Quase parado: mexe só ${(c.hi - c.lo).toFixed(1)} mm`, explain: 'quality.shockStill' });
+  }
   if (c.validPct < 50) out.push({ status: 'warn', text: `Só ${c.validPct.toFixed(0)} % com dado`, explain: 'quality.validSamples' });
   if (c.stuck.length) out.push({ status: 'warn', text: `Travado ${c.stuckS.toFixed(1)} s andando`, explain: 'quality.stuck', t: c.stuck[0].t0 });
   if (c.jumpCount) out.push({ status: 'warn', text: `${c.jumpCount} salto(s) impossível(is)`, explain: 'quality.jumps', t: c.jumps[0]?.t });

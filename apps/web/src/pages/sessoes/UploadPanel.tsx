@@ -14,7 +14,8 @@ import {
 import type { Library, RemoteLibrary, SessionMeta } from '../../library';
 import { useProfiles } from '../../state/profiles';
 import { MetaFields } from './MetaFields';
-import { draftOf, fmtSize, guessDate, joinDate, msgOf, splitDate, type MetaDraft } from './meta';
+import { guessDate } from '@baja/core';
+import { draftOf, fmtSize, joinDate, msgOf, splitDate, type MetaDraft } from './meta';
 import { DuplicateError, saveLocal, uploadRemote, type UploadMeta, type UploadPhase } from './upload';
 
 interface QueueItem {

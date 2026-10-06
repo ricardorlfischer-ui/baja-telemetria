@@ -42,8 +42,9 @@ body {
 .bt-num, .bt-stat-num, .bt-table td.bt-num { font-variant-numeric: tabular-nums; }
 
 /* ---------------------------------------------------------------- casca */
-.bt-header { display: flex; flex-direction: column; justify-content: center; position: relative; }
-/* faixa da pintura logo abaixo do cabeçalho */
+.bt-header { display: flex; flex-direction: column; justify-content: center; }
+/* faixa da pintura logo abaixo do cabeçalho (o Header do Mantine já é position: fixed, que
+ * serve de referência para o ::after; não sobrescrever com relative, senão ele sai do topo) */
 .bt-header::after {
   content: ''; position: absolute; left: 0; right: 0; bottom: -1px; height: 3px;
   background: var(--bt-stripe); pointer-events: none;

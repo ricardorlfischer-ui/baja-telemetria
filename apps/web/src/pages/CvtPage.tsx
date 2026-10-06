@@ -3,7 +3,6 @@
  * Em destaque, o que muda no projeto do carro novo: a troca de calor necessária.
  *
  * Tudo vem de cvtReport (core); a página só desenha. */
-import { useMemo } from 'react';
 import { Alert, Box, Button, Group, Paper, Stack, Text, ThemeIcon, Title } from '@mantine/core';
 import { IconAlertOctagon, IconAlertTriangle, IconCar, IconCircleCheck, IconTemperature } from '@tabler/icons-react';
 import { useNavigate } from 'react-router';
@@ -12,7 +11,8 @@ import { InfoButton, PageHeader, Section, SensorChips } from '../components';
 import { routeByPath } from '../routes';
 import { useCtx, useRange, useSessionStore } from '../state/session';
 import { STATUS_COLOR } from '../theme';
-import { MissingState, Grid2, NeedSensors, NoSession, RangeBadge, RepChart, RepTiles, SourceNote, VehStyles, type TileStatus } from './veiculo/shared';
+import { ComputingPage, MissingState, Grid2, NeedSensors, NoSession, RangeBadge, RepChart, RepTiles, SourceNote, VehStyles, type TileStatus } from './veiculo/shared';
+import { useComputed } from '../state/heavy';
 
 const ROUTE = '/cvt';
 
@@ -25,10 +25,17 @@ export default function CvtPage() {
 }
 
 function Body({ ctx, i0, i1, label }: { ctx: SessionContext; i0: number; i1: number; label: string }) {
+  /* log grande: primeiro o aviso "Calculando…" (useComputed), depois a conta */
+  const rep = useComputed(() => cvtReport(ctx, i0, i1), [ctx, i0, i1]);
+  const r = routeByPath(ROUTE)!;
+  if (!rep) return <ComputingPage title={r.label} subtitle={r.question} label={label} what="o modelo térmico da CVT" />;
+  return <Content ctx={ctx} label={label} rep={rep} />;
+}
+
+function Content({ ctx, label, rep }: { ctx: SessionContext; label: string; rep: ReturnType<typeof cvtReport> }) {
   const r = routeByPath(ROUTE)!;
   const nav = useNavigate();
   const seek = useSessionStore(s => s.seek);
-  const rep = useMemo(() => cvtReport(ctx, i0, i1), [ctx, i0, i1]);
   const car = ctx.cfg.car;
 
   const carBtn = <Button variant="default" size="md" leftSection={<IconCar size={18} />} onClick={() => nav('/carro')}>Dados do carro</Button>;

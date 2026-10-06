@@ -240,15 +240,6 @@ export function useProfilePerms(): ProfilePerms {
 
 /* ---------------------------------------------------------------- utilidades */
 
-/** Salva um texto como arquivo (backup, CSV): o navegador baixa na hora. */
-export function saveTextFile(name: string, text: string, type = 'application/json'): void {
-  const url = URL.createObjectURL(new Blob([text], { type }));
-  const a = document.createElement('a');
-  a.href = url; a.download = name;
-  document.body.appendChild(a); a.click(); a.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
-}
-
 /** Copia para a área de transferência (com recurso para navegador sem clipboard API). */
 export async function copyText(text: string): Promise<boolean> {
   try {

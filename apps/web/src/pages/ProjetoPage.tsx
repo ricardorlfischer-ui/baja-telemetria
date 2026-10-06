@@ -3,7 +3,6 @@
  * os pontos de atenção, cada linha com os sensores de onde saiu e o card de explicação, a
  * matriz sensor → grandezas, exportar CSV (designCsv, com BOM como o antigo) e imprimir/PDF
  * com cabeçalho da sessão — pensada para entregar aos juízes. A página só desenha. */
-import { useMemo } from 'react';
 import { Badge, Button, Group, Paper, Stack, Text, ThemeIcon } from '@mantine/core';
 import {
   IconCar, IconCarSuspension, IconCheck, IconDownload, IconFileDescription, IconGauge,
@@ -11,13 +10,14 @@ import {
 } from '@tabler/icons-react';
 import { useNavigate } from 'react-router';
 import { designCsv, designReport, SENSOR_IDS } from '@baja/core';
-import { NoSessionState, PageHeader, Section, SensorChips } from '../components';
+import { ComputingState, NoSessionState, PageHeader, Section, SensorChips, downloadText } from '../components';
 import { routeByPath } from '../routes';
 import { fmtSessionDate, sessionDateText } from '../library';
 import { useRange, useSessionStore } from '../state/session';
+import { useComputed } from '../state/heavy';
 import { useActiveProfiles } from '../state/profiles';
 import { APP_NAME, BrandLogo, TEAM_NAME } from '../brand';
-import { FichaMissing, FichaRecs, FichaTable, SensorMatrix, downloadText, usePrintMode } from './projeto/FichaParts';
+import { FichaMissing, FichaRecs, FichaTable, SensorMatrix, usePrintMode } from './projeto/FichaParts';
 
 /* o que cada grupo da ficha decide no carro novo */
 const GROUP_INFO: Record<string, { icon: Icon; text: string; need: string }> = {
@@ -54,10 +54,12 @@ export default function ProjetoPage() {
   usePrintMode();
 
   const i0 = range?.[0] ?? 0, i1 = range?.[1] ?? 0, hasRange = range !== null;
-  const rep = useMemo(() => (ctx && hasRange ? designReport(ctx, i0, i1) : null), [ctx, i0, i1, hasRange]);
+  /* log grande: primeiro o aviso "Calculando…" (useComputed), depois a ficha */
+  const rep = useComputed(() => (ctx && hasRange ? designReport(ctx, i0, i1) : null), [ctx, i0, i1, hasRange]);
 
   const header = <PageHeader title={r.label} subtitle={r.question} explain="design.sheet" />;
 
+  if (ctx && range && !rep) return <>{header}<ComputingState what="a ficha do carro" /></>;
   if (!ctx || !rep || !range) {
     return (
       <>

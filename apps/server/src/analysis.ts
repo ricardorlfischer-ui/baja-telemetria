@@ -6,7 +6,7 @@
  *          formato, suavização, volta mínima, linha). Sem linha salva → linha automática.
  *   carro: params do perfil do carro = CarConfig + susp (SuspConfig) opcional.
  *   sem perfil: padrões do core (DEFAULT_CFG / DEFAULT_CAR / DEFAULT_SUSP). */
-import { computeSession, parseLog, sessionSummary, type AnalysisConfigInput, type Session, type SessionSummary } from '@baja/core';
+import { computeSession, guessDate as guessLogDate, parseLog, sessionSummary, type AnalysisConfigInput, type Session, type SessionSummary } from '@baja/core';
 import { badRequest } from './errors';
 
 export type Params = Record<string, unknown>;
@@ -90,31 +90,19 @@ export function analyzeLog(job: AnalyzeJob, emit: (m: AnalyzeMsg) => void): void
 
 /* ---------------------------------------------------------------- data do teste */
 const pad = (n: number | string) => String(n).padStart(2, '0');
-const okDate = (y: number, mo: number, d: number, h = 0, mi = 0) =>
-  y >= 2000 && y <= 2100 && mo >= 1 && mo <= 12 && d >= 1 && d <= 31 && h >= 0 && h < 24 && mi >= 0 && mi < 60;
 
-/** Data do teste (AAAA-MM-DDTHH:MM ou AAAA-MM-DD) quando o usuário não informou:
- *  - nome do arquivo da FT: "Log 3_20261005-1644.csv" → 2026-10-05T16:44;
- *  - BUSMASTER: "***START DATE AND TIME 5:10:2026 16:34:30:698***" do cabeçalho; sem ele,
- *    só a hora do primeiro quadro (clock0) com o dia do envio;
- *  - data AAAA-MM-DD solta no nome do arquivo. */
+/** Data do teste (AAAA-MM-DDTHH:MM ou AAAA-MM-DD) quando o usuário não informou: a regra do
+ *  core (guessDate: nome do arquivo da FT "Log 3_20261005-1644.csv", cabeçalho do BUSMASTER
+ *  "***START DATE AND TIME 5:10:2026 16:34:30:698***", data solta no nome) e, no BUSMASTER
+ *  sem nada disso, a hora do primeiro quadro (clock0) com o dia do envio. */
 export function guessDate(fileName: string, text: string, S: Pick<Session, 'kind' | 'clock0'>, now = new Date()): string | null {
-  const base = fileName.replace(/^.*[\\/]/, '');
-  let m = /(20\d{2})(\d{2})(\d{2})[-_ T]?(\d{2})(\d{2})/.exec(base);
-  if (m && okDate(+m[1], +m[2], +m[3], +m[4], +m[5])) return `${m[1]}-${m[2]}-${m[3]}T${m[4]}:${m[5]}`;
+  const d = guessLogDate(fileName, text);
+  if (d) return d;
   if (S.kind === 'BUSMASTER') {
-    m = /START DATE AND TIME\s+(\d{1,2}):(\d{1,2}):(\d{4})\s+(\d{1,2}):(\d{1,2})/.exec(text.slice(0, 2000));
-    if (m && okDate(+m[3], +m[2], +m[1], +m[4], +m[5])) return `${m[3]}-${pad(m[2])}-${pad(m[1])}T${pad(m[4])}:${pad(m[5])}`;
     const c = /^(\d{1,2}):(\d{2})/.exec(S.clock0 || '');
     if (c && +c[1] < 24 && +c[2] < 60) {
       return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}T${pad(c[1])}:${c[2]}`;
     }
-  }
-  m = /(20\d{2})-(\d{2})-(\d{2})/.exec(base);
-  if (m && okDate(+m[1], +m[2], +m[3])) return `${m[1]}-${m[2]}-${m[3]}`;
-  if (m === null) {
-    m = /(20\d{2})(\d{2})(\d{2})/.exec(base);
-    if (m && okDate(+m[1], +m[2], +m[3])) return `${m[1]}-${m[2]}-${m[3]}`;
   }
   return null;
 }

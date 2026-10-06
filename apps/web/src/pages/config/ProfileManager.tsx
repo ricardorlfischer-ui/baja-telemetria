@@ -177,7 +177,9 @@ export function ProfileManager({ kind, explain, intro }: { kind: Kind; explain: 
         rowKey={p => p.id}
         selected={(p) => p.id === activeId}
         onRowClick={p => choose(p.id)}
-        empty={`Nenhum perfil de ${N.one} ainda. Ajuste os valores abaixo e use "Salvar como novo perfil" (ex.: "${N.example}").`}
+        empty={perms.remote && !perms.user
+          ? `Os perfis de ${N.one} da equipe ficam no servidor: entre para ver e usar. Sem entrar, os valores abaixo valem só neste navegador.`
+          : `Nenhum perfil de ${N.one} ainda. Ajuste os valores abaixo e use "Salvar como novo perfil" (ex.: "${N.example}").`}
         columns={[
           {
             key: 'name', header: 'Perfil',

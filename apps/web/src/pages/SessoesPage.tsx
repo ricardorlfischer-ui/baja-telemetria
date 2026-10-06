@@ -16,6 +16,7 @@ import {
 import { useNavigate } from 'react-router';
 import { computeSession, parseLog } from '@baja/core';
 import { PageHeader, Section } from '../components';
+import { BrandHero } from '../brand';
 import { routeByPath } from '../routes';
 import { ApiError, useLibrary, type SessionMeta } from '../library';
 import { useSessionStore } from '../state/session';
@@ -61,7 +62,9 @@ export default function SessoesPage() {
   const loggedOut = mode === 'remote' && !user;
 
   useEffect(() => {
-    if (!lib) return;
+    if (!lib || libLoading) return;
+    /* servidor sem ninguém conectado: nem pede a lista (seria 401); a tela mostra "entrar" */
+    if (loggedOut) { setList([]); setListError(null); return; }
     let alive = true;
     setListError(null);
     lib.listSessions()
@@ -72,7 +75,7 @@ export default function SessoesPage() {
         setListError({ msg: msgOf(e), status: e instanceof ApiError ? e.status : 0 });
       });
     return () => { alive = false; };
-  }, [lib, version, user?.id]);
+  }, [lib, version, user?.id, loggedOut, libLoading]);
 
   const all = useMemo(() => [...(list ?? [])].sort((a, b) => sortKey(b).localeCompare(sortKey(a))), [list]);
   const drivers = useMemo(() => [...new Set(all.map(m => m.driver).filter((d): d is string => !!d))].sort((a, b) => a.localeCompare(b, 'pt-BR')), [all]);
@@ -165,7 +168,8 @@ export default function SessoesPage() {
     setDelBusy(true);
     try {
       await lib.deleteSession(deleting.id);
-      /* a sessão aberta continua na memória até fechar; só sai da lista */
+      /* a sessão aberta continua na memória até fechar, mas deixa de ser da biblioteca */
+      useSessionStore.getState().detachFromLibrary(deleting.id);
       bump();
       notifications.show({ title: 'Sessão apagada', message: deleting.name });
       setDeleting(null);
@@ -183,17 +187,18 @@ export default function SessoesPage() {
   /* ------------------------------------------------------------ tela */
   return (
     <>
-      <PageHeader title={r.label} subtitle={r.question} actions={(
-        <Box style={{ display: 'flex', flexWrap: 'wrap', gap: 8, maxWidth: 'calc(100vw - 40px)' }}>
-          <Button size="md" variant="default" leftSection={<IconFlask size={18} />} disabled={sessionLoading} onClick={() => { void demo(); }}>
+      <Box mb="xl">
+        <BrandHero compact subtitle="Os logs do carro em gráficos e números para projetar o carro do ano que vem. Envie, filtre e abra as sessões da equipe aqui.">
+          <Button size="md" leftSection={<IconFlask size={18} />} disabled={sessionLoading} onClick={() => { void demo(); }}>
             Dados de exemplo
           </Button>
-          <Button size="md" variant="default" leftSection={<IconFileSearch size={18} />} loading={sessionLoading && !openingId}
+          <Button size="md" variant="white" color="dark" leftSection={<IconFileSearch size={18} />} loading={sessionLoading && !openingId}
             onClick={() => fileRef.current?.click()} title="Só analisa: o arquivo não vai para a biblioteca">
             Abrir arquivo sem salvar
           </Button>
-        </Box>
-      )} />
+        </BrandHero>
+      </Box>
+      <PageHeader title={r.label} subtitle={r.question} />
       <input ref={fileRef} type="file" accept=".csv,.txt,.log" hidden
         onChange={e => { void openNoSave(e.target.files?.[0]); e.target.value = ''; }} />
 
@@ -219,8 +224,8 @@ export default function SessoesPage() {
       >
         {list === null ? (
           <Group gap="sm" py="xl" justify="center"><Loader /> <Text c="dimmed">Carregando as sessões…</Text></Group>
-        ) : listError ? (
-          listError.status === 401 || loggedOut ? (
+        ) : listError || loggedOut ? (
+          loggedOut || listError?.status === 401 ? (
             <Alert color="blue" variant="light" icon={<IconLogin size={20} />} title="Entre para ver as sessões da equipe">
               <Stack gap="sm">
                 <Text>As sessões ficam no servidor da equipe{info?.name ? ` (${info.name})` : ''}. Entre com a sua conta ou um convite.</Text>
@@ -230,7 +235,7 @@ export default function SessoesPage() {
           ) : (
             <Alert color="red" variant="light" title="Não consegui carregar as sessões">
               <Stack gap="sm">
-                <Text>{listError.msg}</Text>
+                <Text>{listError?.msg}</Text>
                 <Button w="fit-content" variant="default" onClick={() => bump()}>Tentar de novo</Button>
               </Stack>
             </Alert>

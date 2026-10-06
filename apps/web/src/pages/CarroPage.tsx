@@ -9,13 +9,14 @@ import { Alert, Button, Select, Stack, Switch, Text } from '@mantine/core';
 import { IconFlask, IconRefresh, IconRuler } from '@tabler/icons-react';
 import { useNavigate } from 'react-router';
 import {
-  DEFAULT_CAR, DEFAULT_SUSP, DEMO_CAR, dataQuality, findCvtCh, findWheelCh,
+  DEFAULT_CAR, DEFAULT_SUSP, DEMO_CAR, findCvtCh, findWheelCh,
   type CarConfig, type QualityIssue, type SensorId, type SuspConfig,
 } from '@baja/core';
 import { NoSessionState, PageHeader, Section, StatTile } from '../components';
 import { routeByPath } from '../routes';
 import { useActiveProfiles, useProfiles } from '../state/profiles';
 import { useCtx, useSessionStore } from '../state/session';
+import { useDataQuality } from '../state/heavy';
 import { ProfileManager } from './config/ProfileManager';
 import { ChannelSelect, FieldGroup, IssueList, NumField, useProfilePerms } from './config/parts';
 
@@ -54,8 +55,11 @@ export default function CarroPage() {
   const seek = useSessionStore(s => s.seek);
   const { car: activeCar } = useActiveProfiles();
   const perms = useProfilePerms();
-  /* perfil de outra pessoa (servidor): campos travados até duplicar ou usar sem perfil */
-  const locked = !!activeCar && !perms.canEdit(activeCar);
+  /* perfil de outra pessoa (servidor): campos travados até duplicar ou usar sem perfil. Com o
+   * exemplo aberto os dados do carro mexem só no carro do exemplo (memória): não travam. As
+   * opções da suspensão valem para os logs reais também (draft): seguem o perfil ativo. */
+  const suspLocked = !!activeCar && !perms.canEdit(activeCar);
+  const locked = !demo && suspLocked;
 
   const setCar = (p: Partial<CarConfig>) => updateConfig({ car: p });
   const setSusp = (p: Partial<SuspConfig>) => updateConfig({ susp: p });
@@ -65,7 +69,8 @@ export default function CarroPage() {
   const autoWheel = useMemo(() => (S ? findWheelCh(S.channels) : null), [S]);
   const autoCvt = useMemo(() => (S ? findCvtCh(S.channels) : null), [S]);
 
-  const issues = useMemo(() => (ctx ? dataQuality(ctx.S, ctx).issues.filter(isCarIssue) : []), [ctx]);
+  const quality = useDataQuality();
+  const issues = useMemo(() => (quality ? quality.issues.filter(isCarIssue) : []), [quality]);
 
   /* sensores dos amortecedores com sinal neste log (chips); sem sessão, os quatro */
   const shocksOn = availability ? SHOCKS.filter(id => availability[id] === 'present') : [];
@@ -162,7 +167,7 @@ export default function CarroPage() {
         title="Opções da análise da suspensão"
         description="Como ler os potenciômetros dos amortecedores e onde procurar a frequência da carroceria. Ficam guardadas junto com o perfil do carro."
         actions={(
-          <Button variant="default" size="md" leftSection={<IconRefresh size={18} />} disabled={locked}
+          <Button variant="default" size="md" leftSection={<IconRefresh size={18} />} disabled={suspLocked}
             onClick={() => setSusp({ compPos: DEFAULT_SUSP.compPos, knee: DEFAULT_SUSP.knee, moving: DEFAULT_SUSP.moving, fmin: DEFAULT_SUSP.fmin, fmax: DEFAULT_SUSP.fmax })}>
             Padrões
           </Button>
@@ -172,20 +177,20 @@ export default function CarroPage() {
           <FieldGroup title="Amortecedores" explain="susp.velocityBands" sensors={shockChips}
             usedIn={['susp.velocityHistogram', 'susp.velocityBands', 'susp.travelHistogram', 'susp.reboundRatio']}
             note={<>A FT grava a posição do potenciômetro; se a posição <b>diminui</b> quando o amortecedor comprime, troque aqui (senão compressão e extensão saem invertidas). Lenta/rápida separa a faixa de baixa e de alta velocidade do amortecedor no histograma.</>}>
-            <Select label="Compressão quando a posição" size="md" allowDeselect={false} disabled={locked}
+            <Select label="Compressão quando a posição" size="md" allowDeselect={false} disabled={suspLocked}
               data={[{ value: '1', label: 'aumenta' }, { value: '0', label: 'diminui' }]}
               value={susp.compPos ? '1' : '0'} onChange={v => setSusp({ compPos: v === '1' })} />
-            <NumField label="Lenta / rápida" unit="mm/s" value={susp.knee || null} min={1} placeholder="100" disabled={locked}
+            <NumField label="Lenta / rápida" unit="mm/s" value={susp.knee || null} min={1} placeholder="100" disabled={suspLocked}
               onCommit={v => setSusp({ knee: v })} />
             <Switch size="md" style={{ gridColumn: '1 / -1' }} label="Só com o carro andando" description="histogramas sem os trechos parado (> 3 km/h)"
-              disabled={locked} checked={!!susp.moving} onChange={e => setSusp({ moving: e.currentTarget.checked })} />
+              disabled={suspLocked} checked={!!susp.moving} onChange={e => setSusp({ moving: e.currentTarget.checked })} />
           </FieldGroup>
 
           <FieldGroup title="Banda da carroceria" explain="susp.naturalFreq" sensors={shockChips}
             usedIn={['susp.naturalFreq', 'freq.spectrum', 'freq.peaks', 'freq.dropTest']}
             note="Faixa de frequência em que o app procura o pico da carroceria (modo de pulo/arfagem) no espectro e no teste de queda. Um baja fica tipicamente entre 1 e 3 Hz; acima de ~6 Hz já é a roda (massa não suspensa).">
-            <NumField label="De" unit="Hz" value={susp.fmin || null} min={0} placeholder="0.6" disabled={locked} onCommit={v => setSusp({ fmin: v })} />
-            <NumField label="Até" unit="Hz" value={susp.fmax || null} min={0} placeholder="4.5" disabled={locked} onCommit={v => setSusp({ fmax: v })} />
+            <NumField label="De" unit="Hz" value={susp.fmin || null} min={0} placeholder="0.6" disabled={suspLocked} onCommit={v => setSusp({ fmin: v })} />
+            <NumField label="Até" unit="Hz" value={susp.fmax || null} min={0} placeholder="4.5" disabled={suspLocked} onCommit={v => setSusp({ fmax: v })} />
           </FieldGroup>
         </div>
       </Section>

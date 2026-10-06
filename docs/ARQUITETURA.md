@@ -70,13 +70,14 @@ da sessão: dá para abrir um log real no navegador com
 | `src/types.ts` | — | tipos compartilhados (abaixo) |
 | `src/util.ts` | `util.js` (só a parte pura) | `clamp`, `fmtTime`, `decimalsFor`, `fmtVal`, `idxAt`, `niceTicks`, `heat`, `HEAT_LIGHT/DARK`, `pctRange`, `range`, `esc` |
 | `src/parsers.ts` | `parsers.js` | `parseLog`, `parseCSV`, `parseBusmaster`, `prettyName`, `finishChannel` |
+| `src/logdate.ts` | novo | `guessDate(fileName, text?)`: data do teste pelo nome do arquivo da FT ou pelo cabeçalho do BUSMASTER (3.3) |
 | `src/gps.ts` | `gps.js` | `DEFAULT_CFG`, `WGS84`, `mPerDeg`, `spanOf`, `FMT_LABEL`, `detectFmt`, `toCode`, `guessGpsChannels`, `smooth`, `computeTrack`, `posAt`, `computeLaps`, `autoLine` |
 | `src/analysis.ts` | `analysis.js` | `DEFAULT_SUSP`, `CORNERS`, `findShocks`, `deriv`, `median`, `quant`, `interpAt`, `stoppedMask`, `suspPrep`, `velStats`, `hist`, `fft`, `welch`, `psd`, `findPeak`, `freeDecay`, `localPeaks`, `highpass`, `dropTests`, `psdMask`, `rideRates`, `gpsDynamics`, `lapProfile`, `bestLap`, `deltaToBest`, `compareLaps` |
 | `src/vehicle.ts` | `vehicle.js` | `DEFAULT_CAR`, `findWheelCh`, `findCvtCh`, `lstsq`, `linFit`, `vehPrep`, `launches`, `powerCurve`, `coastFit`, `findCoasts`, `cvtFit`, `bodyAngles`, `gradients`, `jumps`, `bottomOuts`, `roughness`, `roadSpectrum` |
 | `src/demo.ts` | `demo.js` | `demoCSV`, `DEMO_CAR` (de `app.js`) |
-| `src/pipeline.ts` | `app.js` `recompute()` + `buildDerived()` + `setSession()` | `normalizeConfig`, `computeSession`, `rangeOf`, `getChannel` |
+| `src/pipeline.ts` | `app.js` `recompute()` + `buildDerived()` + `setSession()` | `normalizeConfig`, `computeSession`, `rangeOf`, `getChannel`, `channelExtremes` (novo) |
 | `src/reports/*.ts` | `analysisui.js` / `vehicleui.js` (`render*`) | relatórios puros de cada página (3.4) |
-| `src/quality.ts` | novo | qualidade dos dados por canal (3.5) |
+| `src/quality.ts` | novo | qualidade dos dados por canal (3.5), `SHOCK_STILL_MM` |
 | `src/summary.ts` | novo | métricas da sessão para a biblioteca e a comparação (3.6) |
 | `src/formulas.ts` | novo | canais calculados por fórmula (3.7) |
 | `src/index.ts` | — | reexporta tudo |
@@ -107,6 +108,11 @@ normalizeConfig(S, partialCfg) -> AnalysisConfig
 computeSession(S, partialCfg, { autoLine?: boolean }) -> SessionContext
 rangeOf(ctx, mode: 'session'|'lap'|'view', selLap, view?: [t0, t1]) -> [i0, i1, label]   // = Analysis.range()
 getChannel(ctx, key) -> Channel | undefined
+channelExtremes(ctx, key, i0, i1) -> { min: { v, t, i }, max: { v, t, i } } | null   // mín/máx no trecho com o instante ("ir ao ponto"); null sem dado
+guessDate(fileName, text?) -> 'AAAA-MM-DD' | 'AAAA-MM-DDTHH:MM' | null
+  // "Log 3_20261005-1644.csv" → 2026-10-05T16:44; "***START DATE AND TIME 5:10:2026 16:34:30:698***" (BUSMASTER,
+  // dia:mês:ano, só os 2000 primeiros caracteres de text) → 2026-10-05T16:34; data solta no nome → AAAA-MM-DD.
+  // O servidor acrescenta só a hora do 1º quadro (clock0) com o dia do envio no BUSMASTER sem cabeçalho.
 ```
 
 `computeSession` reproduz `legacyCompute()` de `test/legacy.ts` (que é a réplica de
@@ -124,8 +130,8 @@ designReport(ctx, i0, i1)        -> { rows: { grp, item, val, how, read, explain
 designRecTexts(report) -> string[] ; designCsv(report, nome) -> CSV com a coluna "sensores"
 processedCsv(ctx) -> { name, text }   // exportCSV() do app antigo (todos os canais calculados)
 trackConfigInfo(ctx)                  // cfgInfo(): vão, resolução, origem da posição, nota de calibração 7/8
-suspensionReport(ctx, i0, i1)    -> ...                                                          // renderSusp + renderSuspExtra
-resonanceReport(ctx, i0, i1, o)  -> ...   // renderFreq + showDrop + showPsd + analyzeManual + renderRoadRes
+suspensionReport(ctx, i0, i1)    -> ...   // renderSusp + renderSuspExtra; + still (amortecedor quase parado, abaixo)
+resonanceReport(ctx, i0, i1, o)  -> ...   // renderFreq + showDrop + showPsd + analyzeManual + renderRoadRes; + axles, olley (abaixo)
 powertrainReport(ctx, i0, i1)    -> ...   // renderPower + renderCoast + showCoast
 cvtReport(ctx, i0, i1)           -> ...   // renderCvt
 dynamicsReport(ctx, i0, i1)      -> ...   // renderDyn
@@ -140,6 +146,19 @@ escolher a cor) — assim a página desenha igual e o teste compara as séries c
 antigo mandou para o `BT.Plot` (o carregador grava em `el(id).plot`). `designReport` tem que
 devolver exatamente `designRows`/`designRec` do app antigo.
 
+Acréscimos (sem mudar os números portados):
+
+- `suspensionReport`: cada linha da tabela por canto tem `still` (com sinal mas curso usado no
+  trecho < `SHOCK_STILL_MM` = 1 mm) e o relatório tem `still: { ids, limit, text, explain:
+  'quality.shockStill', sensors } | null` com o aviso pronto ("Amortecedor com sinal mas quase
+  parado (< 1 mm de curso no trecho): RL 0.2 mm. Potenciômetro solto, travado ou mal calibrado...").
+- `resonanceReport`: `axles: { F, R }` com `{ fn, zeta, n, ids, t, explain, sensors }` do 1º
+  teste de queda do trecho (o mesmo de `road.fnF/fnR`, mas sem depender do espectro da pista) e
+  `olley: { ratio, ref: [1.1, 1.2], status: 'low' | 'near' | 'ok' | 'high', read, text, explain,
+  sensors } | null` (null sem fₙ nos dois eixos). `read` = "tras./diant. = 1.18" (coluna da
+  ficha); `text` = a recomendação da ficha em `low` (< 1) e `high` (> 1,3) e uma frase de
+  "dentro/perto da referência" em `ok` (1,1–1,2) e `near`. `olleyStatus(ratio)` está exportada.
+
 ### 3.5 Qualidade dos dados (`dataQuality(S, ctx)`)
 
 Por canal do log: amostras válidas (%), taxa efetiva (Hz), mín/máx, constante, trechos
@@ -148,14 +167,35 @@ travados (mesmo valor ≥ 2 s com o carro andando), saltos impossíveis, papel d
 avisos com nível (`info` | `warn` | `error`), texto em português e o que fazer
 (ex.: "GPS na borda da área em 12 % do tempo: aumente a margem no track_config.h").
 
-### 3.6 Resumo da sessão (`sessionSummary(ctx)`)
+Papéis do GPS: na FT `gps_x`, `gps_y`, `gps_status`; no BUSMASTER (`S.gps`) os canais do módulo e do
+PIC têm papel e sensor `gps`: `gps_lat` ('GPS · latitude'), `gps_lon`, `gps_sats`, `gps_fix`,
+`gps_pic_x`/`gps_pic_y` ('PIC · X/Y (código)') e `gps_status` ('PIC · status GPS'). `gpsUpdateHz` sai
+de X/Y na FT e de latitude/longitude no BUSMASTER. BUSMASTER sem nenhuma posição com fix 3D →
+aviso `gps.nofix` (`error`, card `quality.gpsFix`): "O módulo GPS mandou 128 posições, nenhuma
+com fix 3D: tipo de fix sempre 0 ..., no máximo 0 satélite(s), status do PIC 85 (sem fix) em 94 %
+do tempo..." (no lugar de `gps.track` e sem os avisos de canal vazio/constante desses canais);
+`sensorAvailability` continua `absent` para o GPS nesse caso (o card `sensor.gps` explica em
+"Limitações"). Amortecedor com sinal mas máx − mín da posição < `SHOCK_STILL_MM` (1 mm) no log
+inteiro → aviso `susp.still` (`warn`, card `quality.shockStill`, sensores dos cantos).
 
-`{ version: SUMMARY_VERSION, metrics: { key, group, label, value: number | null, unit, text? }[] }`
+### 3.6 Resumo da sessão (`sessionSummary(ctx, design?, range?)`)
+
+`{ version: SUMMARY_VERSION, metrics: { key, group, label, value: number | null, unit, text?, explain, sensors, scope, better?, digits }[], range? }`
 com os números de projeto (duração, distância, voltas, melhor volta, v máx, curso usado por
 canto, batidas no fim de curso, saltos, frequência natural e ζ, gradientes, potência máx,
 melhor largada, Crr/CdA, T máx da CVT, regime previsto...). Chaves estáveis (ex.:
 `susp.travel.FL`, `cvt.tmax`) porque a página "Comparar sessões" e o servidor guardam isso.
-Mudou a conta? Aumente `SUMMARY_VERSION` (o servidor recalcula). Hoje: **2**.
+Mudou a conta? Aumente `SUMMARY_VERSION` (o servidor recalcula). Hoje: **3**.
+
+Cada métrica tem também `scope: 'session' | 'range'`, `digits` (casas do `text`) e, quando a
+direção é óbvia para o projeto, `better: 'up' | 'down'` (ex.: melhor volta `down`, v máx `up`;
+lista em `SUMMARY_BETTER`). Sem `range` o resumo é o da sessão inteira (o que o servidor e a
+biblioteca guardam). Com `range = [i0, i1]` as métricas `scope: 'range'` seguem o trecho (a ficha
+do trecho: v máx, curso, velocidades do amortecedor, saltos, fim de curso, gradientes, rugosidade,
+ondulações, potência, força trativa, largadas, coast-down, CVT, distância do trecho, % de GPS
+válido) e as `scope: 'session'` ficam da sessão inteira (`SUMMARY_SESSION_SCOPE`: duração, voltas,
+melhor volta, fator do pneu, fₙ/ζ/k/c — a ficha usa o 1º teste de queda da sessão — e sensores
+presentes); o resumo traz `range: { i0, i1, t0, t1 }`. Passe em `design` a ficha do MESMO trecho.
 
 ### 3.8 Explicações e sensores (`sensors.ts`, `explain.ts`) — **requisito central**
 

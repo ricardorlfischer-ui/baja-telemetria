@@ -5,7 +5,7 @@
 import { Fragment, useMemo } from 'react';
 import { Select, Stack, UnstyledButton } from '@mantine/core';
 import { IconArrowDownRight, IconArrowUpRight, IconEqual } from '@tabler/icons-react';
-import { fmtTime, SENSOR_IDS, type CornerId, type SensorId, type SessionSummary, type SummaryMetric } from '@baja/core';
+import { fmtTime, SENSOR_IDS, SUMMARY_BETTER, type CornerId, type SensorId, type SessionSummary, type SummaryMetric } from '@baja/core';
 import { ChartCard, EmptyState, InfoButton, SensorChips, useExplain, XYPlot, type XYSeries, type XYSpec } from '../../components';
 import { CORNER_LABEL, STATUS_COLOR, useChartTheme, type Status } from '../../theme';
 import type { SessionMeta } from '../../library/types';
@@ -27,21 +27,14 @@ export interface CmpSession {
 
 const GROUP_ORDER = ['Sessão', 'Suspensão', 'Trem de força', 'CVT', 'Qualidade'];
 
-/* direção "melhor" só onde ela é óbvia (o resto fica neutro, sem cor) */
-const BETTER: Record<string, 'lower' | 'higher'> = {
-  'session.bestLap': 'lower', 'session.vmax': 'higher', 'power.vmax': 'higher',
-  'power.pmax': 'higher', 'power.traction': 'higher',
-  'power.launch30': 'lower', 'power.launch20kmh': 'lower', 'power.launchSlip': 'lower',
-  'susp.bottomOuts.F': 'lower', 'susp.bottomOuts.R': 'lower',
-  'cvt.tmax': 'lower', 'cvt.steady': 'lower', 'cvt.endTemp': 'lower', 'cvt.coolingExtra': 'lower',
-  'cvt.margin': 'higher', 'cvt.timeToLimit': 'higher',
-  'quality.gpsValid': 'higher', 'quality.sensors': 'higher',
-};
-
-/** Casas decimais do texto da métrica ("12.34" → 2), para a diferença sair igual. */
-const decOf = (t: string | undefined): number => {
-  const m = /^-?\d+(?:\.(\d+))?$/.exec(t ?? '');
-  return m ? (m[1]?.length ?? 0) : 2;
+/* Direção "melhor" (só onde é óbvia; o resto fica neutro, sem cor) e casas da diferença vêm da
+ * própria métrica do core (better, digits: docs/ARQUITETURA.md 3.6). Resumo guardado por uma
+ * versão antiga, sem esses campos: SUMMARY_BETTER e as casas do texto. */
+const betterOf = (c: SummaryMetric, key: string): 'up' | 'down' | undefined => c.better ?? SUMMARY_BETTER[key];
+const digitsOf = (c: SummaryMetric): number => {
+  if (typeof c.digits === 'number') return c.digits;
+  const m = /^-?\d+(?:\.(\d+))?$/.exec(c.text ?? '');
+  return m ? m[1]?.length ?? 0 : Number.isInteger(c.value) ? 0 : 2;
 };
 
 export interface MetricRow {
@@ -111,7 +104,6 @@ export function MetricsTable({ sessions, rows, selected, onSelect }: {
             const grpRow = r.group !== lastGroup;
             lastGroup = r.group;
             const ref = r.cells[0];
-            const dir = BETTER[r.key];
             return (
               <Fragment key={r.key}>
                 {grpRow && (
@@ -138,10 +130,11 @@ export function MetricsTable({ sessions, rows, selected, onSelect }: {
                     const shown = !c ? (s.summary ? '—' : 'sem resumo') : c.text ?? (c.value !== null ? String(c.value) : '—');
                     let diff: React.ReactNode = null;
                     if (j > 0 && c && ref && c.value !== null && ref.value !== null) {
-                      const d = c.value - ref.value, dec = decOf(c.text);
+                      const d = c.value - ref.value, dec = Math.max(digitsOf(c), digitsOf(ref));
                       const same = +d.toFixed(dec) === 0;
+                      const dir = betterOf(c, r.key);
                       let st: Status | null = null, word = '';
-                      if (dir && !same) { const better = dir === 'higher' ? d > 0 : d < 0; st = better ? 'good' : 'serious'; word = better ? 'melhor' : 'pior'; }
+                      if (dir && !same) { const better = dir === 'up' ? d > 0 : d < 0; st = better ? 'good' : 'serious'; word = better ? 'melhor' : 'pior'; }
                       const Ico = same ? IconEqual : d > 0 ? IconArrowUpRight : IconArrowDownRight;
                       diff = (
                         <span className="bt-cmp-diff" data-status={st ?? undefined} style={st ? { ['--bt-status' as string]: STATUS_COLOR[st] } : undefined}

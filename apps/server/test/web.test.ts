@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { json, makeApp, tmpDir, type TestApp } from './helpers';
 import { isLocalAddress, loadConfig, parseTrustProxy, SERVER_ROOT, trustProxyOption } from '../src/config';
 import { guessDate } from '../src/analysis';
+import { guessDate as coreGuessDate } from '@baja/core';
 import { acceptsGzip } from '../src/routes/sessions';
 
 let t: TestApp | null = null;
@@ -46,7 +47,7 @@ describe('app web', () => {
     r = await app.inject('/api/nao-existe');
     expect(r.statusCode).toBe(404);
     expect(json(r).error).toMatch(/Rota não encontrada/);
-    expect(json(await app.inject('/api/info')).name).toBe('Baja Telemetria');
+    expect(json(await app.inject('/api/info')).name).toBe('Telemetria · Mauá Racing Baja');
   });
 
   it('sem o build: / responde uma página dizendo para rodar npm run build', async () => {
@@ -151,6 +152,12 @@ describe('configuração e utilitários', () => {
     const bm = { kind: 'BUSMASTER' as const, clock0: '16:34:36' };
     expect(guessDate('x.log', '***START DATE AND TIME 5:10:2026 16:34:30:698***', bm)).toBe('2026-10-05T16:34');
     expect(guessDate('x.log', 'sem cabeçalho', bm, new Date(2026, 9, 6, 12))).toBe('2026-10-06T16:34');
+    /* sem cabeçalho, a data do nome do arquivo ganha da hora do primeiro quadro */
+    expect(guessDate('can 2026-03-02.log', 'sem cabeçalho', bm, new Date(2026, 9, 6, 12))).toBe('2026-03-02');
+    /* a regra é a do core (mesmo resultado sem o recurso do dia do envio) */
+    for (const [f, txt] of [['Log 3_20261005-1644.csv', ''], ['x.log', '***START DATE AND TIME 5:10:2026 16:34:30:698***'], ['Log 3.csv', '']]) {
+      expect(guessDate(f, txt, ft)).toBe(coreGuessDate(f, txt));
+    }
   });
 
   it('acceptsGzip', () => {

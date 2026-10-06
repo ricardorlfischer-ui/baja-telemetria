@@ -2,8 +2,8 @@
  * enquanto abre, o aviso de carregando; sem sessão, o que a página mostra e os três caminhos
  * (dados de exemplo, abrir um arquivo sem salvar, ou escolher um log da biblioteca). */
 import { useRef, type ReactNode } from 'react';
-import { Button, Group, Loader, Paper, Stack, Text } from '@mantine/core';
-import { IconFileSearch, IconFlask, IconFolderOpen, type Icon } from '@tabler/icons-react';
+import { Alert, Button, Group, Loader, Paper, Stack, Text } from '@mantine/core';
+import { IconAlertTriangle, IconFileSearch, IconFlask, IconFolderOpen, type Icon } from '@tabler/icons-react';
 import { useNavigate } from 'react-router';
 import { useSessionStore } from '../state/session';
 import { BrandHero } from '../brand';
@@ -19,6 +19,8 @@ export interface NoSessionStateProps {
 export function NoSessionState({ description, title = 'Nenhuma sessão aberta' }: NoSessionStateProps) {
   const status = useSessionStore(s => s.status);
   const loadingText = useSessionStore(s => s.loadingText);
+  const error = useSessionStore(s => s.error);
+  const clearError = useSessionStore(s => s.clearError);
   const openDemo = useSessionStore(s => s.openDemo);
   const openFile = useSessionStore(s => s.openFile);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -32,6 +34,17 @@ export function NoSessionState({ description, title = 'Nenhuma sessão aberta' }
   }
   return (
     <>
+      {/* o log que não abriu: o motivo fica na página (o aviso do canto some sozinho) */}
+      {status === 'error' && error && (
+        <Alert color="red" variant="light" icon={<IconAlertTriangle size={20} />} title="Não consegui abrir o log" mb="lg"
+          withCloseButton closeButtonLabel="Fechar o aviso" onClose={clearError}>
+          <Text>{error}</Text>
+          <Text size="sm" c="dimmed" mt={6}>
+            O app lê o CSV exportado pelo FT Manager (FT450) e o log do BUSMASTER (.txt/.log). Confira se o arquivo é um desses
+            e se ele abre num editor de texto.
+          </Text>
+        </Alert>
+      )}
       <BrandHero
         compact
         title={title}

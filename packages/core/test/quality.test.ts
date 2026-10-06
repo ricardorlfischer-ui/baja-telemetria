@@ -6,8 +6,9 @@ import { readFixture } from './legacy';
 import { parseLog, parseCSV, finishChannel } from '../src/parsers';
 import { demoCSV, DEMO_CAR } from '../src/demo';
 import { computeSession, type AnalysisConfigInput } from '../src/pipeline';
-import { dataQuality, detectRoles, CHANNEL_ROLES, ROLE_SENSOR, ROLE_LABEL, type DataQuality } from '../src/quality';
-import { SENSORS } from '../src/sensors';
+import { dataQuality, detectRoles, CHANNEL_ROLES, ROLE_SENSOR, ROLE_LABEL, SHOCK_STILL_MM, type DataQuality } from '../src/quality';
+import { SENSORS, sensorAvailability } from '../src/sensors';
+import { sensorsOfChannel } from '../src/reports/maps';
 import { getExplain } from '../src/explain';
 import { idxAt } from '../src/util';
 import type { Session } from '../src/types';
@@ -56,9 +57,32 @@ describe('papéis', () => {
     const r = detectRoles(demo(), { chX: 'O2_General', chY: 'Back_pressure', chStatus: '', car: { wheelCh: 'CVT_temp', cvtCh: 'Wheel_speed' } });
     expect([r.gps_x, r.gps_y, r.wheel, r.cvt_temp]).toEqual(['O2_General', 'Back_pressure', 'CVT_temp', 'Wheel_speed']);
   });
-  it('BUSMASTER: GPS vem da lat/lon (sem papéis de canal)', () => {
+  it('BUSMASTER: canais do módulo GPS e do PIC têm papel e sensor gps', () => {
     const S = parseLog(readFixture('busmaster_14.log')!, 'busmaster_14.log');
-    expect(detectRoles(S)).toEqual({});
+    expect(detectRoles(S)).toEqual({
+      gps_lat: 'GPS · latitude', gps_lon: 'GPS · longitude', gps_sats: 'GPS · satélites', gps_fix: 'GPS · tipo de fix',
+      gps_pic_x: 'PIC · X (código)', gps_pic_y: 'PIC · Y (código)', gps_status: 'PIC · status GPS',
+    });
+    const { ctx, q } = run(S);
+    for (const k of Object.values(detectRoles(S))) {
+      const c = q.channels.find(x => x.key === k)!;
+      expect(c.sensor, k).toBe('gps');
+      expect(c.explain, k).toBe('sensor.gps');
+      expect(sensorsOfChannel(ctx, k), k).toEqual(['gps']);
+    }
+    /* os canais da FT/expander continuam sem papel */
+    expect(q.channels.filter(c => c.role).length).toBe(7);
+  });
+  it('BUSMASTER com fix: taxa da posição pela latitude/longitude', () => {
+    const S = parseLog(readFixture('busmaster_14.log')!, 'busmaster_14.log');
+    /* posição fabricada a 4 Hz na latitude/longitude (como o 0x028 com fix) */
+    for (const k of ['GPS · latitude', 'GPS · longitude']) {
+      const c = ch(S, k);
+      for (let i = 0; i < S.t.length; i++) c.data[i] = -23.5 + Math.floor(S.t[i] * 4) * 1e-6;
+      finishChannel(c);
+    }
+    const { q } = run(S);
+    expect(q.gpsUpdateHz).toBeCloseTo(4, 0);
   });
 });
 
@@ -112,14 +136,33 @@ describe('logs reais', () => {
       expect(q.issues.find(x => x.id === 'susp.partial')!.sensors).toEqual(['shock_fl', 'shock_fr', 'shock_rr']);
       expect(q.issues.find(x => x.id === 'car.data')!.level).toBe('warn');
       expect(q.channels.find(c => c.key === 'Shock_-_Rear_Left')!.updateHz).toBeCloseTo(25, 3);
+      /* RL tem sinal, mas mexe ~0,2 mm no log inteiro */
+      const st = q.issues.find(x => x.id === 'susp.still')!;
+      expect(st.level).toBe('warn');
+      expect(st.text).toMatch(/^Amortecedor com sinal mas quase parado \(< 1 mm de curso no log\): RL mexe só 0\.\d mm\. Potenciômetro solto, travado ou mal calibrado\.$/);
+      expect(SHOCK_STILL_MM).toBe(1);
+      expect(st.explain).toBe('quality.shockStill');
+      expect(st.sensors).toEqual(['shock_rl']);
     });
   }
-  it('busmaster_14.log: GPS sem fix = erro', () => {
-    const { q } = run(parseLog(readFixture('busmaster_14.log')!, 'busmaster_14.log'));
+  it('busmaster_14.log: GPS sem fix = erro que diz o que o módulo mandou', () => {
+    const { ctx, q } = run(parseLog(readFixture('busmaster_14.log')!, 'busmaster_14.log'));
     sane(q);
-    expect(q.issues[0].id).toBe('gps.track');
+    expect(q.issues[0].id).toBe('gps.nofix');
     expect(q.issues[0].level).toBe('error');
-    expect(q.issues[0].text).toContain('fix 3D');
+    expect(q.issues[0].text).toMatch(/^O módulo GPS mandou 128 posições, nenhuma com fix 3D: tipo de fix sempre 0/);
+    expect(q.issues[0].text).toContain('no máximo 0 satélite(s)');
+    expect(q.issues[0].text).toContain('status do PIC 85 (sem fix)');
+    expect(q.issues[0].explain).toBe('quality.gpsFix');
+    expect(q.issues[0].sensors).toEqual(['gps']);
+    /* sem avisos repetidos: nem "sem trajetória", nem latitude vazia, nem satélites constantes */
+    const id = ids(q);
+    expect(id).not.toContain('gps.track');
+    expect(id.filter(x => /GPS ·|PIC ·/.test(x))).toEqual([]);
+    /* o card do sensor explica por que o GPS fica ausente */
+    expect(sensorAvailability(ctx).gps).toBe('absent');
+    expect(getExplain('sensor.gps')!.limits).toContain('fix 3D');
+    expect(q.gpsUpdateHz).toBeNaN();
     expect(q.gpsBorderPct).toBeNull();
     expect(q.logRateHz).toBeCloseTo(20, 6);
   });

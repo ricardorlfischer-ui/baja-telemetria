@@ -75,6 +75,31 @@ export interface ResRoadRow {
   cells: string[];
 }
 
+/** fₙ e ζ de um eixo no 1º teste de queda do trecho (média dos dois lados que deram). */
+export interface ResAxle {
+  fn: number;                    /* Hz (NaN sem teste nesse eixo) */
+  zeta: number;                  /* NaN sem */
+  n: number;                     /* lados que entraram na média (0–2) */
+  ids: CornerId[];
+  t: number | null;              /* s do teste de queda (null sem) */
+  explain: string;
+  sensors: SensorId[];           /* amortecedores que entraram + o "parado" que achou o evento */
+}
+
+/** Situação da razão de Olley (tras./diant.), com a referência do flat ride 1,1–1,2. */
+export type OlleyStatus = 'low' | 'ok' | 'near' | 'high';
+
+/** Regra de Olley: razão fₙ traseira ÷ dianteira e a leitura (textos iguais aos da ficha). */
+export interface ResOlley {
+  ratio: number;
+  ref: [number, number];         /* [1.1, 1.2] */
+  status: OlleyStatus;           /* low < 1 ≤ near < 1,1 ≤ ok ≤ 1,2 < near ≤ 1,3 < high */
+  read: string;                  /* "tras./diant. = 1.15" (coluna leitura da ficha) */
+  text: string;                  /* recomendação da ficha (low/high) ou a leitura dentro/perto da regra */
+  explain: string;
+  sensors: SensorId[];
+}
+
 export interface ResonanceReport {
   hasShocks: boolean;
   empty: string | null;
@@ -112,6 +137,10 @@ export interface ResonanceReport {
     rows: ResPeakRow[];
   };
   note: { text: string; fs: number; explain: string; sensors: SensorId[] };
+  /* ---------- fₙ e ζ por eixo (1º teste de queda do trecho) e regra de Olley; não depende
+   * do espectro da pista (road.fnF/fnR só existem quando ele deu) */
+  axles: { F: ResAxle; R: ResAxle };
+  olley: ResOlley | null;        /* null sem fₙ nos dois eixos */
   /* ---------- pista × ressonância */
   road: {
     explain: string;
@@ -188,6 +217,8 @@ export function resonanceReport(ctx: SessionContext, i0: number, i1: number, opt
     psd: { explain: 'freq.spectrum', sensors: [], modeOptions: [], mode: 'all', vlo: NaN, vhi: NaN, spectra: {}, plot: { key: 'frPsd', title: 'Espectro com o carro andando', explain: 'freq.spectrum', sensors: [] } },
     peaks: { explain: 'freq.peaks', sensors: [], columns: [], rows: [] },
     note: { text: '', fs: NaN, explain: 'freq.sampleRate', sensors: [] },
+    axles: { F: emptyAxle(), R: emptyAxle() },
+    olley: null,
     road: {
       explain: 'freq.roadWavelength', sensors: [], spectrum: null, message: null, columns: ROAD_COLUMNS, rows: [], note: '',
       fnF: NaN, fnR: NaN, v10: NaN, v50: NaN, v90: NaN,
@@ -277,8 +308,39 @@ export function resonanceReport(ctx: SessionContext, i0: number, i1: number, opt
       `A frequência da roda (massa não suspensa, ~8–15 Hz) fica no limite ou acima disso. Para vê-la, grave os amortecedores a 100 Hz ou mais, se a FT permitir.`,
   };
 
+  axlesOlley(A, rep, ev0 || null, stopS);
   roadRes(A, i0, i1, rep, act, ev0 || null);
   return rep;
+}
+
+const emptyAxle = (): ResAxle => ({ fn: NaN, zeta: NaN, n: 0, ids: [], t: null, explain: 'susp.naturalFreq', sensors: [] });
+
+/** Razão de Olley (tras./diant.) → situação e texto. Os textos de "low" e "high" são as
+ *  recomendações da ficha de projeto (design.ts), palavra por palavra. */
+export function olleyStatus(ratio: number): { status: OlleyStatus; read: string; text: string } {
+  const read = `tras./diant. = ${ratio.toFixed(2)}`;
+  if (ratio < 1) return { status: 'low', read, text: `A traseira está com frequência menor que a dianteira (${ratio.toFixed(2)}×). A regra do “flat ride” (Olley) sugere a traseira 10–20 % acima da dianteira, para o carro não “galopar” em lombadas.` };
+  if (ratio > 1.3) return { status: 'high', read, text: `A traseira está ${((ratio - 1) * 100).toFixed(0)} % acima da dianteira em frequência; a referência do “flat ride” é 10–20 %.` };
+  if (ratio >= 1.1 && ratio <= 1.2) return { status: 'ok', read, text: `A traseira está ${((ratio - 1) * 100).toFixed(0)} % acima da dianteira em frequência: dentro da referência do “flat ride” (10–20 %).` };
+  return { status: 'near', read, text: `A traseira está ${((ratio - 1) * 100).toFixed(0)} % acima da dianteira em frequência; a referência do “flat ride” é 10–20 %.` };
+}
+
+/* fₙ/ζ por eixo e Olley, do 1º teste de queda do trecho (o mesmo de road.fnF/fnR) */
+function axlesOlley(A: SessionContext, rep: ResonanceReport, ev: DropTest | null, stopS: SensorId[]): void {
+  const mk = (ax: 'F' | 'R'): ResAxle => {
+    const d = axleDrop(ev, ax);
+    const ids = d.ids as CornerId[];
+    return {
+      fn: d.fn, zeta: d.zeta, n: d.n, ids, t: ev ? ev.t : null, explain: 'susp.naturalFreq',
+      sensors: d.n ? suspJoinSensors(ids.map(id => suspCornerSensor(id)), stopS) : [],
+    };
+  };
+  const F = mk('F'), R = mk('R');
+  rep.axles = { F, R };
+  if (ok(F.fn) && ok(R.fn)) {
+    const ratio = R.fn / F.fn;
+    rep.olley = { ratio, ref: [1.1, 1.2], ...olleyStatus(ratio), explain: 'susp.naturalFreq', sensors: suspJoinSensors(F.sensors, R.sensors) };
+  }
 }
 
 /* showDrop: tabela e gráfico do evento selecionado */

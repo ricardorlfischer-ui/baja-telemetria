@@ -3,17 +3,18 @@
  * controles (compressão aumenta/diminui, lenta/rápida, só andando), tabela por canto, histogramas
  * de velocidade e de curso (pequenos múltiplos com a mesma escala), rolagem e arfagem × acelerações,
  * saltos (clique = ir ao salto) e batidas no fim de curso. */
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Group, Paper, SegmentedControl, SimpleGrid, Stack, Switch, Text } from '@mantine/core';
-import { suspensionReport, type BottomOut, type SuspCornerRow, type SuspensionReport, type SuspJumpRow } from '@baja/core';
+import { SHOCK_STILL_MM, suspensionReport, type BottomOut, type SuspCornerRow, type SuspensionReport, type SuspJumpRow } from '@baja/core';
 import {
-  ChartCard, DataTable, InfoButton, PageHeader, Section, StatTile, useExplain, type Column, type XYSpec,
+  ChartCard, ComputingState, DataTable, InfoButton, PageHeader, Section, StatTile, useExplain, type Column, type XYSpec,
 } from '../components';
 import { routeByPath } from '../routes';
 import { useCtx, useRange, useSessionReady, useSessionStore } from '../state/session';
+import { useComputed } from '../state/heavy';
 import { CORNER_LABEL, type Corner } from '../theme';
 import {
-  Callout, CarButton, CommitNumber, CornerSwatch, NoSession, NoShocks, Num, PlotCard, RangeBadge,
+  Callout, CarButton, CommitNumber, CornerSwatch, NoSession, NoShocks, Num, PlotCard, RangeBadge, StillShocks,
 } from './suspensao/shared';
 import classes from './suspensao/susp.module.css';
 
@@ -22,7 +23,8 @@ export default function SuspensaoPage() {
   const ready = useSessionReady();
   const ctx = useCtx();
   const range = useRange();
-  const rep = useMemo(() => (ctx && range ? suspensionReport(ctx, range[0], range[1]) : null), [ctx, range]);
+  /* log grande: primeiro o aviso "Calculando…" (useComputed) */
+  const rep = useComputed(() => (ctx && range ? suspensionReport(ctx, range[0], range[1]) : null), [ctx, range]);
 
   const header = (
     <PageHeader
@@ -30,6 +32,7 @@ export default function SuspensaoPage() {
       actions={<>{range && <RangeBadge label={range[2]} />}<CarButton /></>}
     />
   );
+  if (ready && ctx && range && !rep) return <>{header}<ComputingState what="a suspensão" /></>;
   if (!ready || !rep || !range) return <>{header}<NoSession what="curso, velocidade dos amortecedores, rolagem e saltos" /></>;
   if (!rep.hasShocks) {
     return (
@@ -110,15 +113,16 @@ function CornerSection({ rep }: { rep: SuspensionReport }) {
       <Stack gap="lg">
         <SimpleGrid cols={{ base: 1, xs: 2, lg: 4 }} spacing="md">
           {rows.map(r => {
-            /* canal com sinal mas quase parado (< 1 mm no trecho): provável ruído do sensor, não curso */
-            const still = r.active && r.used !== undefined && r.used < 1;
+            /* canal com sinal mas quase parado no trecho (row.still do core: < SHOCK_STILL_MM):
+             * provável ruído do sensor, não curso */
+            const still = r.active && !!r.still;
             return (
               <StatTile
                 key={r.id}
                 label={<span className={classes.cornerHead}><CornerSwatch id={r.id as Corner} />{r.id} · curso usado</span>}
                 value={r.active ? r.cells[3].replace(/ mm$/, '') : null} unit="mm"
                 hint={still
-                  ? 'menos de 1 mm no trecho: parece só ruído do sensor (carro parado ou potenciômetro sem medir)'
+                  ? `menos de ${SHOCK_STILL_MM} mm no trecho: parece só ruído do sensor (carro parado ou potenciômetro sem medir)`
                   : r.active
                     ? (r.stroke && r.stroke > 0 ? `${r.cells[4]} do curso total` : 'informe o curso total para ver a %')
                     : r.cells[1]}
@@ -128,6 +132,8 @@ function CornerSection({ rep }: { rep: SuspensionReport }) {
             );
           })}
         </SimpleGrid>
+
+        <StillShocks still={rep.still} />
 
         {dead.length > 0 && (
           <Callout tone="warn" sensors={dead.map(r => r.sensors[0])}>
@@ -268,6 +274,8 @@ function JumpsSection({ rep }: { rep: SuspensionReport }) {
   const jp = rep.jumps;
   const seek = useSessionStore(s => s.seek);
   const [sel, setSel] = useState(-1);
+  /* trecho novo = lista nova: o destaque não pode ficar no índice de outro salto */
+  useEffect(() => { setSel(-1); }, [jp.rows]);
   const { open } = useExplain();
   const cols: Column<SuspJumpRow>[] = jp.columns.map((c, i) => ({
     key: c.key,
@@ -315,6 +323,7 @@ function BottomSection({ rep }: { rep: SuspensionReport }) {
   const bo = rep.bottom;
   const seek = useSessionStore(s => s.seek);
   const [sel, setSel] = useState(-1);
+  useEffect(() => { setSel(-1); }, [bo.events]);
   const cols: Column<BottomOut>[] = [
     { key: 'id', header: 'Canto', render: b => <span className={classes.cornerHead}><CornerSwatch id={b.id as Corner} />{b.id} · {CORNER_LABEL[b.id as Corner]}</span> },
     { key: 't', header: 't', numeric: true, render: b => <Num explain={bo.explain} sensors={bo.sensors} title={`Fim de curso · ${b.id}`}>{b.t.toFixed(1)} s</Num> },

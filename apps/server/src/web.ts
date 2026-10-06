@@ -8,10 +8,10 @@ import fastifyStatic from '@fastify/static';
 
 const NO_BUILD_PAGE = `<!doctype html>
 <html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Baja Telemetria</title>
+<title>Telemetria · Mauá Racing Baja</title>
 <style>body{font:16px/1.5 system-ui,"Segoe UI",sans-serif;background:#141517;color:#e9ecef;margin:0;padding:48px 16px}
 main{max-width:640px;margin:0 auto}code{background:#25262b;padding:2px 6px;border-radius:4px}h1{font-size:24px}</style></head>
-<body><main><h1>Baja Telemetria — servidor no ar</h1>
+<body><main><h1>Telemetria · Mauá Racing Baja — servidor no ar</h1>
 <p>A API está funcionando em <code>/api</code>, mas o app web ainda não foi gerado.</p>
 <p>Na raiz do projeto, rode <code>npm run build</code> e reinicie o servidor
 (ou aponte <code>WEB_DIST</code> para a pasta do build).</p></main></body></html>`;

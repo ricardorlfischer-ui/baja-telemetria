@@ -1,6 +1,7 @@
 /* Contexto da biblioteca ativa: useLibrary() dá a biblioteca (local ou remota), o usuário
  * conectado (remoto), as informações do servidor e ações para trocar/atualizar. */
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { notifications } from '@mantine/notifications';
 import { detectLibrary } from './detect';
 import { RemoteLibrary } from './remote';
 import { LocalLibrary } from './local';
@@ -38,10 +39,21 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [version, setVersion] = useState(0);
 
+  /* o servidor recusou o token (venceu, senha trocada, usuário desativado): volta ao login e
+   * diz o motivo — sem isso a pessoa só via "entrar" de repente, sem saber por quê */
+  const lostAuth = useCallback((message: string) => {
+    setUser(null);
+    notifications.show({
+      id: 'baja-auth-lost', color: 'yellow', autoClose: 10_000,
+      title: 'Você saiu do servidor da equipe', message,
+    });
+  }, []);
+
   const redetect = useCallback(async () => {
     setLoading(true);
     try {
       const d = await detectLibrary();
+      if (d.lib instanceof RemoteLibrary) d.lib.onUnauthorized = lostAuth;
       setLib(d.lib); setInfo(d.info); setOffline(!!d.offline);
       setUser(null);
       if (d.lib instanceof RemoteLibrary && d.info && d.lib.loggedIn) {
@@ -52,14 +64,14 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [lostAuth]);
 
   useEffect(() => { void redetect(); }, [redetect]);
 
-  /* 401 do servidor: limpa o usuário */
+  /* 401 do servidor: limpa o usuário e avisa */
   useEffect(() => {
-    if (lib instanceof RemoteLibrary) lib.onUnauthorized = () => setUser(null);
-  }, [lib]);
+    if (lib instanceof RemoteLibrary) lib.onUnauthorized = lostAuth;
+  }, [lib, lostAuth]);
 
   const value = useMemo<LibraryState>(() => ({
     lib,

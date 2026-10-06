@@ -12,7 +12,7 @@ Contrato completo: `docs/ARQUITETURA.md` seção 4. Resumo do que já existe:
 | `layout/` | `AppLayout` (AppShell: barra lateral 260 px, cabeçalho 60 px, rodapé 64 px nas rotas com `player`; liga os atalhos do play), `NavMenu`, `SessionChip` (sessão aberta + menu trocar/fechar; no celular também o trecho), `RangeControl` (Sessão/Volta/Janela + volta), `PlayerBar` (play, velocidade, barra de tempo com voltas, repetir), `HeaderParts` (modo da biblioteca, tema) |
 | `components/` | componentes compartilhados (abaixo); importe de `../components` |
 | `theme.ts` | tema Mantine + tokens dos gráficos (`useChartTheme`, `resolveColor`, cores dos cantos e status) |
-| `state/` | `session.ts` (store da sessão, play, trecho, hooks), `profiles.ts` (perfis de carro/pista, configuração em uso, fórmulas), `hotkeys.ts`, `SessionSync.tsx` (biblioteca → perfis; disponibilidade dos sensores → chips), `librarySave.ts` (guardar log com resumo) |
+| `state/` | `session.ts` (store da sessão, play, trecho, hooks), `heavy.ts` (contas pesadas com log grande, qualidade dos dados), `profiles.ts` (perfis de carro/pista, configuração em uso, fórmulas), `hotkeys.ts`, `SessionSync.tsx` (biblioteca → perfis; disponibilidade dos sensores → chips; `?exemplo` na URL), `librarySave.ts` (guardar log com resumo) |
 | `explain/` | `ExplainHost` (monta o contexto de explicação) e `ExplainDrawer` (o card) |
 | `state/prefs.ts` | preferências (tema, servidor, layouts da página Canais, menu recolhido); `lsGet/lsSet` com try/catch |
 | `library/` | biblioteca local (IndexedDB) e remota (API 5.3); `useLibrary()` |
@@ -47,6 +47,14 @@ Contrato completo: `docs/ARQUITETURA.md` seção 4. Resumo do que já existe:
 - **`UPlotChart`** (`data`, `series`, `syncKey`, `xLabel`, `yLabel`, `onCursor`, `onZoom`, `onClick`, `plugins`, `ref`): uPlot com tema
   (série com `stroke` usa essa cor; callbacks lidos a cada evento; `plugins` somados aos ganchos internos);
   `ref.current.setCursorTime(t)` move a linha do play sem redesenhar; `setXRange`, `resetX`, `getPlot`.
+- **`reportSpec(plot, { onClick?, extra? })`**: o único conversor de gráfico de relatório do core (`RepPlot` do trem de força, CVT,
+  dinâmica, voltas, mapas e `SuspPlot` da suspensão/ressonância) para o spec do `XYPlot`: papel → cor do tema (`comp`→`pos`,
+  `fit`→`c2`...), RepFmt → tooltip, `onClick` = ir ao ponto. Não escreva outro: use este (a página Voltas, `RepChart` de
+  `pages/veiculo` e `PlotCard` de `pages/suspensao` já usam).
+- **`downloadText(nome, texto, tipo?)`** (CSV da ficha, backup, log original), **`RangeBadge`** (rótulo do trecho no cabeçalho
+  das páginas de análise), **`ComputingState`** (aviso "Calculando…" de log grande, ver `useComputed`),
+  **`PageErrorBoundary`** (no `AppLayout`, em volta da página: erro ao desenhar mostra a mensagem na página e o menu continua;
+  trocar de página/sessão tenta de novo).
 - **`ChartCard`**, **`StatTile`**, **`SensorChips`** (estado `present/absent/planned` por `availability` ou pelo
   `SensorAvailabilityProvider`; rótulos provisórios em `SENSOR_LABELS` até o catálogo `SENSORS` do core),
   **`PageHeader`**, **`Section`**, **`EmptyState`**, **`DataTable`** (`columns`, `rows`, `onRowClick`, `selected`, `maxHeight`; `numeric` alinha à direita).
@@ -78,20 +86,32 @@ Ações (todas em `useSessionStore.getState()` ou por seletor):
 | `updateConfig(patch)` | muda pista/carro/susp/fórmulas (`AnalysisConfigInput`) e recalcula; mantém cursor e volta. Com o exemplo aberto o carro e a linha vão para a memória (não estragam o carro real) |
 | `setLine(pts \| null)` | linha de largada (arredonda a 2 casas, zera a volta, recalcula) — use no `onLineDrawn` do TrackMap |
 | `seek(t)`, `play()`, `pause()`, `togglePlay()`, `setSpeed(x)`, `setLoop(b)` | player (um único laço rAF; o play fica na volta selecionada) |
-| `setLap(k)` | selectLap do antigo: janela na volta ±2 % e cursor no começo; `-1` = sessão |
+| `setLap(k)` | selectLap do antigo: janela na volta ±2 % e cursor no começo; `-1` = sessão. Depois de um recálculo a volta selecionada continua só se a mesma volta (mesmas amostras) existir — o índice pode mudar; se sumir, a janela que estava nela volta para a sessão (`keepLap`). Abrir outra sessão volta o trecho "Volta" para "Sessão" |
 | `setRangeMode(m)`, `setView([t0, t1] \| null)`, `resetView()`, `zoomView(f, tc?)`, `setFollow(b)` | trecho e janela dos gráficos (mín. 0,2 s, dentro da sessão) |
 | `setColorKey(k)`, `setXAxis(x)` | canal do mapa, eixo da página Canais |
 
 Hooks:
 
 - `useSessionReady()`, `useHasSession()`, `useCtx()`.
-- `useRange()` → `[i0, i1, rótulo] | null` (rangeOf do core). Relatórios: `useMemo(() => xReport(ctx, i0, i1), [ctx, i0, i1])`.
+- `useRange()` → `[i0, i1, rótulo] | null` (rangeOf do core). Mesmo trecho = o mesmo array (a janela dos gráficos só entra no
+  trecho "Janela"). Relatórios: `useComputed(() => xReport(ctx, i0, i1), [ctx, i0, i1])` (state/heavy.ts): igual ao `useMemo`
+  com log pequeno; com log grande (> `BIG_LOG` = 50 mil amostras) devolve `null` primeiro e a página mostra
+  `<ComputingState what="…" />`, e só depois de pintar o aviso roda a conta (sem isso a aba congelava segundos sem aviso).
+- `useQuality()` / `useDataQuality()` (state/heavy.ts): `dataQuality` do core calculado uma vez por sessão e compartilhado pelas
+  páginas (null enquanto um log grande calcula).
 - `useCursorEffect((t, state) => ref.current?.setCursor(t))` — gráficos e mapa, 60×/s **sem re-render**.
 - `useCursorTime()` / `useCursorIndex()` — textos e tabelas (limitado a ~20×/s no play).
 - `window.__baja.session` / `.profiles` no `npm run dev`, para depurar no console.
 
-Atalhos globais (state/hotkeys.ts, ligados no AppLayout): espaço, ← → (Shift = 1 s), Home, End — ignorados em campos,
-menus e no card de explicação aberto.
+Atalhos globais (state/hotkeys.ts, ligados no AppLayout): espaço, ← → (Shift = 1 s), Home, End — só nas páginas com a barra
+de reprodução (`player` em routes.tsx; nas outras o espaço/Home/End rolam a página); ignorados em campos, menus, no card de
+explicação aberto e quando um elemento da página já usou a tecla (`preventDefault`, ex.: espaço numa linha da lista de canais).
+
+## Sessão de exemplo pela URL
+
+`?exemplo` (ou `?exemplo=1`) antes do `#` ou na rota abre a sessão de exemplo ao carregar o app, na página pedida — para
+apresentar aos juízes e para as capturas de tela: `https://…/#/canais?exemplo=1`, `https://…/?exemplo#/ressonancia`.
+`exemplo=0` não abre. Só vale ao carregar a página e com nada aberto (`wantsDemoFromUrl` em state/SessionSync.tsx).
 
 ## Perfis e configuração (`state/profiles.ts`)
 

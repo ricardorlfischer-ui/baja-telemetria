@@ -13,3 +13,8 @@ export * from './MapLegend';
 export * from './UPlotChart';
 export * from './canvas';
 export * from './NoSessionState';
+export * from './reportSpec';
+export * from './download';
+export * from './RangeBadge';
+export * from './ComputingState';
+export * from './PageErrorBoundary';

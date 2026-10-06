@@ -3,6 +3,7 @@
 export * from './types';
 export * from './util';
 export * from './parsers';
+export * from './logdate';
 export * from './gps';
 export * from './analysis';
 export * from './vehicle';

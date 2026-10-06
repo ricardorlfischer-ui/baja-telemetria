@@ -66,9 +66,19 @@
   overflow-y: auto;
   display: flex; align-items: flex-start; justify-content: center;
   padding: 48px 16px;
-  background: var(--mantine-color-body);
+  /* foto do carro da equipe ao fundo, escurecida para o cartão e o texto ficarem legíveis */
+  background:
+    linear-gradient(180deg, rgba(8, 8, 10, 0.72), rgba(8, 8, 10, 0.9)),
+    url('../../assets/brand/baja-maua.webp') 55% 40% / cover no-repeat,
+    #0d0d0f;
 }
-[data-mantine-color-scheme='dark'] .cfg-login { background: var(--mantine-color-dark-8); }
+.cfg-login::before {
+  content: ''; position: fixed; left: 0; right: 0; top: 0; height: 5px;
+  background: var(--bt-stripe);
+}
+.cfg-login-kicker {
+  color: #ef7d22; font-size: 12px; font-weight: 750; letter-spacing: 0.14em; text-transform: uppercase;
+}
 .cfg-login-card { width: 100%; max-width: 480px; }
 @media (min-height: 760px) { .cfg-login { align-items: center; } }
 

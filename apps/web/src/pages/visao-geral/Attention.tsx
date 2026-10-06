@@ -113,7 +113,7 @@ export function QualitySummary({ dq }: { dq: DataQuality }) {
         <Paper withBorder radius="md" p="md">
           <Group gap="sm" wrap="nowrap">
             <IconCircleCheck size={22} color={STATUS_COLOR.good} />
-            <Text>Nenhum erro ou aviso nos canais com papel conhecido{count('info') ? ` (${count('info')} informação${count('info') > 1 ? 'ões' : ''} em Aquisição)` : ''}.</Text>
+            <Text>Nenhum erro ou aviso nos canais com papel conhecido{count('info') ? ` (${count('info')} ${count('info') > 1 ? 'informações' : 'informação'} em Aquisição)` : ''}.</Text>
           </Group>
         </Paper>
       )}

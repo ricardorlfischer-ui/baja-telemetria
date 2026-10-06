@@ -5,13 +5,14 @@
  * Calibração e testes. Todas as contas são do core (dataQuality, sensorAvailability,
  * sensorMatrix, validateFormula/evalFormula, trackConfigInfo); a página só desenha.
  * Sem sessão: Sensores, Fórmulas e Calibração continuam úteis (catálogo, editor, textos). */
-import { useMemo, useState } from 'react';
-import { Badge, Group, Tabs, Text } from '@mantine/core';
+import { useState } from 'react';
+import { Alert, Badge, Group, Tabs, Text } from '@mantine/core';
 import { IconCalculator, IconChecklist, IconCpu, IconListDetails, IconShieldCheck } from '@tabler/icons-react';
-import { dataQuality, SENSOR_IDS } from '@baja/core';
-import { PageHeader } from '../components';
+import { SENSOR_IDS } from '@baja/core';
+import { ComputingState, PageHeader } from '../components';
 import { routeByPath } from '../routes';
 import { useCtx, useRange, useSessionStore } from '../state/session';
+import { useQuality } from '../state/heavy';
 import { lsGet, lsSet } from '../state/prefs';
 import { NoSession } from './aquisicao/common';
 import { CanaisTab } from './aquisicao/CanaisTab';
@@ -38,8 +39,10 @@ export default function AquisicaoPage() {
   });
   const pick = (t: string | null) => { if (t && TABS.includes(t as Tab)) { setTab(t as Tab); lsSet(K_TAB, t); } };
 
-  /* qualidade do log inteiro (dataQuality do core) */
-  const quality = useMemo(() => (ctx ? dataQuality(ctx.S, ctx) : null), [ctx]);
+  /* qualidade do log inteiro (dataQuality do core, uma vez por sessão: useQuality; log grande:
+   * primeiro o aviso "Calculando…") */
+  const q = useQuality();
+  const quality = q?.dq ?? null;
   const present = SENSOR_IDS.filter(id => availability?.[id] === 'present');
   const nWarn = quality ? quality.issues.filter(i => i.level !== 'info').length : 0;
   const c = ready ? ctx : null;
@@ -67,12 +70,12 @@ export default function AquisicaoPage() {
         </Tabs.List>
 
         <Tabs.Panel value="canais">
-          {c && quality ? <CanaisTab ctx={c} quality={quality} /> : (
+          {c && quality ? <CanaisTab ctx={c} quality={quality} /> : c ? <QualityPending err={q?.err ?? null} /> : (
             <NoSession description="Abra um log para ver cada canal gravado, o sensor que o app reconheceu nele, as amostras válidas, a taxa e se ele travou. Enquanto isso, a aba Sensores e projeto mostra o catálogo completo." />
           )}
         </Tabs.Panel>
         <Tabs.Panel value="qualidade">
-          {c && quality ? <QualidadeTab quality={quality} availability={availability} /> : (
+          {c && quality ? <QualidadeTab quality={quality} availability={availability} /> : c ? <QualityPending err={q?.err ?? null} /> : (
             <NoSession description="Abra um log para conferir os dados: sensores sem sinal ou travados, saltos impossíveis, GPS na borda da área, dados do carro faltando — cada aviso com o que fazer." />
           )}
         </Tabs.Panel>
@@ -87,5 +90,13 @@ export default function AquisicaoPage() {
         </Tabs.Panel>
       </Tabs>
     </>
+  );
+}
+
+/** Qualidade ainda calculando (log grande) ou a conta falhou neste log. */
+function QualityPending({ err }: { err: string | null }) {
+  if (!err) return <ComputingState what="a qualidade dos dados" />;
+  return (
+    <Alert color="red" variant="light" title="Não consegui avaliar a qualidade deste log" mt="md">{err}</Alert>
   );
 }

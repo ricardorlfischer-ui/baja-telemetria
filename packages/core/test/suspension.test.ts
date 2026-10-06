@@ -179,7 +179,7 @@ describe('suspensionReport: explicações e sensores', () => {
       });
     }
     expect([...SUSP_EXPLAIN_IDS].sort()).toEqual([
-      'susp.bottomOut', 'susp.cornerTable', 'susp.jumps', 'susp.pitchGradient', 'susp.reboundRatio', 'susp.rollGradient',
+      'quality.shockStill', 'susp.bottomOut', 'susp.cornerTable', 'susp.jumps', 'susp.pitchGradient', 'susp.reboundRatio', 'susp.rollGradient',
       'susp.staticHeight', 'susp.travelHistogram', 'susp.travelUsed', 'susp.velocityBands', 'susp.velocityHistogram', 'susp.velocityP95',
     ]);
   });

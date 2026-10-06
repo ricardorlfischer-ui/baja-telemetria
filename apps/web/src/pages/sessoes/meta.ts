@@ -1,32 +1,14 @@
-/* Utilidades das páginas Sessões e Visão geral: data do teste (tirada do nome do arquivo da
- * FT ou do cabeçalho do BUSMASTER, igual ao servidor), formatação de datas, configuração das
- * contas para um carro/pista escolhidos e o download do log original.
+/* Utilidades das páginas Sessões e Visão geral: data do teste, formatação de datas,
+ * configuração das contas para um carro/pista escolhidos e o download do log original.
  * Nada aqui é conta de engenharia: só orquestração e texto. */
 import type { AnalysisConfigInput, Session } from '@baja/core';
 import type { Library, SessionMeta, SessionPatch } from '../../library';
 import { configInput, useProfiles } from '../../state/profiles';
+import { downloadText } from '../../components/download';
 
 /* ---------------------------------------------------------------- data do teste */
-const pad = (n: number | string) => String(n).padStart(2, '0');
-const okDate = (y: number, mo: number, d: number, h = 0, mi = 0) =>
-  y >= 2000 && y <= 2100 && mo >= 1 && mo <= 12 && d >= 1 && d <= 31 && h >= 0 && h < 24 && mi >= 0 && mi < 60;
-
-/** Data do teste (AAAA-MM-DDTHH:MM ou AAAA-MM-DD) pelo nome do arquivo e, no BUSMASTER, pelo
- *  cabeçalho "***START DATE AND TIME 5:10:2026 16:34:30:698***". Mesmo critério de
- *  guessDate em apps/server/src/analysis.ts (sem o recurso do dia do envio).
- *  "Log 3_20261005-1644.csv" → 2026-10-05T16:44. */
-export function guessDate(fileName: string, head = ''): string | null {
-  const base = fileName.replace(/^.*[\\/]/, '');
-  let m = /(20\d{2})(\d{2})(\d{2})[-_ T]?(\d{2})(\d{2})/.exec(base);
-  if (m && okDate(+m[1], +m[2], +m[3], +m[4], +m[5])) return `${m[1]}-${m[2]}-${m[3]}T${m[4]}:${m[5]}`;
-  m = /START DATE AND TIME\s+(\d{1,2}):(\d{1,2}):(\d{4})\s+(\d{1,2}):(\d{1,2})/.exec(head.slice(0, 2000));
-  if (m && okDate(+m[3], +m[2], +m[1], +m[4], +m[5])) return `${m[3]}-${pad(m[2])}-${pad(m[1])}T${pad(m[4])}:${pad(m[5])}`;
-  m = /(20\d{2})-(\d{2})-(\d{2})/.exec(base);
-  if (m && okDate(+m[1], +m[2], +m[3])) return `${m[1]}-${m[2]}-${m[3]}`;
-  m = /(20\d{2})(\d{2})(\d{2})/.exec(base);
-  if (m && okDate(+m[1], +m[2], +m[3])) return `${m[1]}-${m[2]}-${m[3]}`;
-  return null;
-}
+/* A data do teste (pelo nome do arquivo da FT ou pelo cabeçalho do BUSMASTER) vem do
+ * guessDate do core, o mesmo que o servidor usa (docs/ARQUITETURA.md 3.3). */
 
 /* formatação das datas: a mesma de toda a interface (library/format.ts) */
 export { fmtSessionDate as fmtDate, fmtDateTime as fmtIso } from '../../library';
@@ -100,14 +82,7 @@ export function patchOf(d: MetaDraft): SessionPatch {
 /* ---------------------------------------------------------------- baixar o log original */
 export async function downloadLog(lib: Library, m: SessionMeta): Promise<void> {
   const text = await lib.getSessionText(m.id);
-  const url = URL.createObjectURL(new Blob([text], { type: 'text/plain;charset=utf-8' }));
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = m.fileName || `${m.name}.csv`;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 2000);
+  downloadText(m.fileName || `${m.name}.csv`, text, 'text/plain;charset=utf-8');
 }
 
 export const msgOf = (e: unknown): string => (e instanceof Error ? e.message : String(e));

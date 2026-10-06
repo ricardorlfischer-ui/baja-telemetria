@@ -7,7 +7,7 @@
  * findWheelCh/findCvtCh e os canais escolhidos em cfg.car), então "papel detectado" aqui
  * é exatamente o canal que entrou em cada análise. */
 import type { CarConfig, Channel, GpsFmt, SensorId, Session, TrackConfig } from './types';
-import type { CornerId } from './analysis';
+import type { ActiveShock, CornerId } from './analysis';
 import type { SessionContext } from './pipeline';
 import { guessGpsChannels, detectFmt, toCode, spanOf } from './gps';
 import { findShocks, CORNERS } from './analysis';
@@ -16,12 +16,14 @@ import { findWheelCh, findCvtCh } from './vehicle';
 /** Papel de um canal do log. */
 export type ChannelRole =
   | 'gps_x' | 'gps_y' | 'gps_status'
+  | 'gps_lat' | 'gps_lon' | 'gps_sats' | 'gps_fix' | 'gps_pic_x' | 'gps_pic_y'
   | `shock_pos_${CornerId}` | `shock_vel_${CornerId}`
   | 'wheel' | 'cvt_temp'
   | 'engine_rpm' | 'throttle' | 'brake_pressure' | 'steering' | 'imu';
 
 export const CHANNEL_ROLES: ChannelRole[] = [
   'gps_x', 'gps_y', 'gps_status',
+  'gps_lat', 'gps_lon', 'gps_sats', 'gps_fix', 'gps_pic_x', 'gps_pic_y',
   'shock_pos_FL', 'shock_pos_FR', 'shock_pos_RL', 'shock_pos_RR',
   'shock_vel_FL', 'shock_vel_FR', 'shock_vel_RL', 'shock_vel_RR',
   'wheel', 'cvt_temp', 'engine_rpm', 'throttle', 'brake_pressure', 'steering', 'imu',
@@ -30,6 +32,8 @@ export const CHANNEL_ROLES: ChannelRole[] = [
 /** Nome do papel para a interface. */
 export const ROLE_LABEL: Record<ChannelRole, string> = {
   gps_x: 'GPS X (Leste, entrada 7)', gps_y: 'GPS Y (Norte, entrada 8)', gps_status: 'Status do GPS',
+  gps_lat: 'GPS · latitude (CAN 0x028)', gps_lon: 'GPS · longitude (CAN 0x028)', gps_sats: 'GPS · satélites (CAN 0x023)',
+  gps_fix: 'GPS · tipo de fix (CAN 0x023)', gps_pic_x: 'PIC · código X (CAN 0x7E9)', gps_pic_y: 'PIC · código Y (CAN 0x7E9)',
   shock_pos_FL: 'Amortecedor diant. esq. · posição', shock_pos_FR: 'Amortecedor diant. dir. · posição',
   shock_pos_RL: 'Amortecedor tras. esq. · posição', shock_pos_RR: 'Amortecedor tras. dir. · posição',
   shock_vel_FL: 'Amortecedor diant. esq. · velocidade', shock_vel_FR: 'Amortecedor diant. dir. · velocidade',
@@ -42,11 +46,26 @@ export const ROLE_LABEL: Record<ChannelRole, string> = {
 /** Sensor físico de cada papel (catálogo em sensors.ts). */
 export const ROLE_SENSOR: Record<ChannelRole, SensorId> = {
   gps_x: 'gps', gps_y: 'gps', gps_status: 'gps',
+  gps_lat: 'gps', gps_lon: 'gps', gps_sats: 'gps', gps_fix: 'gps', gps_pic_x: 'gps', gps_pic_y: 'gps',
   shock_pos_FL: 'shock_fl', shock_pos_FR: 'shock_fr', shock_pos_RL: 'shock_rl', shock_pos_RR: 'shock_rr',
   shock_vel_FL: 'shock_fl', shock_vel_FR: 'shock_fr', shock_vel_RL: 'shock_rl', shock_vel_RR: 'shock_rr',
   wheel: 'wheel', cvt_temp: 'cvt_temp',
   engine_rpm: 'engine_rpm', throttle: 'throttle', brake_pressure: 'brake_pressure', steering: 'steering', imu: 'imu',
 };
+
+/* canais do GPS no log do BUSMASTER (parseBusmaster): nome do canal → papel */
+const BUSMASTER_GPS: [string, ChannelRole][] = [
+  ['GPS · latitude', 'gps_lat'], ['GPS · longitude', 'gps_lon'], ['GPS · satélites', 'gps_sats'], ['GPS · tipo de fix', 'gps_fix'],
+  ['PIC · X (código)', 'gps_pic_x'], ['PIC · Y (código)', 'gps_pic_y'], ['PIC · status GPS', 'gps_status'],
+];
+
+/** Papéis do GPS que só existem no log do BUSMASTER (quadros do módulo e do PIC). */
+const BM_GPS_ROLES = new Set<ChannelRole>(BUSMASTER_GPS.map(x => x[1]).filter(r => r !== 'gps_status'));
+
+/** Abaixo disso (mm de máx − mín da posição) um amortecedor com sinal está "quase parado":
+ *  potenciômetro solto, travado ou mal calibrado (ou o carro parado no trecho). Vale para a
+ *  qualidade (log inteiro), para suspensionReport (trecho) e para a interface. */
+export const SHOCK_STILL_MM = 1;
 
 /* sensores ainda não instalados: reconhecidos pelo nome do canal, se aparecerem no log */
 const PLANNED_RE: [ChannelRole, RegExp][] = [
@@ -72,6 +91,9 @@ export function detectRoles(S: Session, cfg?: Pick<TrackConfig, 'chX' | 'chY' | 
     if (has(x)) roles.gps_x = x;
     if (has(y)) roles.gps_y = y;
     if (has(st)) roles.gps_status = st;
+  } else {
+    /* BUSMASTER: a posição vem de S.gps (lat/lon do 0x028); os canais do módulo e do PIC são do GPS */
+    for (const [k, r] of BUSMASTER_GPS) if (has(k)) roles[r] = k;
   }
   findShocks(S.channels).forEach(k => {
     if (k.pos) roles[`shock_pos_${k.id}`] = k.pos.key;
@@ -149,7 +171,7 @@ export interface DataQuality {
 const STUCK_S = 2;                     /* mesmo valor ≥ 2 s com o carro andando */
 /* papéis em que valor parado é normal por mais tempo (inércia térmica) ou sempre */
 const stuckLimit = (role: ChannelRole | null): number =>
-  role === 'cvt_temp' ? 60 : role === 'gps_status' || role === 'gps_x' || role === 'gps_y' ? Infinity : STUCK_S;
+  role === 'cvt_temp' ? 60 : role && ROLE_SENSOR[role] === 'gps' ? Infinity : STUCK_S;
 /* variação máxima possível por segundo (unidades do canal), por papel */
 /* minStep: o ruído do sensor nunca passa disso entre duas amostras (a temperatura tem ruído
  * de décimos de grau a 25 Hz, que em °C/s parece rápido) */
@@ -315,7 +337,40 @@ export function dataQuality(S: Session, ctx: Pick<SessionContext, 'cfg' | 'track
   /* ---------- GPS */
   let gpsBorderPct: number | null = null;
   const gx = cq(roles.gps_x), gy = cq(roles.gps_y);
-  const gpsUpdateHz = gx && gy ? Math.max(gx.updateHz === gx.updateHz ? gx.updateHz : 0, gy.updateHz === gy.updateHz ? gy.updateHz : 0) || NaN : NaN;
+  /* taxa da posição: X/Y da FT ou, no BUSMASTER, latitude/longitude do módulo (0x028) */
+  const px = S.gps ? cq(roles.gps_lon) : gx, py = S.gps ? cq(roles.gps_lat) : gy;
+  const gpsUpdateHz = px && py ? Math.max(px.updateHz === px.updateHz ? px.updateHz : 0, py.updateHz === py.updateHz ? py.updateHz : 0) || NaN : NaN;
+  /* BUSMASTER sem nenhuma posição com fix 3D: aviso que diz o que o módulo mandou */
+  let noFix = false;
+  if (S.gps && !S.gps.lat.some(v => v === v)) {
+    noFix = true;
+    /* quantas posições o 0x028 trouxe (parseBusmaster escreve "N posições GPS (M com fix)" no info) */
+    const mi = /(\d+) posições GPS \((\d+) com fix\)/.exec(S.info || '');
+    const nPos = mi ? +mi[1] : null;
+    const chan = (r: ChannelRole) => { const k = roles[r]; return k ? S.channels.find(c => c.key === k) : undefined; };
+    const fixC = chan('gps_fix'), satC = chan('gps_sats'), stC = chan('gps_status');
+    const det: string[] = [];
+    if (fixC && fixC.count) {
+      const seen = [...new Set(Array.from(fixC.data).filter(v => v === v))].sort((a, b) => a - b);
+      det.push(seen.length === 1 ? `tipo de fix sempre ${seen[0]}${seen[0] < 3 ? ' (precisa de 3 = 3D)' : ''}` : `tipo de fix entre ${seen[0]} e ${seen[seen.length - 1]}`);
+    }
+    if (satC && satC.count) det.push(`no máximo ${satC.hi} satélite(s)`);
+    if (stC && stC.count) {
+      let n85 = 0;
+      for (const v of stC.data) if (v === 85) n85++;
+      if (n85) det.push(`status do PIC 85 (sem fix) em ${f0(pct(n85, stC.count))} % do tempo`);
+    }
+    const what = nPos === 0 ? 'O módulo GPS não mandou nenhuma posição (quadro 0x028) neste log'
+      : `O módulo GPS mandou ${nPos === null ? 'posições' : nPos + ' posições'}, nenhuma com fix 3D`;
+    add({
+      id: 'gps.nofix', level: 'error',
+      text: what + (det.length ? ': ' + det.join(', ') + '.' : '.') + ' Sem posição válida não há trajetória, mapa, voltas nem velocidade pelo GPS, e o GPS conta como ausente neste log.',
+      action: nPos === 0
+        ? 'Confira se o módulo GPS está ligado no barramento CAN (1 Mbps) e mandando o 0x028 a 4 Hz.'
+        : 'Ligue o carro em céu aberto e espere o fix 3D (tipo de fix 3, status do PIC 255) antes de começar a gravar; confira a antena (longe do motor e de metal por cima) e o quadro 0x023 do módulo.',
+      explain: 'quality.gpsFix', sensors: ['gps'],
+    });
+  }
   if (!S.gps && !(gx && gy)) {
     add({
       id: 'gps.missing', level: 'warn',
@@ -323,7 +378,7 @@ export function dataQuality(S: Session, ctx: Pick<SessionContext, 'cfg' | 'track
       action: 'Confira no FT Manager se as entradas 7 (X, Leste) e 8 (Y, Norte) do expander estão sendo gravadas, ou escolha os canais em Pista e GPS. Sem GPS não há mapa, voltas, aceleração lateral nem calibração da roda.',
       explain: 'track.gpsPosition', sensors: ['gps'],
     });
-  } else if (!tr.ok) {
+  } else if (!tr.ok && !noFix) {
     add({ id: 'gps.track', level: 'error', text: `Sem trajetória: ${tr.msg}`, action: S.gps ? 'Grave com o GPS com fix 3D (céu aberto, espere o fix antes de sair) e confira o quadro 0x023 do módulo.' : 'Confira os canais X/Y e o formato em Pista e GPS.', explain: 'track.gpsPosition', sensors: ['gps'] });
   }
   if (tr.ok) {
@@ -343,7 +398,9 @@ export function dataQuality(S: Session, ctx: Pick<SessionContext, 'cfg' | 'track
       add({
         id: 'gps.rate', level: 'warn',
         text: `A posição do GPS muda no máximo a ${f1(gpsUpdateHz)} Hz (o módulo manda 4 Hz).`,
-        action: 'Confira a taxa do módulo GPS (0x028 a 4 Hz) e o período do bloco do expander que leva as entradas 7/8; com menos de 4 Hz a velocidade e o raio de curva perdem resolução.',
+        action: S.gps
+          ? 'Confira a taxa do módulo GPS (0x028 a 4 Hz) e se o barramento CAN não está perdendo quadros; com menos de 4 Hz a velocidade e o raio de curva perdem resolução.'
+          : 'Confira a taxa do módulo GPS (0x028 a 4 Hz) e o período do bloco do expander que leva as entradas 7/8; com menos de 4 Hz a velocidade e o raio de curva perdem resolução.',
         explain: 'quality.sampleRate', sensors: ['gps', 'logger'],
       });
     }
@@ -403,14 +460,20 @@ export function dataQuality(S: Session, ctx: Pick<SessionContext, 'cfg' | 'track
   for (const c of channels) {
     const sens: SensorId[] = c.sensor ? [c.sensor] : ['logger'];
     const lvl: QualityLevel = c.role ? 'warn' : 'info';
+    /* latitude/longitude do BUSMASTER vazias = sem fix: o aviso gps.nofix já explica */
+    const bmGps = !!c.role && BM_GPS_ROLES.has(c.role);
+    if (!c.valid && bmGps && noFix) continue;
     if (!c.valid) {
       add({ id: 'empty:' + c.key, level: lvl, channel: c.key, text: `${c.name}: nenhuma amostra com dado.`, action: 'Confira se a entrada está configurada e gravando no FT Manager (a FT grava 1,797…e308 quando não há dado).', explain: 'quality.validSamples', sensors: sens });
       continue;
     }
-    if (c.validPct < 50) {
+    if (c.validPct < 50 && (c.role === 'gps_lat' || c.role === 'gps_lon')) {
+      add({ id: 'valid:' + c.key, level: 'warn', channel: c.key, text: `${c.name}: só ${f0(c.validPct)} % das amostras com fix 3D.`, action: 'Espere o fix 3D antes de sair (céu aberto, antena longe do motor); sem fix a posição fica fora das contas.', explain: 'quality.gpsFix', sensors: sens });
+    } else if (c.validPct < 50) {
       add({ id: 'valid:' + c.key, level: c.role ? 'warn' : 'info', channel: c.key, text: `${c.name}: só ${f0(c.validPct)} % das amostras têm dado.`, action: 'Confira a taxa de gravação desse canal na FT e o conector do sensor; trechos sem dado ficam fora das contas.', explain: 'quality.validSamples', sensors: sens });
     }
-    if (c.constant && c.role && c.role !== 'gps_status') {
+    /* status do GPS e os quadros do módulo/PIC podem ficar parados (sem fix, carro parado) */
+    if (c.constant && c.role && c.role !== 'gps_status' && !bmGps) {
       add({ id: 'const:' + c.key, level: 'warn', channel: c.key, text: `${c.name} (${c.roleLabel}) ficou constante em ${c.lo}${c.unit ? ' ' + c.unit : ''} o log inteiro: o sensor não mandou sinal.`, action: 'Confira o cabo, o conector e a alimentação de 5 V do sensor e a calibração da entrada no FT Manager. Um canal constante fica fora das análises.', explain: 'quality.constant', sensors: sens });
     }
     if (c.stuck.length && c.role !== 'gps_x' && c.role !== 'gps_y') {
@@ -436,7 +499,7 @@ export function dataQuality(S: Session, ctx: Pick<SessionContext, 'cfg' | 'track
   }
 
   /* ---------- amortecedores */
-  const act = ctx.susp.shocks.filter(k => k.active);
+  const act = ctx.susp.shocks.filter((k): k is ActiveShock => k.active);
   if (!act.length) {
     const any = ctx.susp.shocks.some(k => k.pos);
     add({
@@ -453,6 +516,16 @@ export function dataQuality(S: Session, ctx: Pick<SessionContext, 'cfg' | 'track
         text: `Amortecedores com sinal: ${act.map(k => k.id).join(', ')} (faltam ${miss.map(k => k.id).join(', ')}).`,
         action: 'Rolagem precisa dos dois lados do eixo, arfagem da frente e da traseira, torção dos quatro. Confira os sensores que faltam.',
         explain: 'susp.rollGradient', sensors: miss.map(k => ('shock_' + k.id.toLowerCase()) as SensorId),
+      });
+    }
+    /* com sinal, mas quase parado no log inteiro (< SHOCK_STILL_MM de máx − mín) */
+    const still = act.filter(k => k.pos.hi - k.pos.lo < SHOCK_STILL_MM);
+    if (still.length) {
+      add({
+        id: 'susp.still', level: 'warn',
+        text: `Amortecedor com sinal mas quase parado (< ${SHOCK_STILL_MM} mm de curso no log): ${still.map(k => `${k.id} mexe só ${(k.pos.hi - k.pos.lo).toFixed(1)} mm`).join(', ')}. Potenciômetro solto, travado ou mal calibrado.`,
+        action: 'Confira a fixação do potenciômetro nos dois lados (o corpo e a haste têm que acompanhar o amortecedor), se o cursor não está travado e a calibração da entrada no FT Manager (mm por volt). Com o carro parado, comprima o canto e veja o canal mexer vários mm.',
+        explain: 'quality.shockStill', sensors: still.map(k => ('shock_' + k.id.toLowerCase()) as SensorId),
       });
     }
     const noStop = act.filter(k => !k.staticFromStop);

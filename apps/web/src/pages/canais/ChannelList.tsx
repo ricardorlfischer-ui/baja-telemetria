@@ -6,11 +6,11 @@
 import { memo, useMemo, useState } from 'react';
 import { ActionIcon, Button, Group, HoverCard, ScrollArea, Stack, Text, TextInput, Tooltip, UnstyledButton } from '@mantine/core';
 import { IconChevronDown, IconChevronRight, IconEye, IconEyeOff, IconHelpCircle, IconMapPin, IconSearch } from '@tabler/icons-react';
-import { fmtVal, type Channel, type SessionContext } from '@baja/core';
+import { channelExtremes, fmtVal, type Channel, type SessionContext } from '@baja/core';
 import { InfoButton, SensorChips } from '../../components';
 import { useRange } from '../../state/session';
 import type { ChartsCtl } from './ctl';
-import { extremes, fold, type ChannelInfo } from './model';
+import { fold, type ChannelInfo } from './model';
 import { endDrag, startDrag } from './dnd';
 import { channelExplain } from './ChannelPanel';
 
@@ -26,14 +26,14 @@ interface Props {
 }
 
 /* card do mouse: faixa no trecho e "ir ao ponto" */
-function ChannelCard({ c, info, ctl, shown, onToggle }: { c: Channel; info: ChannelInfo; ctl: ChartsCtl; shown: boolean; onToggle: () => void }) {
+function ChannelCard({ c, ctx, info, ctl, shown, onToggle }: { c: Channel; ctx: SessionContext; info: ChannelInfo; ctl: ChartsCtl; shown: boolean; onToggle: () => void }) {
   const rng = useRange();
-  const t = ctl.t;
-  const [i0, i1, label] = rng ?? [0, t.length - 1, 'sessão inteira'];
-  const e = useMemo(() => extremes(c.data, i0, i1), [c, i0, i1]);
+  const [i0, i1, label] = rng ?? [0, ctx.S.t.length - 1, 'sessão inteira'];
+  /* mínimo e máximo no trecho com o instante de cada um (channelExtremes do core) */
+  const e = useMemo(() => channelExtremes(ctx, c.key, i0, i1), [ctx, c, i0, i1]);
   const dec = info.dec(c.key);
   const sensors = info.sensors(c.key);
-  const go = (i: number) => { if (i >= 0) ctl.goTo(t[i]); };
+  const go = (tc: number) => ctl.goTo(tc);
   return (
     <Stack gap={8}>
       <Group justify="space-between" wrap="nowrap" align="flex-start" gap={6}>
@@ -48,18 +48,18 @@ function ChannelCard({ c, info, ctl, shown, onToggle }: { c: Channel; info: Chan
         <Text size="sm" c="dimmed">Nenhuma amostra válida neste log: o canal existe, mas veio vazio.</Text>
       ) : c.constant ? (
         <Text size="sm">Constante em <b>{fmtVal(c.lo, dec)} {c.unit}</b> no log inteiro: sem variação (sensor sem sinal ou desligado?).</Text>
-      ) : e.n === 0 ? (
+      ) : !e ? (
         <Text size="sm" c="dimmed">Sem dados no trecho ({label}).</Text>
       ) : (
         <>
           <Text size="sm" c="dimmed">No trecho: {label}</Text>
           <div className="cn-ext">
-            <span>mín</span><b className="bt-num">{fmtVal(e.lo, dec)} {c.unit}</b>
-            <span className="bt-num cn-ext-t">t {t[e.iLo].toFixed(2)} s</span>
-            <Button size="compact-sm" variant="light" leftSection={<IconMapPin size={14} />} onClick={() => go(e.iLo)}>Ir ao ponto</Button>
-            <span>máx</span><b className="bt-num">{fmtVal(e.hi, dec)} {c.unit}</b>
-            <span className="bt-num cn-ext-t">t {t[e.iHi].toFixed(2)} s</span>
-            <Button size="compact-sm" variant="light" leftSection={<IconMapPin size={14} />} onClick={() => go(e.iHi)}>Ir ao ponto</Button>
+            <span>mín</span><b className="bt-num">{fmtVal(e.min.v, dec)} {c.unit}</b>
+            <span className="bt-num cn-ext-t">t {e.min.t.toFixed(2)} s</span>
+            <Button size="compact-sm" variant="light" leftSection={<IconMapPin size={14} />} onClick={() => go(e.min.t)}>Ir ao ponto</Button>
+            <span>máx</span><b className="bt-num">{fmtVal(e.max.v, dec)} {c.unit}</b>
+            <span className="bt-num cn-ext-t">t {e.max.t.toFixed(2)} s</span>
+            <Button size="compact-sm" variant="light" leftSection={<IconMapPin size={14} />} onClick={() => go(e.max.t)}>Ir ao ponto</Button>
           </div>
         </>
       )}
@@ -70,7 +70,7 @@ function ChannelCard({ c, info, ctl, shown, onToggle }: { c: Channel; info: Chan
   );
 }
 
-const Row = memo(function Row({ c, info, ctl, color, onToggle }: { c: Channel; info: ChannelInfo; ctl: ChartsCtl; color: string | undefined; onToggle: (k: string) => void }) {
+const Row = memo(function Row({ c, ctx, info, ctl, color, onToggle }: { c: Channel; ctx: SessionContext; info: ChannelInfo; ctl: ChartsCtl; color: string | undefined; onToggle: (k: string) => void }) {
   const shown = color !== undefined;
   return (
     <HoverCard position="right-start" openDelay={450} closeDelay={120} width={330} shadow="md" withinPortal offset={10}>
@@ -90,7 +90,7 @@ const Row = memo(function Row({ c, info, ctl, color, onToggle }: { c: Channel; i
         </div>
       </HoverCard.Target>
       <HoverCard.Dropdown>
-        <ChannelCard c={c} info={info} ctl={ctl} shown={shown} onToggle={() => onToggle(c.key)} />
+        <ChannelCard c={c} ctx={ctx} info={info} ctl={ctl} shown={shown} onToggle={() => onToggle(c.key)} />
       </HoverCard.Dropdown>
     </HoverCard>
   );
@@ -142,7 +142,7 @@ export function ChannelList({ ctx, info, ctl, colors, onToggle }: Props) {
                 <span>{g.name}</span>
                 <span className="cn-group-n">{list.length}</span>
               </UnstyledButton>
-              {!isClosed && list.map(c => <Row key={c.key} c={c} info={info} ctl={ctl} color={colors.get(c.key)} onToggle={onToggle} />)}
+              {!isClosed && list.map(c => <Row key={c.key} c={c} ctx={ctx} info={info} ctl={ctl} color={colors.get(c.key)} onToggle={onToggle} />)}
             </div>
           );
         })}

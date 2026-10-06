@@ -53,7 +53,7 @@ export async function exportBackup(appVersion: string, onProgress?: (done: numbe
 export function parseBackup(text: string): { backup: Backup; counts: BackupCounts } {
   let b: Backup;
   try { b = JSON.parse(text) as Backup; } catch { throw new Error('O arquivo não é um JSON válido.'); }
-  if (!b || typeof b !== 'object' || b.format !== BACKUP_FORMAT) throw new Error('Este arquivo não é um backup do Baja Telemetria.');
+  if (!b || typeof b !== 'object' || b.format !== BACKUP_FORMAT) throw new Error('Este arquivo não é um backup da Telemetria da Mauá Racing Baja.');
   if (typeof b.version !== 'number' || b.version > BACKUP_VERSION) throw new Error('Backup de uma versão mais nova do app: atualize o app antes de importar.');
   const arr = <T,>(x: unknown): T[] => (Array.isArray(x) ? x as T[] : []);
   b.cars = arr<CarProfile>(b.cars).filter(c => c && typeof c.id === 'string' && typeof c.name === 'string');

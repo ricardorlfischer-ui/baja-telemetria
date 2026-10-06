@@ -17,7 +17,7 @@ try {
   });
 } catch (e) {
   /* configuração inválida (ex.: JWT_SECRET curto): mensagem clara, sem pilha */
-  console.error(`Baja Telemetria: não deu para subir o servidor: ${e instanceof Error ? e.message : String(e)}`);
+  console.error(`Telemetria Mauá Racing Baja: não deu para subir o servidor: ${e instanceof Error ? e.message : String(e)}`);
   process.exit(1);
 }
 
@@ -39,7 +39,7 @@ process.on('SIGTERM', () => void stop('SIGTERM'));
 
 try {
   await app.listen({ port: cfg.port, host: cfg.host });
-  app.log.info(`Baja Telemetria ${VERSION} · dados em ${cfg.dataDir} · app web de ${cfg.webDist}`);
+  app.log.info(`Telemetria Mauá Racing Baja ${VERSION} · dados em ${cfg.dataDir} · app web de ${cfg.webDist}`);
 } catch (e) {
   app.log.error(e);
   process.exit(1);

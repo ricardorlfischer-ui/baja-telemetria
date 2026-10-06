@@ -370,19 +370,6 @@ export function refIndexAt(t: Float64Array, X: Float64Array, ov: Overlay, i: num
   return Math.max(ref.i0, Math.min(ref.i1, idxAt(X, q)));
 }
 
-/** Mínimo e máximo de um canal no trecho, com o índice de cada um (botão "ir ao ponto"). */
-export function extremes(d: Float64Array, i0: number, i1: number): { lo: number; hi: number; iLo: number; iHi: number; n: number } {
-  let lo = Infinity, hi = -Infinity, iLo = -1, iHi = -1, n = 0;
-  for (let i = Math.max(0, i0); i <= i1 && i < d.length; i++) {
-    const v = d[i];
-    if (!(v === v)) continue;
-    n++;
-    if (v < lo) { lo = v; iLo = i; }
-    if (v > hi) { hi = v; iHi = i; }
-  }
-  return { lo, hi, iLo, iHi, n };
-}
-
 /** Busca sem acento e sem caixa. */
 export const fold = (s: string): string => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
 

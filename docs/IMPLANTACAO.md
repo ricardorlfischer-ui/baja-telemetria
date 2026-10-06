@@ -133,28 +133,44 @@ Abra <http://localhost:8080>. Os dados ficam na pasta `data/` ao lado do
 
 ## 3. Primeiro acesso: admin, convites e papéis
 
-1. **Criar o administrador.** Na primeira vez que alguém abre o app servido pelo servidor
-   (ou aponta o app para ele em **Preferências**), o servidor ainda não tem nenhum usuário
-   (`/api/info` responde `needsSetup: true`) e o app pede para criar a conta de
-   **administrador**: nome, e-mail e senha. Só funciona enquanto não existe nenhum
-   usuário, então **faça isso logo depois de subir o servidor**, antes de divulgar o
-   endereço.
-2. **Convidar a equipe.** Na página **Equipe** (`#/equipe`, só aparece com servidor), crie
-   um **convite** escolhendo o papel. O app gera um **código**. Mande o código para a
-   pessoa (WhatsApp, e-mail) junto com o endereço do app.
-3. **A pessoa cria a conta.** Na tela **Entrar**, ela escolhe criar conta com convite,
-   digita o código, nome, e-mail e senha. Cada código vale para **uma** pessoa e expira
-   (7 dias por padrão; o admin escolhe ao criar).
-4. **Papéis:**
+1. **Criar o administrador.** Abra o app servido pelo servidor (ou, no app de outro
+   endereço, vá em **Preferências → Servidor da equipe**, cole o endereço, clique em
+   **Testar conexão** e depois **Conectar**). Enquanto o servidor não tem nenhum usuário
+   (`/api/info` responde `needsSetup: true`), a tela **Entrar** — aberta pelo selo
+   **Servidor · entrar** no canto direito do cabeçalho ou pelo botão **Entrar** da página
+   **Sessões** — mostra **Primeiro acesso**: preencha nome, e-mail, senha (mínimo 8
+   caracteres) e **Repita a senha**, e clique em **Criar administrador e entrar**. Só
+   funciona enquanto não existe nenhum usuário, então **faça isso logo depois de subir o
+   servidor**, antes de divulgar o endereço.
+2. **Convidar a equipe.** Na página **Equipe** (`#/equipe`, no grupo Configuração do menu;
+   só funciona com servidor), seção **Convites** → **Novo convite**: escolha o **Papel de
+   quem usar o convite** e a **Validade** (em dias; padrão 7) e clique em **Criar
+   convite**. O app mostra o **código** e um **link** (**Copiar código** / **Copiar link**,
+   também nos ícones da tabela de convites). Mande o link (WhatsApp, e-mail): ele abre o
+   app já na tela de cadastro com o código preenchido — e, se o app estiver em outro
+   endereço (ex.: GitHub Pages), leva o endereço do servidor junto e pergunta **Usar este
+   servidor**. Convite não usado pode ser **revogado** na tabela.
+   Alternativa: em **Usuários → Novo usuário** o admin cria a conta direto; sem digitar
+   senha, o servidor gera uma **senha temporária**, mostrada uma única vez.
+3. **A pessoa cria a conta.** Na tela **Entrar**, aba **Criar conta com convite**: código
+   do convite, nome, e-mail, senha e **Repita a senha** → **Criar conta e entrar**. Cada
+   código vale para **uma** pessoa e expira na validade escolhida. Depois, cada um troca a
+   própria senha em **Equipe → Minha conta → Trocar a senha** (ou **Preferências → Conta →
+   Equipe e trocar a senha**); **Sair** fica em **Preferências → Conta**.
+4. **Papéis** (no app aparecem como Leitor, Membro e Administrador):
 
    | Papel | Pode |
    |---|---|
-   | `viewer` (leitor) | ver e analisar as sessões, carros e pistas da equipe; não envia nem altera nada. Bom para professores, patrocinadores, juízes |
-   | `member` (membro) | tudo do leitor + enviar logs e editar/apagar o que é seu; anotações |
-   | `admin` | tudo: usuários, convites, papéis, apagar qualquer coisa |
+   | `viewer` (Leitor) | ver e analisar as sessões, carros e pistas da equipe; não envia nem altera nada. Bom para professores, patrocinadores, juízes |
+   | `member` (Membro) | tudo do leitor + enviar logs, criar perfis de carro e pista, editar/apagar o que é seu; anotações |
+   | `admin` (Administrador) | tudo: usuários, convites, papéis, apagar qualquer coisa |
+
+   O papel de cada usuário muda na tabela **Usuários** da página Equipe; lá também dá para
+   desativar uma conta, apagá-la ou **definir uma senha nova** para quem esqueceu.
 
    Tenha **pelo menos dois admins** (se alguém sair da equipe ou esquecer a senha, o outro
-   resolve). Quem saiu da equipe: desative a conta na página Equipe.
+   resolve). Quem saiu da equipe: desative a conta na página Equipe (desativar encerra as
+   sessões abertas da pessoa sem apagar o que ela enviou).
 
 ---
 
@@ -486,7 +502,8 @@ Passo a passo:
    - `PAGES_ENABLED` = `true`
    - `API_URL` = endereço do servidor da equipe com **HTTPS**, sem barra no fim (ex.:
      `https://telemetria.seudominio.com.br`). Opcional: sem ele, cada pessoa pode
-     informar o servidor em **Preferências**.
+     informar o servidor em **Preferências → Servidor da equipe** (**Testar conexão** →
+     **Conectar**), ou abrir um link de convite, que já leva o endereço.
 3. No **servidor**, libere a origem do Pages (só a origem, sem o caminho):
    `CORS_ORIGINS=https://ricardorlfischer-ui.github.io` (no `docker-compose.yml`, no
    `fly.toml`/`fly secrets` ou nas Variables do Railway) e reinicie o servidor.

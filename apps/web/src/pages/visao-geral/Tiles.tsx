@@ -1,13 +1,17 @@
-/* Blocos grandes da Visão geral: os números do resumo da sessão (sessionSummary do core),
- * cada um com o card de explicação e os sensores que entraram na conta. Quando o número não
- * sai neste log, o bloco diz o que falta (qual sensor ou ajuste) em vez de ficar só "—". */
+/* Blocos grandes da Visão geral: os números do resumo da sessão (sessionSummary do core, com
+ * o trecho do cabeçalho), cada um com o card de explicação e os sensores que entraram na
+ * conta. Cada métrica diz se segue o trecho (scope 'range') ou é sempre da sessão inteira
+ * (scope 'session': duração, voltas, melhor volta), e o bloco mostra isso. Quando o número
+ * não sai neste log, o bloco diz o que falta (qual sensor ou ajuste) em vez de ficar só "—". */
 import { SimpleGrid } from '@mantine/core';
-import { fmtTime, type DesignReport, type SessionContext, type SessionSummary, type SummaryMetric } from '@baja/core';
+import { SHOCK_STILL_MM, fmtTime, type DesignReport, type SessionContext, type SessionSummary, type SummaryMetric } from '@baja/core';
 import { StatTile } from '../../components';
 
 export interface TilesProps {
   ctx: SessionContext;
+  /** sessionSummary(ctx, design, [i0, i1]) — o resumo do trecho */
   summary: SessionSummary;
+  /** a ficha do mesmo trecho */
   design: DesignReport;
   /** rótulo do trecho (rangeOf) */
   rangeLabel: string;
@@ -20,8 +24,10 @@ const has = (m: SummaryMetric | undefined): m is SummaryMetric & { value: number
 
 export function Tiles({ ctx, summary, design, rangeLabel, whole }: TilesProps) {
   const get = (k: string) => summary.metrics.find(x => x.key === k);
-  const sessionHint = whole ? 'sessão inteira' : 'sessão inteira (não depende do trecho)';
-  const rangeHint = whole ? 'sessão inteira' : `no trecho: ${rangeLabel}`;
+  /* de onde é o número: o trecho ou sempre a sessão inteira (scope da métrica no core) */
+  const scopeHint = (m: SummaryMetric | undefined) => (whole
+    ? 'sessão inteira'
+    : m?.scope === 'session' ? 'sessão inteira (não depende do trecho)' : `no trecho: ${rangeLabel}`);
   const trackOk = !!ctx.track && ctx.track.ok;
   const anyShock = !!ctx.susp && ctx.susp.shocks.some(k => k.pos !== null);
   const shocks = design.facts.shocks;
@@ -53,6 +59,8 @@ export function Tiles({ ctx, summary, design, rangeLabel, whole }: TilesProps) {
   const axle = travelCorner ? design.facts.axle[travelCorner[0] as 'F' | 'R'] : undefined;
   const pctTxt = axle && axle.pct !== null && isFinite(axle.pct) ? ` · ${axle.pct.toFixed(0)} % do curso do eixo` : '';
   const shockNote = shocks.length && shocks.length < 4 ? ` · só ${shocks.join(', ')} com sinal (${shocks.length} de 4)` : '';
+  /* mesmo limite do aviso "amortecedor quase parado" do core (susp.still / suspensionReport.still) */
+  const stillNote = has(travel) && travel.value < SHOCK_STILL_MM ? ` · menos de ${SHOCK_STILL_MM} mm: parece só ruído do sensor` : '';
 
   /* ---- saltos */
   const jumps = get('susp.jumps');
@@ -61,31 +69,32 @@ export function Tiles({ ctx, summary, design, rangeLabel, whole }: TilesProps) {
 
   return (
     <SimpleGrid cols={{ base: 1, xs: 2, md: 4 }} spacing="lg" verticalSpacing="lg">
-      <StatTile label="Duração" value={has(dur) ? fmtTime(dur.value) : null} hint={sessionHint}
+      <StatTile label="Duração" value={has(dur) ? fmtTime(dur.value) : null} hint={scopeHint(dur)}
         explain={dur?.explain ?? 'design.duration'} sensors={dur?.sensors} />
       <StatTile label="Distância" value={has(dist) ? (distKm ? (dist.value / 1000).toFixed(2) : dist.text) : null} unit={distKm ? 'km' : 'm'}
-        hint={has(dist) ? `${sessionHint} · ${dist.sensors.includes('gps') ? 'pelo GPS' : 'pela roda'}` : 'precisa do GPS ou do sensor da roda'}
+        hint={has(dist) ? `${scopeHint(dist)} · ${dist.sensors.includes('gps') ? 'pelo GPS' : 'pela roda'}` : 'precisa do GPS ou do sensor da roda'}
         explain={dist?.explain ?? 'track.distance'} sensors={dist?.sensors} />
       <StatTile label="Voltas" value={has(laps) ? laps.text : null}
-        hint={has(laps) && laps.value > 0 ? sessionHint : lapMissing}
+        hint={has(laps) && laps.value > 0 ? scopeHint(laps) : lapMissing}
         explain={laps?.explain ?? 'laps.lapTimes'} sensors={laps?.sensors} />
       <StatTile label="Melhor volta" value={has(best) ? fmtTime(best.value) : null}
-        hint={has(best) ? (bestLap ? `volta ${bestLap.n} · ${bestLap.vavg.toFixed(1)} km/h de média` : sessionHint) : lapMissing}
+        hint={has(best) ? (bestLap ? `volta ${bestLap.n} · ${bestLap.vavg.toFixed(1)} km/h de média` : scopeHint(best)) : lapMissing}
         explain={best?.explain ?? 'laps.lapTimes'} sensors={best?.sensors} />
       <StatTile label="Velocidade máxima" value={has(vmax) ? vmax.text : null} unit="km/h"
-        hint={has(vmax) ? rangeHint : 'precisa do GPS ou do sensor da roda'}
+        hint={has(vmax) ? scopeHint(vmax) : 'precisa do GPS ou do sensor da roda'}
         explain={vmax?.explain ?? 'power.vmax'} sensors={vmax?.sensors} />
       <StatTile label="Temperatura máx. da CVT" value={has(cvt) ? cvt.text : null} unit="°C"
-        hint={has(cvt) ? rangeHint : 'sem sensor de temperatura da CVT neste log'}
+        hint={has(cvt) ? scopeHint(cvt) : 'sem sensor de temperatura da CVT neste log'}
         explain={cvt?.explain ?? 'cvt.maxTemp'} sensors={cvt?.sensors} />
       <StatTile label="Curso máximo usado" value={has(travel) ? travel.text : null} unit="mm"
         hint={has(travel)
-          ? `no ${travelCorner}${pctTxt}${shockNote}${travel.value < 1 ? ' · menos de 1 mm: parece só ruído do sensor' : ''} · ${rangeHint}`
+          ? `no ${travelCorner}${pctTxt}${shockNote}${stillNote} · ${scopeHint(travel)}`
           : anyShock ? 'os amortecedores não tiveram sinal (constantes): confira cabos e calibração' : 'precisa dos potenciômetros dos amortecedores'}
+        status={stillNote ? 'warn' : undefined} statusText={stillNote ? 'Quase parado' : undefined}
         explain={travel?.explain ?? 'susp.travelUsed'} sensors={travel?.sensors} />
       <StatTile label="Saltos" value={has(jumps) ? jumps.text : null}
         hint={has(jumps)
-          ? (jumps.value > 0 && has(air) ? `maior: ${air.text} ms no ar${has(h) ? `, ~${h.text} cm` : ''} · ${rangeHint}` : rangeHint)
+          ? (jumps.value > 0 && has(air) ? `maior: ${air.text} ms no ar${has(h) ? `, ~${h.text} cm` : ''} · ${scopeHint(jumps)}` : scopeHint(jumps))
           : 'precisa dos amortecedores com sinal e da velocidade (GPS ou roda)'}
         explain={jumps?.explain ?? 'susp.jumps'} sensors={jumps?.sensors} />
     </SimpleGrid>

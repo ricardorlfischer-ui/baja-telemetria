@@ -14,7 +14,8 @@ import { create } from 'zustand';
 import { notifications } from '@mantine/notifications';
 import {
   clamp, computeSession, demoCSV, idxAt, parseCSV, parseLog, rangeOf, sensorAvailability,
-  type AnalysisConfig, type AnalysisConfigInput, type Channel, type Pt, type RangeMode, type SensorId, type SensorState, type Session, type SessionContext,
+  type AnalysisConfig, type AnalysisConfigInput, type Channel, type Lap, type Pt, type RangeMode, type SensorId,
+  type SensorState, type Session, type SessionContext,
 } from '@baja/core';
 import type { Library, SessionMeta } from '../library/types';
 import { ApiError } from '../library/remote';
@@ -100,6 +101,9 @@ export interface SessionState {
   /** dados da sessão na biblioteca mudaram (editar, recalcular o resumo): atualiza source.meta
    *  sem reabrir o log (só se for a mesma sessão aberta) */
   setSourceMeta: (meta: SessionMeta) => void;
+  /** a sessão foi apagada da biblioteca: se for a aberta, ela continua na tela, mas como
+   *  "aberta sem salvar" (sem dados para editar nem anotações, que dariam 404) */
+  detachFromLibrary: (id: string) => void;
 }
 
 /* ---------------------------------------------------------------- biblioteca registrada
@@ -146,6 +150,27 @@ function clampView(S: Session, t0: number, t1: number): [number, number] {
   if (w > b - a) w = b - a;
   t0 = clamp(t0, a, b - w);
   return [t0, t0 + w];
+}
+
+/* janela de uma volta: a volta ±2 % (selectLap do antigo) */
+const lapWindow = (S: Session, l: Lap): [number, number] => clampView(S, l.t0 - l.time * 0.02, l.t1 + l.time * 0.02);
+
+/** Depois de uma conta nova (linha, volta mínima, perfil de pista...), a volta selecionada
+ *  continua só se a MESMA volta (mesmas amostras) existir; o índice pode mudar. O antigo
+ *  comparava só o índice: com uma volta a menos antes dela, o índice passava a apontar para a
+ *  volta seguinte, o trecho "Volta" e o play iam para ela e a janela ficava na antiga.
+ *  Devolve o índice novo e, quando a volta some, a janela (null se ela estava na volta). */
+export function keepLap(
+  S: Session, oldLaps: readonly Lap[], newLaps: readonly Lap[], sel: number, view: [number, number] | null,
+): { selLap: number; view: [number, number] | null } {
+  if (sel < 0) return { selLap: -1, view };
+  const o = oldLaps[sel];
+  const k = o ? newLaps.findIndex(l => l.i0 === o.i0 && l.i1 === o.i1) : -1;
+  if (k >= 0) return { selLap: k, view };
+  /* a volta sumiu: a janela que mostrava a volta volta para a sessão inteira */
+  const w = o ? lapWindow(S, o) : null;
+  const onLap = !!view && !!w && Math.abs(view[0] - w[0]) < 1e-9 && Math.abs(view[1] - w[1]) < 1e-9;
+  return { selLap: -1, view: onLap ? null : view };
 }
 
 /* ---------------------------------------------------------------- store */
@@ -205,6 +230,8 @@ export const useSessionStore = create<SessionState>((set, get) => {
       status: 'ready', error: null, loadingText: null, busy: false, source,
       S, ctx, cfg: ctx.cfg, availability: sensorAvailability(ctx),
       cursor: S.t.length ? S.t[0] : 0, playing: false, selLap: -1, view: null,
+      /* sessão nova começa sem volta: o trecho "Volta" (de outro log) vira "Sessão" */
+      rangeMode: st.rangeMode === 'lap' ? 'session' : st.rangeMode,
       colorKey: pickColorKey(ctx.all, st.colorKey),
     });
     return true;
@@ -340,10 +367,13 @@ export const useSessionStore = create<SessionState>((set, get) => {
     },
 
     setLine: pts => {
-      /* A.setLine do antigo: arredonda a 2 casas, zera a volta selecionada e recalcula */
+      /* A.setLine do antigo: arredonda a 2 casas, zera a volta selecionada e recalcula. A
+       * janela que mostrava a volta zerada volta para a sessão inteira (as voltas vão mudar) */
       const l = pts ? pts.map(q => ({ x: +q.x.toFixed(2), y: +q.y.toFixed(2) })) : null;
-      set({ selLap: -1 });
-      useProfiles.getState().applyPatch({ line: l }, !!get().S?.demo);
+      const st = get();
+      if (st.S && st.ctx && st.selLap >= 0) set(keepLap(st.S, st.ctx.laps, [], st.selLap, st.view));
+      else set({ selLap: -1 });
+      useProfiles.getState().applyPatch({ line: l }, !!st.S?.demo);
     },
 
     recompute: async () => {
@@ -360,10 +390,11 @@ export const useSessionStore = create<SessionState>((set, get) => {
         if (!demo) useProfiles.getState().syncGuessedChannels({ chX: ctx.cfg.chX, chY: ctx.cfg.chY, chStatus: ctx.cfg.chStatus });
         const t = S.t;
         const now = get();
-        /* recompute() do antigo: a volta selecionada some se não existir mais */
-        const selLap = now.selLap >= ctx.laps.length ? -1 : now.selLap;
+        /* recompute() do antigo: a volta selecionada some se não existir mais (aqui pela
+         * identidade da volta, não só pelo índice: keepLap) */
+        const kept = now.ctx && now.S === S ? keepLap(S, now.ctx.laps, ctx.laps, now.selLap, now.view) : { selLap: -1, view: now.view };
         set({
-          ctx, cfg: ctx.cfg, availability: sensorAvailability(ctx), busy: false, error: null, selLap,
+          ctx, cfg: ctx.cfg, availability: sensorAvailability(ctx), busy: false, error: null, ...kept,
           cursor: t.length ? clamp(now.cursor, t[0], t[t.length - 1]) : 0,
           colorKey: pickColorKey(ctx.all, now.colorKey),
         });
@@ -407,8 +438,7 @@ export const useSessionStore = create<SessionState>((set, get) => {
       if (!st.S || !st.ctx) return;
       const l = k >= 0 ? st.ctx.laps[k] : undefined;
       if (l) {
-        const pad = l.time * 0.02;
-        set({ selLap: k, view: clampView(st.S, l.t0 - pad, l.t1 + pad) });
+        set({ selLap: k, view: lapWindow(st.S, l) });
         get().seek(l.t0);
       } else set({ selLap: -1, view: null });
     },
@@ -425,7 +455,7 @@ export const useSessionStore = create<SessionState>((set, get) => {
       const st = get();
       if (!st.S || !st.ctx) return;
       const l = st.selLap >= 0 ? st.ctx.laps[st.selLap] : undefined;
-      set({ view: l ? clampView(st.S, l.t0 - l.time * 0.02, l.t1 + l.time * 0.02) : null });
+      set({ view: l ? lapWindow(st.S, l) : null });
     },
 
     zoomView: (f, tc) => {
@@ -443,6 +473,9 @@ export const useSessionStore = create<SessionState>((set, get) => {
     clearError: () => set(s => ({ error: null, status: s.status === 'error' ? 'empty' : s.status })),
     setSourceMeta: meta => set(s => (s.source && s.source.libraryId === meta.id
       ? { source: { ...s.source, name: meta.name, meta } }
+      : {})),
+    detachFromLibrary: id => set(s => (s.source && s.source.libraryId === id
+      ? { source: { type: 'file', name: s.source.name } }
       : {})),
   };
 });
@@ -467,8 +500,13 @@ export function useRange(): [number, number, string] | null {
   const ctx = useSessionStore(s => s.ctx);
   const mode = useSessionStore(s => s.rangeMode);
   const sel = useSessionStore(s => s.selLap);
-  const view = useSessionStore(s => s.view);
-  return useMemo(() => (ctx ? rangeOf(ctx, mode, sel, view ?? undefined) : null), [ctx, mode, sel, view]);
+  /* a janela só entra no trecho "Janela": nos outros modos mexer no zoom (ou escolher uma
+   * volta, que move a janela) não pode recalcular os relatórios */
+  const view = useSessionStore(s => (s.rangeMode === 'view' ? s.view : null));
+  const r = useMemo(() => (ctx ? rangeOf(ctx, mode, sel, view ?? undefined) : null), [ctx, mode, sel, view]);
+  /* mesmo trecho → o mesmo array (as páginas usam o trecho como dependência de useMemo) */
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  return useMemo(() => r, [ctx, r === null, r?.[0], r?.[1], r?.[2]]);
 }
 
 /** Tempo do cursor com limitação (~20×/s no play; imediato parado) — para textos e tabelas. */

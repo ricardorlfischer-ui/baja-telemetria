@@ -13,12 +13,12 @@ import {
 } from '@tabler/icons-react';
 import { useNavigate } from 'react-router';
 import { SUMMARY_VERSION } from '@baja/core';
-import { PageHeader, Section } from '../components';
+import { PageHeader, Section, downloadText } from '../components';
 import { routeByPath } from '../routes';
 import { RemoteLibrary, useLibrary, type ServerInfo } from '../library';
 import { DEFAULT_SERVER_URL, normalizeServerUrl, serverUrlInUse, usePrefs, type ThemePref } from '../state/prefs';
 import { useProfiles } from '../state/profiles';
-import { fmtDate, msgOf, saveTextFile } from './config/parts';
+import { fmtDate, msgOf } from './config/parts';
 import { ROLE_LABEL } from './config/team';
 import { exportBackup, importBackup, parseBackup, type Backup, type BackupCounts, type ImportOptions } from './config/backup';
 import webPkg from '../../package.json';
@@ -71,7 +71,7 @@ function AboutCard() {
     <Paper withBorder radius="md" p="lg">
       <Stack gap="xs">
         <Text fw={650} size="lg">Sobre</Text>
-        <Text>Baja Telemetria — app <b>{APP_VERSION}</b> · contas do resumo versão <b>{SUMMARY_VERSION}</b></Text>
+        <Text>Telemetria da Mauá Racing Baja — app <b>{APP_VERSION}</b> · contas do resumo versão <b>{SUMMARY_VERSION}</b></Text>
         <Text>{mode === 'remote' && info ? <>Servidor: <b>{info.name} {info.version}</b></> : 'Sem servidor da equipe (modo local)'}</Text>
         <Text size="sm" c="dimmed">
           Lê o CSV do FT Manager (FT450) e o log CAN do BUSMASTER e faz todas as contas no navegador, as mesmas do app
@@ -104,7 +104,7 @@ function ServerSection() {
     setBusy('test'); setTest(null);
     try {
       const i = await new RemoteLibrary(norm).info();
-      if (!i || typeof i !== 'object' || !('name' in i)) throw new Error('O endereço respondeu, mas não é um servidor do Baja Telemetria.');
+      if (!i || typeof i !== 'object' || !('name' in i)) throw new Error('O endereço respondeu, mas não é um servidor da Telemetria da Mauá Racing Baja.');
       setTest({ ok: true, info: i });
     } catch (e) {
       setTest({ ok: false, msg: msgOf(e) });
@@ -222,7 +222,7 @@ function BackupSection() {
     try {
       const b = await exportBackup(APP_VERSION, (done, total) => setProg({ what: 'Lendo as sessões', done, total }));
       const stamp = new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-');
-      saveTextFile(`baja-backup-${stamp}.json`, JSON.stringify(b));
+      downloadText(`baja-backup-${stamp}.json`, JSON.stringify(b), 'application/json');
       notifications.show({ color: 'green', title: 'Backup pronto', message: `${b.sessions.length} sessão(ões), ${b.cars.length} carro(s), ${b.tracks.length} pista(s).`, autoClose: 5000 });
     } catch (e) {
       notifications.show({ color: 'red', title: 'Não deu para exportar', message: msgOf(e), autoClose: 8000 });

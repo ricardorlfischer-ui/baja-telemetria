@@ -1,14 +1,14 @@
 /* Painel "Agora" do mapa (card Agora + tabela de canais do app antigo, updateNow): velocidade,
  * estado do GPS, tempo, volta, X/Y, lat/lon e o valor de cada canal no cursor. Clicar num
  * canal colore o mapa por ele; cada número abre o card de explicação com os sensores.
- * Re-renderiza ~20×/s no play (useCursorIndex); as linhas da tabela são memorizadas. */
+ * Re-renderiza ~20×/s no play (useCursorTime); as linhas da tabela são memorizadas. */
 import { memo, useMemo } from 'react';
 import { Divider, Group, Paper, ScrollArea, Stack, Text, Title, UnstyledButton } from '@mantine/core';
 import { IconAlertCircle, IconAlertTriangle, IconCircleCheck, IconAntennaOff, type Icon } from '@tabler/icons-react';
-import { decimalsFor, detectRoles, fmtTime, fmtVal, getChannel, posAt, type SensorId, type SessionContext } from '@baja/core';
+import { decimalsFor, detectRoles, fmtTime, fmtVal, getChannel, idxAt, posAt, type SensorId, type SessionContext } from '@baja/core';
 import { InfoButton, SensorChips, useExplain } from '../../components';
 import { STATUS_COLOR, type Status } from '../../theme';
-import { useCursorIndex, useCursorTime, useSessionStore } from '../../state/session';
+import { useCursorTime, useSessionStore } from '../../state/session';
 import { channelInfo, clockAt, lapAt, type ChannelInfo } from './common';
 
 interface GpsBadge { status: Status | null; text: string; icon: Icon }
@@ -46,8 +46,9 @@ const Row = memo(function Row({ info, value, active, onPick }: { info: ChannelIn
 });
 
 export function NowPanel({ ctx, colorKey }: { ctx: SessionContext; colorKey: string }) {
-  const i = Math.max(0, useCursorIndex());
+  /* uma assinatura só do cursor (~20×/s no play): o índice sai do tempo */
   const cur = useCursorTime();
+  const i = useMemo(() => Math.max(0, ctx.S.t.length ? idxAt(ctx.S.t, cur) : 0), [ctx, cur]);
   const setColorKey = useSessionStore(s => s.setColorKey);
   const { open } = useExplain();
   const S = ctx.S, tr = ctx.track;

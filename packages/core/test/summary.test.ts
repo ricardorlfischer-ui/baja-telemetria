@@ -10,7 +10,7 @@ import { computeSession, type SessionContext } from '../src/pipeline';
 import { SENSOR_IDS } from '../src/sensors';
 import { EXPLAIN_AREAS } from '../src/explain';
 import { designReport } from '../src/reports/design';
-import { sessionSummary, summaryMetric, SUMMARY_VERSION, type SessionSummary } from '../src/summary';
+import { sessionSummary, summaryMetric, SUMMARY_VERSION, SUMMARY_SESSION_SCOPE, SUMMARY_BETTER, type SessionSummary } from '../src/summary';
 
 const L = loadLegacy({ ui: true });
 const { BT } = L;
@@ -48,14 +48,22 @@ function checkShape(s: SessionSummary, label: string) {
     for (const id of x.sensors) expect(SENSOR_IDS, at).toContain(id);
     if (x.value !== null) expect(x.sensors.length, at).toBeGreaterThan(0);
     if (x.value === null && x.text === undefined) expect(x.sensors, at).toEqual([]);
+    expect(['session', 'range'], at).toContain(x.scope);
+    expect(x.scope, at).toBe(SUMMARY_SESSION_SCOPE.includes(x.key) ? 'session' : 'range');
+    expect(x.better, at).toBe(SUMMARY_BETTER[x.key]);
+    if (x.better === undefined) expect('better' in x, at).toBe(false);
+    expect(Number.isInteger(x.digits) && x.digits >= 0, at).toBe(true);
+    /* text com número = value.toFixed(digits) */
+    if (x.value !== null && x.text !== undefined && /^-?\d+(\.\d+)?$/.test(x.text)) expect(x.text, at).toBe(x.value.toFixed(x.digits));
   }
   expect(JSON.parse(JSON.stringify(s))).toEqual(s);                       /* vai para o servidor como JSON */
 }
 
 describe('sessionSummary no exemplo', () => {
   it('formato, chaves estáveis, explain e sensores', () => {
-    expect(SUMMARY_VERSION).toBe(2);
+    expect(SUMMARY_VERSION).toBe(3);
     checkShape(SUM, 'exemplo');
+    expect(SUM.range).toBeUndefined();
     expect(KEYS).toContain('susp.travel.FL');
     expect(KEYS).toContain('cvt.tmax');
     expect(KEYS.length).toBeGreaterThan(60);
@@ -130,6 +138,57 @@ describe('sessionSummary no exemplo', () => {
     expect(summaryMetric(SUM, 'cvt.steady')!.sensors).toEqual(['gps', 'wheel', 'cvt_temp', 'car_data']);
     expect(summaryMetric(SUM, 'susp.k.F')!.sensors).toEqual(['gps', 'shock_fl', 'shock_fr', 'car_data']);
     expect(summaryMetric(SUM, 'session.duration')!.sensors).toEqual(['logger']);
+  });
+});
+
+describe('sessionSummary com trecho', () => {
+  const n = N.S.t.length;
+  it('trecho = sessão inteira: mesmos valores, com o trecho marcado', () => {
+    const s = sessionSummary(N, undefined, [0, n - 1]);
+    checkShape(s, 'trecho inteiro');
+    expect(s.metrics).toEqual(SUM.metrics);
+    expect(s.range).toEqual({ i0: 0, i1: n - 1, t0: N.S.t[0], t1: N.S.t[n - 1] });
+  });
+  it('uma volta: métricas do trecho seguem a ficha do trecho, as da sessão não mudam', () => {
+    const L = N.laps[1], i0 = L.i0, i1 = L.i1;
+    const s = sessionSummary(N, undefined, [i0, i1]);
+    checkShape(s, 'volta 2');
+    expect(sessionSummary(N, designReport(N, i0, i1), [i0, i1])).toEqual(s);
+    const f = designReport(N, i0, i1).facts;
+    for (const x of s.metrics) {
+      const whole = summaryMetric(SUM, x.key)!;
+      if (x.scope === 'session') expect(x, x.key).toEqual(whole);
+    }
+    expect(val(s, 'session.vmax')).toBe(f.vmax);
+    expect(val(s, 'power.pmax')).toBe(f.pmax);
+    expect(val(s, 'cvt.tmax')).toBe(f.cvt!.tmax);
+    expect(val(s, 'susp.travel.FL')).toBe(f.cornerTravel.FL);
+    expect(val(s, 'session.vmax')!).toBeLessThanOrEqual(val(SUM, 'session.vmax')!);
+    expect(val(s, 'session.duration')).toBe(val(SUM, 'session.duration'));
+    expect(val(s, 'session.laps')).toBe(val(SUM, 'session.laps'));
+    /* distância do trecho ≈ a da volta */
+    expect(Math.abs(val(s, 'session.distance')! - L.dist)).toBeLessThan(L.dist * 0.02 + 2);
+    /* força trativa: percentil 98 da aceleração só no trecho */
+    expect(val(s, 'power.traction')).not.toBe(val(SUM, 'power.traction'));
+    expect(s.range).toEqual({ i0, i1, t0: N.S.t[i0], t1: N.S.t[i1] });
+  });
+  it('trecho fora dos limites é cortado', () => {
+    const s = sessionSummary(N, undefined, [-50, n + 100]);
+    expect(s.range).toMatchObject({ i0: 0, i1: n - 1 });
+    expect(s.metrics).toEqual(SUM.metrics);
+  });
+  it('better e digits', () => {
+    const g = (k: string) => summaryMetric(SUM, k)!;
+    expect(g('session.bestLap').better).toBe('down');
+    expect(g('session.vmax').better).toBe('up');
+    expect(g('cvt.margin').better).toBe('up');
+    expect(g('susp.travel.F').better).toBeUndefined();
+    expect(g('susp.fn.F').better).toBeUndefined();
+    expect(g('session.bestLap').digits).toBe(2);
+    expect(g('power.tireFactor').digits).toBe(4);
+    expect(g('susp.wavelength').digits).toBe(1);
+    expect(g('session.duration').scope).toBe('session');
+    expect(g('session.vmax').scope).toBe('range');
   });
 });
 

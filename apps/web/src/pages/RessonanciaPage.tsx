@@ -8,14 +8,15 @@ import { Button, Group, Paper, Select, SimpleGrid, Stack, Text, Tooltip } from '
 import { IconAlertTriangle, IconCircleCheck, IconPlayerTrackNext, IconZoomScan } from '@tabler/icons-react';
 import {
   resonanceReport, resRoadTip,
-  type ResDropRow, type ResonanceReport, type ResPeakRow, type ResRoadRow, type SensorId, type SuspColumn,
+  type OlleyStatus, type ResDropRow, type ResonanceReport, type ResPeakRow, type ResRoadRow, type SensorId, type SuspColumn,
 } from '@baja/core';
 import {
-  ChartCard, DataTable, PageHeader, Section, SensorChips, StatTile, useExplain, type Column, type XYSpec,
+  ChartCard, ComputingState, DataTable, PageHeader, Section, SensorChips, StatTile, useExplain, type Column, type XYSpec,
 } from '../components';
 import { routeByPath } from '../routes';
 import { useCtx, useRange, useSessionReady, useSessionStore } from '../state/session';
-import { CORNER_LABEL, STATUS_COLOR, useChartTheme, type Corner } from '../theme';
+import { useComputed } from '../state/heavy';
+import { CORNER_LABEL, STATUS_COLOR, useChartTheme, type Corner, type Status } from '../theme';
 import {
   Callout, CarButton, CommitNumber, CornerSwatch, DeadShocks, NoSession, NoShocks, Num, PlotCard, RangeBadge,
 } from './suspensao/shared';
@@ -36,7 +37,8 @@ export default function RessonanciaPage() {
   const S = ctx?.S;
   useEffect(() => { setManual(null); setDropIndex(undefined); setPsdMode('all'); }, [S]);
 
-  const rep = useMemo(
+  /* log grande: primeiro o aviso "Calculando…" (useComputed) */
+  const rep = useComputed(
     () => (ctx && range ? resonanceReport(ctx, range[0], range[1], { dropIndex, manual, psdMode }) : null),
     [ctx, range, dropIndex, manual, psdMode],
   );
@@ -47,6 +49,7 @@ export default function RessonanciaPage() {
       actions={<>{range && <RangeBadge label={range[2]} />}<CarButton /></>}
     />
   );
+  if (ready && ctx && range && !rep) return <>{header}<ComputingState what="a ressonância" /></>;
   if (!ready || !rep || !range || !ctx) return <>{header}<NoSession what="a frequência natural, o amortecimento e o espectro da suspensão" /></>;
   if (!rep.hasShocks) {
     return (
@@ -228,36 +231,48 @@ function DropCard({ row, columns }: { row: ResDropRow; columns: SuspColumn[] }) 
 }
 
 /* ---------------------------------------------------------------- Olley e ζ */
+/* situação da razão de Olley (olleyStatus do core) → cor e texto curto do bloco */
+const OLLEY_STATUS: Record<OlleyStatus, { status?: Status; text: string }> = {
+  low: { status: 'warn', text: 'traseira mais lenta: galopa' },
+  near: { text: 'perto da referência' },
+  ok: { status: 'good', text: 'dentro da referência' },
+  high: { status: 'warn', text: 'traseira muito acima' },
+};
+
 function OlleySection({ rep }: { rep: ResonanceReport }) {
-  const rd = rep.road;
+  /* fₙ e ζ por eixo do 1º teste de queda do trecho e a regra de Olley: resonanceReport.axles /
+   * .olley do core (não dependem do espectro da pista) */
+  const { F, R } = rep.axles;
+  const ol = rep.olley;
   const ok = (v: number) => v === v && isFinite(v);
-  const both = ok(rd.fnF) && ok(rd.fnR);
-  /* razão tras./diant. só para mostrar (o relatório dá as duas fₙ dos eixos) */
-  const ratio = both ? rd.fnR / rd.fnF : NaN;
-  const olley = !both ? undefined : ratio < 1 ? 'warn' : ratio > 1.3 ? 'warn' : ratio >= 1.1 && ratio <= 1.2 ? 'good' : undefined;
-  const olleyText = !both ? undefined : ratio < 1 ? 'traseira mais lenta: galopa' : ratio > 1.3 ? 'traseira muito acima' : ratio >= 1.1 && ratio <= 1.2 ? 'dentro da regra' : 'perto da regra';
-  const s: SensorId[] = rd.sensors;
-  /* cada eixo: sem os amortecedores do outro eixo */
-  const sF = s.filter(x => x !== 'shock_rl' && x !== 'shock_rr'), sR = s.filter(x => x !== 'shock_fl' && x !== 'shock_fr');
+  const okF = ok(F.fn), okR = ok(R.fn);
+  const s: SensorId[] = ol ? ol.sensors : [...new Set([...F.sensors, ...R.sensors])];
+  const st = ol ? OLLEY_STATUS[ol.status] : null;
+  const side = (a: typeof F, ids: string) => (a.n === 2 ? `média ${ids}` : a.n === 1 ? `só ${a.ids.join('')}` : '');
   const why = !rep.events.length
     ? 'Sem teste de queda achado neste trecho.'
-    : !rd.spectrum ? 'As fₙ por eixo saem junto com o espectro da pista, que não deu neste trecho (precisa de distância e trechos andando).' : 'Precisa de teste de queda com amortecedor na frente e atrás.';
+    : !okF && !okR ? 'O teste de queda do trecho não deu fₙ em nenhum eixo.'
+      : `O teste de queda do trecho só deu fₙ na ${okF ? 'dianteira' : 'traseira'}.`;
   return (
     <Section
-      title="Regra de Olley e faixa de amortecimento" explain="susp.naturalFreq" sensors={s}
+      title="Regra de Olley e faixa de amortecimento" explain={ol?.explain ?? 'susp.naturalFreq'} sensors={s}
       description="Como ler fₙ e ζ para escolher a mola e o amortecedor do carro novo."
     >
       <Stack gap="lg">
         <SimpleGrid cols={{ base: 1, sm: 3 }} spacing="md">
-          <StatTile label="fₙ dianteira" value={ok(rd.fnF) ? rd.fnF.toFixed(2) : null} unit="Hz"
-            hint={ok(rd.fnF) ? 'média FL/FR, 1º teste do trecho' : 'sem teste na dianteira'} explain="susp.naturalFreq" sensors={sF} />
-          <StatTile label="fₙ traseira" value={ok(rd.fnR) ? rd.fnR.toFixed(2) : null} unit="Hz"
-            hint={ok(rd.fnR) ? 'média RL/RR, 1º teste do trecho' : 'sem teste na traseira'} explain="susp.naturalFreq" sensors={sR} />
-          <StatTile label="Traseira ÷ dianteira" value={both ? ratio.toFixed(2) : null} unit="×"
-            hint={both ? 'meta: 1,10–1,20' : 'precisa das duas'} status={olley} statusText={olleyText}
-            explain="susp.naturalFreq" sensors={s} />
+          <StatTile label="fₙ dianteira" value={okF ? F.fn.toFixed(2) : null} unit="Hz"
+            hint={okF ? `${side(F, 'FL/FR')}, 1º teste do trecho${ok(F.zeta) ? ` · ζ ${F.zeta.toFixed(2)}` : ''}` : 'sem teste na dianteira'}
+            explain={F.explain} sensors={F.sensors} />
+          <StatTile label="fₙ traseira" value={okR ? R.fn.toFixed(2) : null} unit="Hz"
+            hint={okR ? `${side(R, 'RL/RR')}, 1º teste do trecho${ok(R.zeta) ? ` · ζ ${R.zeta.toFixed(2)}` : ''}` : 'sem teste na traseira'}
+            explain={R.explain} sensors={R.sensors} />
+          <StatTile label="Traseira ÷ dianteira" value={ol ? ol.ratio.toFixed(2) : null} unit="×"
+            hint={ol ? `referência: ${ol.ref[0].toFixed(2)}–${ol.ref[1].toFixed(2)}` : 'precisa das duas'} status={st?.status} statusText={st?.text}
+            explain={ol?.explain ?? 'susp.naturalFreq'} sensors={s} />
         </SimpleGrid>
-        {!both && <Callout sensors={s}>{why} Faça o teste de queda empurrando a dianteira e depois a traseira, com o log gravando e o carro parado.</Callout>}
+        {ol
+          ? <Callout tone={ol.status === 'low' || ol.status === 'high' ? 'warn' : 'info'} sensors={ol.sensors}><b>{ol.read}.</b> {ol.text}</Callout>
+          : <Callout sensors={s}>{why} Faça o teste de queda empurrando a dianteira e depois a traseira, com o log gravando e o carro parado.</Callout>}
         <Paper withBorder radius="md" p="lg">
           <div className={classes.prose}>
             <p><b>Regra de Olley (“flat ride”).</b> A traseira deve ter frequência natural 10–20 % acima da dianteira.

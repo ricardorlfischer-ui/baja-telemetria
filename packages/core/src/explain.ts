@@ -316,6 +316,34 @@ const ENTRIES: ExplainEntry[] = [
     test: 'Balança por roda com o piloto; para o MR, suba a roda 10 mm com um macaco e meça quanto o amortecedor comprime.',
     related: ['susp.rollGradient', 'susp.naturalFreq', 'susp.travelUsed'],
   },
+  {
+    id: 'quality.gpsFix',
+    title: 'GPS sem fix 3D',
+    what: 'O módulo GPS mandou posições pelo CAN, mas nenhuma (ou poucas) com fix 3D: a latitude/longitude desses quadros não vale e fica fora das contas. Por isso o GPS aparece como ausente neste log mesmo com o módulo ligado e mandando quadros.',
+    sensors: [
+      { id: 'gps', need: 'required', why: 'posição (0x028), tipo de fix e satélites (0x023) do módulo; status do PIC (0x7E9)' },
+      { id: 'logger', need: 'required', why: 'o log do BUSMASTER com os quadros do barramento' },
+    ],
+    how: 'Uma posição do 0x028 só vale com fix 3D: tipo de fix 3 ou 4 e flag fixOK no último 0x023, recebido há menos de 1 s. O aviso conta as posições recebidas e mostra o tipo de fix, o máximo de satélites e o status do PIC (85 = sem fix, 255 = ok) vistos no log. Sensor GPS “presente” = pelo menos uma posição válida.',
+    design: 'Sem fix não há trajetória, voltas, aceleração lateral nem calibração da roda: a sessão inteira perde o “onde”. No carro novo: antena com céu aberto (no alto, longe do motor, do escapamento e de chapa por cima), procedimento de largada que espera o fix (LED de status do PIC) e o status do GPS gravado no log.',
+    limits: 'O módulo leva de ~30 s (partida quente) a alguns minutos (fria) para o primeiro fix; perto de prédios, árvores e estruturas metálicas o fix cai.',
+    test: 'Com o carro parado em céu aberto, grave 2 minutos desde que liga: veja o tipo de fix chegar a 3 e os satélites passarem de 6.',
+    related: ['track.gpsPosition', 'quality.validSamples', 'sensor.gps'],
+  },
+  {
+    id: 'quality.shockStill',
+    title: 'Amortecedor com sinal mas quase parado',
+    what: 'O canal do potenciômetro do amortecedor muda (não é constante), mas a diferença entre o máximo e o mínimo da posição fica abaixo de 1 mm: com o carro andando a suspensão sempre mexe vários milímetros, então o que aparece é só ruído do sensor.',
+    sensors: [
+      ...SHOCKS_REQ('máximo − mínimo da posição de cada amortecedor com sinal'),
+      { id: 'logger', need: 'required', why: 'a FT grava a posição do potenciômetro' },
+    ],
+    how: 'Para cada amortecedor ativo (canal de posição presente e não constante): curso = máx − mín da posição no log inteiro (na página Suspensão, no trecho). Abaixo de 1 mm (SHOCK_STILL_MM) vira aviso.',
+    design: 'Um canto “parado” tira do projeto o curso usado, a velocidade do amortecedor e a rolagem desse eixo — e engana: parece que a suspensão não trabalha. No carro novo: suporte do potenciômetro rígido nos dois lados (corpo no chassi/bandeja, haste no amortecedor), curso do sensor maior que o do amortecedor e calibração conferida antes de cada teste.',
+    limits: 'Num trecho curto com o carro parado o curso pode ser menor que 1 mm de verdade: confira com o log inteiro ou um trecho andando.',
+    test: 'Com o carro no chão e o log gravando, empurre cada canto para baixo e solte: o canal tem que mexer dezenas de mm.',
+    related: ['quality.constant', 'susp.shocksActive', 'susp.travelUsed'],
+  },
 ];
 
 /* ---------------------------------------------------------------- ajudantes dos cards novos */
@@ -1557,6 +1585,11 @@ const SENSOR_ALT: Partial<Record<SensorId, ExplainSensor[]>> = {
   wheel: [sn('gps', 'alternative', 'sem sensor de roda, o app usa a velocidade do GPS (aceleração bem menos precisa)')],
 };
 
+/* limitações que valem para o sensor (aparecem no card do sensor) */
+const SENSOR_LIMITS: Partial<Record<SensorId, string>> = {
+  gps: 'Conta como presente neste log só com pelo menos uma posição válida: X/Y da FT com sinal ou, no BUSMASTER, uma latitude/longitude com fix 3D. Com o módulo mandando quadros mas sem fix 3D, o GPS aparece como ausente (veja o aviso “GPS sem fix 3D” na Aquisição).',
+};
+
 /* cards dos sensores, gerados do catálogo */
 const sensorEntries = (): ExplainEntry[] => {
   const matrix = sensorMatrix();
@@ -1570,7 +1603,7 @@ const sensorEntries = (): ExplainEntry[] => {
       sensors: [{ id, need: 'required', why: 'é o próprio sensor' }, ...(SENSOR_ALT[id] || [])],
       how: `${s.signal} Taxa: ${s.rate}.${s.resolution ? ' Resolução: ' + s.resolution + '.' : ''}`,
       design: (s.planned ? 'Ainda não instalado. Destravaria: ' : 'No projeto do carro novo: ') + (s.unlocks || []).join('; ') + '.',
-      limits: s.planned ? 'Sensor sugerido: as análises dele aparecem quando um canal com esse sinal estiver no log.' : undefined,
+      limits: s.planned ? 'Sensor sugerido: as análises dele aparecem quando um canal com esse sinal estiver no log.' : SENSOR_LIMITS[id],
       related: items.map(x => x.explain).filter((x, i, a) => x !== 'sensor.' + id && a.indexOf(x) === i),
     };
   });

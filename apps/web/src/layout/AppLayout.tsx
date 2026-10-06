@@ -14,6 +14,7 @@ import { routeByPath } from '../routes';
 import { usePrefs } from '../state/prefs';
 import { useSessionHotkeys } from '../state/hotkeys';
 import { APP_NAME, BrandLogo, FULL_NAME, TEAM_NAME } from '../brand';
+import { PageErrorBoundary } from '../components/PageErrorBoundary';
 
 export function AppLayout() {
   const [mobileOpen, { toggle: toggleMobile, close: closeMobile }] = useDisclosure(false);
@@ -67,9 +68,12 @@ export function AppLayout() {
 
       <AppShell.Main className="bt-main">
         <div className="bt-page">
-          <Suspense fallback={<Center py={80}><Loader /></Center>}>
-            <Outlet />
-          </Suspense>
+          {/* erro numa página mostra a mensagem nela; o menu, o cabeçalho e o play continuam */}
+          <PageErrorBoundary route={pathname}>
+            <Suspense fallback={<Center py={80}><Loader /></Center>}>
+              <Outlet />
+            </Suspense>
+          </PageErrorBoundary>
         </div>
       </AppShell.Main>
 

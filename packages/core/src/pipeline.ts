@@ -158,6 +158,27 @@ export const rangeOf = (ctx: Pick<SessionContext, 'S' | 'laps'>, mode: RangeMode
 /** Canal pela chave (A.channel do app antigo). */
 export const getChannel = (ctx: Pick<SessionContext, 'all'>, key: string): Channel | undefined => ctx.all.find(c => c.key === key);
 
+/** Ponto extremo de um canal: valor, instante (s) e índice da amostra. */
+export interface ChannelExtreme { v: number; t: number; i: number }
+
+/** Mínimo e máximo de um canal no trecho [i0, i1] (amostras sem dado ignoradas), com o
+ *  instante de cada um para "ir ao ponto". Empate: a primeira amostra. null = canal
+ *  inexistente ou sem nenhuma amostra válida no trecho. */
+export function channelExtremes(ctx: Pick<SessionContext, 'S' | 'all'>, key: string, i0: number, i1: number): { min: ChannelExtreme; max: ChannelExtreme } | null {
+  const c = getChannel(ctx, key), t = ctx.S.t, n = t.length;
+  if (!c || !n) return null;
+  const a = Math.max(0, Math.min(i0, i1) | 0), b = Math.min(n - 1, Math.max(i0, i1) | 0);
+  let lo = -1, hi = -1;
+  for (let i = a; i <= b; i++) {
+    const v = c.data[i];
+    if (v !== v) continue;
+    if (lo < 0 || v < c.data[lo]) lo = i;
+    if (hi < 0 || v > c.data[hi]) hi = i;
+  }
+  if (lo < 0) return null;
+  return { min: { v: c.data[lo], t: t[lo], i: lo }, max: { v: c.data[hi], t: t[hi], i: hi } };
+}
+
 /** Textos do diálogo de Pista e GPS (cfgInfo() de legacy/js/app.js), sem HTML: vão coberto e
  *  resolução por passo do código 0–255, de onde a posição está sendo lida e a nota da
  *  calibração das entradas 7/8 na FT. */

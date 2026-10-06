@@ -12,6 +12,7 @@ import { RemoteLibrary, useLibrary, type AuthResult } from '../library';
 import { normalizeServerUrl, usePrefs } from '../state/prefs';
 import { msgOf } from './config/parts';
 import { PASSWORD_MIN, ROLE_LABEL, emailOk } from './config/team';
+import { APP_NAME, BrandLogo, TEAM_NAME } from '../brand';
 import './config/config.css';
 
 type Tab = 'login' | 'register';
@@ -108,9 +109,12 @@ export default function LoginPage() {
   return (
     <div className="cfg-login" role="dialog" aria-label="Entrar no servidor da equipe">
       <Stack className="cfg-login-card" gap="lg">
-        <Group gap="sm" justify="center">
-          <span className="bt-brand-mark" aria-hidden style={{ width: 40, height: 40, fontSize: 20 }}>B</span>
-          <Title order={1} fz={26}>Baja Telemetria</Title>
+        <Group gap="md" justify="center" wrap="nowrap" className="cfg-login-brand">
+          <BrandLogo size={64} />
+          <Stack gap={2}>
+            <Text className="cfg-login-kicker">{APP_NAME}</Text>
+            <Title order={1} fz={28} c="white">{TEAM_NAME}</Title>
+          </Stack>
         </Group>
         <Paper withBorder radius="lg" p="xl" shadow="md">
           <Stack gap="lg">

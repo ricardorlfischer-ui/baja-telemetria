@@ -1,44 +1,18 @@
 /* Peças comuns das páginas do veículo (Trem de força, CVT, Dinâmica — o vehicleui.js /
  * renderDyn do app antigo). Só desenham o que os relatórios do core devolvem: RepPlot →
- * XYPlot, RepTile → StatTile, RepText → nota da fonte. Nenhuma conta aqui.
- *
- * Ficam nesta pasta (e não em src/components) porque outros agentes estão mexendo nos
- * componentes compartilhados; ver as sugestões em deviations. */
-import type { CSSProperties, ReactNode, Ref } from 'react';
-import { Badge, Box, Group, Paper, Stack, Text, ThemeIcon, Title } from '@mantine/core';
+ * XYPlot (reportSpec de components/), RepTile → StatTile, RepText → nota da fonte. Nenhuma
+ * conta aqui. */
+import { useMemo, type CSSProperties, type ReactNode, type Ref } from 'react';
+import { Box, Group, Paper, Stack, Text, ThemeIcon, Title } from '@mantine/core';
 import { IconInfoCircle, type Icon } from '@tabler/icons-react';
-import { esc, fmtRep, SENSORS, type RepPlot, type RepText, type RepTile, type SensorId } from '@baja/core';
+import { SENSORS, type RepPlot, type RepText, type RepTile, type SensorId } from '@baja/core';
 import {
-  ChartCard, InfoButton, NoSessionState, PageHeader, SensorChips, StatTile,
-  XYPlot, type XYPlotHandle, type XYSpec,
+  ChartCard, ComputingState, InfoButton, NoSessionState, PageHeader, RangeBadge, SensorChips, StatTile,
+  XYPlot, reportSpec, type XYPlotHandle, type XYSpec,
 } from '../../components';
 import type { Status } from '../../theme';
 
-/* ---------------------------------------------------------------- RepPlot → XYSpec */
-
-/** Spec do XYPlot a partir do RepPlot do core (cores pelo role, tooltips pelo RepFmt). */
-export function repSpec(p: RepPlot, extra: Partial<XYSpec> = {}): XYSpec {
-  if (p.empty) return { empty: p.empty };
-  const tipX = p.tipX, fmtY = p.fmtY, tips = p.barTips;
-  return {
-    series: p.series?.map(q => ({ x: q.x, y: q.y, id: q.id, color: q.role, label: q.label, width: q.width })),
-    points: p.points ? { x: p.points.x, y: p.points.y, alpha: p.points.alpha } : undefined,
-    bars: p.bars ? { x0: p.bars.x0, w: p.bars.w, y: p.bars.y, colors: p.bars.roles } : undefined,
-    hlines: p.hlines?.map(l => ({ y: l.y, color: l.role, label: l.label })),
-    markers: p.markers?.map(m => ({ x: m.x, color: m.role, label: m.label })),
-    circles: p.circles,
-    xLabel: p.xLabel, yLabel: p.yLabel, logY: p.logY, equal: p.equal,
-    xRange: p.xRange, yRange: p.yRange, zeroY: p.zeroY,
-    legend: p.legend?.map(l => ({ label: l.label, role: l.role })),
-    tipX: tipX ? (x: number) => `<b>${esc(fmtRep(tipX, x))}</b>` : undefined,
-    fmtY: fmtY ? (v: number) => fmtRep(fmtY, v) : undefined,
-    tipBar: tips ? (k: number) => {
-      const b = tips[k];
-      return b ? `<b>${esc(b.title)}</b>${b.note ? ' ' + esc(b.note) : ''}<br>${esc(b.text)}` : '';
-    } : undefined,
-    ...extra,
-  };
-}
+export { RangeBadge } from '../../components';
 
 export interface RepChartProps {
   plot: RepPlot | null | undefined;
@@ -66,6 +40,8 @@ export interface RepChartProps {
  *  relatório (e o que medir), da mesma altura, em vez do texto pequeno no canvas. */
 export function RepChart({ plot, title, subtitle, height = 300, onClickX, emptyHint, footer, actions, plotRef, extra, boxStyle, explain, sensors }: RepChartProps) {
   const empty = !plot ? 'sem dados' : plot.empty;
+  /* spec só muda quando o relatório muda (o XYPlot redesenha a cada spec novo) */
+  const spec = useMemo(() => (plot && !plot.empty ? reportSpec(plot, { onClick: onClickX, extra }) : null), [plot, onClickX, extra]);
   return (
     <ChartCard
       title={title} subtitle={subtitle} explain={plot?.explain ?? explain} sensors={plot?.sensors ?? sensors}
@@ -78,10 +54,7 @@ export function RepChart({ plot, title, subtitle, height = 300, onClickX, emptyH
         </Stack>
       ) : (
         <Box style={boxStyle}>
-          <XYPlot
-            ref={plotRef} height={height} aria-label={title}
-            spec={repSpec(plot!, { ...(onClickX ? { onClick: onClickX } : {}), ...extra })}
-          />
+          <XYPlot ref={plotRef} height={height} aria-label={title} spec={spec!} />
         </Box>
       )}
     </ChartCard>
@@ -163,13 +136,13 @@ export function NeedSensors({ sensors, why }: { sensors: SensorId[]; why?: Parti
 
 /* ---------------------------------------------------------------- estados da página */
 
-/** Rótulo do trecho analisado (o seletor fica no cabeçalho). */
-export function RangeBadge({ label }: { label: string }) {
+/** Log grande calculando (useComputed): cabeçalho + aviso, antes da conta pesada. */
+export function ComputingPage({ title, subtitle, label, what }: { title: string; subtitle: string; label: string; what: string }) {
   return (
-    <Badge size="lg" variant="light" radius="sm" style={{ textTransform: 'none', fontWeight: 600 }}
-      title="Trecho analisado: escolha Sessão, Volta ou Janela no cabeçalho">
-      Trecho: {label}
-    </Badge>
+    <>
+      <PageHeader title={title} subtitle={subtitle} actions={<RangeBadge label={label} />} />
+      <ComputingState what={what} />
+    </>
   );
 }
 

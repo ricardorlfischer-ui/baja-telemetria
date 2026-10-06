@@ -9,7 +9,7 @@ import {
   IconArrowsExchange, IconPencil, IconRefresh, IconRoute, IconSparkles, IconTrash,
 } from '@tabler/icons-react';
 import {
-  DEFAULT_CFG, FMT_LABEL, autoLine, dataQuality, spanOf, trackConfigInfo,
+  DEFAULT_CFG, FMT_LABEL, autoLine, spanOf, trackConfigInfo,
   type QualityIssue, type TrackConfig,
 } from '@baja/core';
 import {
@@ -18,6 +18,7 @@ import {
 import { routeByPath } from '../routes';
 import { useActiveProfiles, useProfiles } from '../state/profiles';
 import { useCtx, useCursorEffect, useSessionStore } from '../state/session';
+import { useDataQuality } from '../state/heavy';
 import { ProfileManager } from './config/ProfileManager';
 import { ChannelSelect, FieldGroup, IssueList, NumField, useProfilePerms } from './config/parts';
 
@@ -57,7 +58,7 @@ export default function PistaPage() {
 
   /* textos do diálogo antigo (cfgInfo): vão, resolução, de onde vem a posição, calibração */
   const info = useMemo(() => trackConfigInfo({ S, cfg, track: ctx?.track ?? null }), [S, cfg, ctx]);
-  const quality = useMemo(() => (ctx ? dataQuality(ctx.S, ctx) : null), [ctx]);
+  const quality = useDataQuality();
   const issues = useMemo(() => (quality ? quality.issues.filter(isGpsIssue) : []), [quality]);
 
   const chOpts = useMemo(() => (S ? S.channels.map(c => ({ value: c.key, label: c.name })) : []), [S]);

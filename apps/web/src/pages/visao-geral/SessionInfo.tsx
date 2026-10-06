@@ -97,6 +97,7 @@ export function SessionData({ source, ctx }: { source: SessionSource; ctx: Sessi
   return (
     <Paper withBorder radius="md" p="lg">
       <Stack gap="md">
+        {err && <Alert color="red" variant="light" title="Não consegui ler os dados atuais da sessão">{err}</Alert>}
         <Text size="sm" c="dimmed">
           Arquivo {meta.fileName}{meta.uploadedBy ? ` · enviado por ${meta.uploadedBy}` : ''} em {fmtIso(meta.createdAt)}
           {!canEdit ? ' · só quem enviou (ou um administrador) pode editar' : ''}
@@ -118,10 +119,19 @@ export function SessionData({ source, ctx }: { source: SessionSource; ctx: Sessi
 }
 
 /* ---------------------------------------------------------------- anotações */
+/** "neste instante: 1:23.45 (volta 2)" — o único pedaço das anotações que segue o cursor
+ *  (~10×/s no play). */
+function CursorStamp({ laps }: { laps: SessionContext['laps'] }) {
+  const cursor = useCursorTime(100);
+  const lap = laps.find(l => cursor >= l.t0 && cursor <= l.t1);
+  return <>neste instante: <span className="bt-ss-time">{fmtTime(cursor)}</span>{lap ? ` (volta ${lap.n})` : ''}</>;
+}
+
 export function Comments({ source, ctx }: { source: SessionSource; ctx: SessionContext }) {
   const { lib, user, mode } = useLibrary();
   const seek = useSessionStore(s => s.seek);
-  const cursor = useCursorTime(100);
+  /* o cursor muda 60×/s no play: só o rótulo "neste instante" (CursorStamp) acompanha; a lista e
+   * o campo de texto não re-renderizam com ele. Ao gravar, vale o cursor daquele momento. */
   const id = source.libraryId;
   const [list, setList] = useState<Comment[] | null>(null);
   const [err, setErr] = useState<string | null>(null);
@@ -157,7 +167,7 @@ export function Comments({ source, ctx }: { source: SessionSource; ctx: SessionC
     if (!text.trim() || !lib.addComment) return;
     setBusy(true);
     try {
-      const c = await lib.addComment(id, { t: atCursor ? cursor : null, text: text.trim() });
+      const c = await lib.addComment(id, { t: atCursor ? useSessionStore.getState().cursor : null, text: text.trim() });
       setList(l => [...(l ?? []), c]);
       setText('');
     } catch (e) {
@@ -174,7 +184,7 @@ export function Comments({ source, ctx }: { source: SessionSource; ctx: SessionC
     }
   };
 
-  const curLap = lapAt(cursor);
+
   return (
     <Stack gap="md">
       {canWrite && (
@@ -185,7 +195,7 @@ export function Comments({ source, ctx }: { source: SessionSource; ctx: SessionC
               onKeyDown={e => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); void add(); } }} />
             <Group justify="space-between" wrap="wrap" gap="sm">
               <Checkbox size="md" checked={atCursor} onChange={e => setAtCursor(e.currentTarget.checked)}
-                label={<>neste instante: <span className="bt-ss-time">{fmtTime(cursor)}</span>{curLap ? ` (volta ${curLap.n})` : ''}</>} />
+                label={<CursorStamp laps={ctx.laps} />} />
               <Button leftSection={<IconMessagePlus size={17} />} loading={busy} disabled={!text.trim()} onClick={() => { void add(); }}>
                 {atCursor ? 'Anotar neste instante' : 'Anotar (sem instante)'}
               </Button>

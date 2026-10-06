@@ -17,6 +17,7 @@ import type { RepBarTip, RepFmt } from './powertrain';
 import { velStats, quant, hist } from '../analysis';
 import { gradients, jumps, bottomOuts } from '../vehicle';
 import { niceTicks } from '../util';
+import { SHOCK_STILL_MM } from '../quality';
 
 /* ---------------------------------------------------------------- tipos (gráficos) */
 /** Série de linha do spec do BT.Plot, sem cor: `id` diz quem é (canto, 'fit', 'brake'...). */
@@ -80,6 +81,17 @@ export interface SuspCornerRow {
   usedFrac?: number | null;      /* used / stroke (null sem curso) */
   vel?: VelStats | null;         /* null = sem amostras andando */
   vCalc?: boolean;
+  /** Com sinal mas quase parado no trecho (curso usado < SHOCK_STILL_MM): ruído, não curso. */
+  still?: boolean;
+}
+
+/** Aviso dos amortecedores com sinal mas quase parados no trecho (< SHOCK_STILL_MM). */
+export interface SuspStillWarning {
+  ids: CornerId[];
+  limit: number;                 /* mm (= SHOCK_STILL_MM) */
+  text: string;
+  explain: string;
+  sensors: SensorId[];
 }
 
 export interface SuspJumpRow {
@@ -105,6 +117,8 @@ export interface SuspensionReport {
     note: string;
     sensors: SensorId[];
   };
+  /** Amortecedores com sinal mas quase parados no trecho (null = nenhum). */
+  still: SuspStillWarning | null;
   /** Histogramas de velocidade (spv<ID>) e de curso (spp<ID>), mesma escala em todos. */
   velHist: SuspPlot[];
   posHist: SuspPlot[];
@@ -226,6 +240,7 @@ export function suspensionReport(ctx: SessionContext, i0: number, i1: number): S
     emptySensors: [],
     options: { compPos: !!sp.compPos, knee: sp.knee, moving: !!sp.moving, movingApplied: !!moving },
     table: { explain: 'susp.cornerTable', columns: CORNER_COLUMNS, rows: [], note: '', sensors: [] },
+    still: null,
     velHist: [],
     posHist: [],
     velScale: { R: 0, bw: 0, nb: 0 },
@@ -268,9 +283,18 @@ export function suspensionReport(ctx: SessionContext, i0: number, i1: number): S
       id: a.id, label: a.label, active: true, cells, explain: 'susp.cornerTable',
       sensors: suspJoinSensors(cornerS, a.staticFromStop && 'gps', stroke > 0 && 'car_data', movingS),
       static: a.static, staticFromStop: a.staticFromStop, min: mn, max: mx, used, stroke,
-      usedFrac: stroke > 0 ? used / stroke : null, vel: vs, vCalc: a.vCalc,
+      usedFrac: stroke > 0 ? used / stroke : null, vel: vs, vCalc: a.vCalc, still: used < SHOCK_STILL_MM,
     });
   });
+  const still = rep.table.rows.filter(r => r.still);
+  if (still.length) {
+    rep.still = {
+      ids: still.map(r => r.id), limit: SHOCK_STILL_MM, explain: 'quality.shockStill',
+      sensors: still.map(r => suspCornerSensor(r.id)),
+      text: `Amortecedor com sinal mas quase parado (< ${SHOCK_STILL_MM} mm de curso no trecho): ${still.map(r => `${r.id} ${fx(r.used)} mm`).join(', ')}. ` +
+        'Potenciômetro solto, travado ou mal calibrado (ou o carro ficou parado neste trecho).',
+    };
+  }
   rep.table.note = `${car.strokeF > 0 ? '' : 'Informe o curso total dos amortecedores em “Dados do carro” para ver a % usada e as batidas no fim de curso. '}Velocidades em mm/s${act.some(k => k.vCalc) ? ' (derivada da posição onde não há canal de velocidade)' : ''}. ` +
     `Lenta/rápida: abaixo/acima de ${+sp.knee || 100} mm/s, em % do tempo${moving ? ' com o carro andando' : ''}.` +
     (act.some(k => !k.staticFromStop) ? ' * estático pela mediana do log (não achou o carro parado).' : '');

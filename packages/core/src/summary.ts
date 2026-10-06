@@ -9,9 +9,18 @@
  * fato entraram na conta nesta sessão (sensors). value = null quando não dá para calcular
  * (sensor ausente, teste não feito, dado do carro não informado).
  *
+ * Trecho (range = [i0, i1]): sem trecho é a sessão inteira (o que o servidor e a biblioteca
+ * guardam). Com trecho, as métricas marcadas scope 'range' seguem o trecho (a ficha é a do
+ * trecho, como na página Ficha do carro) e as marcadas scope 'session' continuam sendo da
+ * sessão inteira: duração, voltas, melhor volta, calibração do pneu (fator único da sessão),
+ * frequência natural / ζ / rigidez / amortecimento (a ficha usa o 1º teste de queda da sessão
+ * inteira) e os sensores presentes. better: direção que é melhor para o projeto, só quando é
+ * óbvia ('up' = maior é melhor, 'down' = menor é melhor). digits: casas do texto.
+ *
  * Mudou alguma conta, chave ou unidade? Aumente SUMMARY_VERSION.
  *
- * Tabela de chaves (unidade · casas do texto · explain):
+ * Tabela de chaves (unidade · casas do texto = digits · explain); escopo e direção melhor
+ * nas listas SUMMARY_SESSION_SCOPE e SUMMARY_BETTER abaixo:
  *
  *   Sessão
  *   session.duration          s      1  design.duration         duração do log
@@ -77,8 +86,9 @@ import { designReport, type DesignReport } from './reports/design';
 
 /** Versão das contas do resumo (o servidor recalcula resumos com versão antiga).
  *  2: power.latMax = null sem aceleração lateral (antes 0); sensores das largadas (distância
- *     do GPS com roda de tração), dos saltos (estático medido parado) e do fim de curso. */
-export const SUMMARY_VERSION = 2;
+ *     do GPS com roda de tração), dos saltos (estático medido parado) e do fim de curso.
+ *  3: cada métrica ganhou scope, digits e (quando óbvio) better; valores iguais aos da 2. */
+export const SUMMARY_VERSION = 3;
 
 export type SummaryGroup = 'Sessão' | 'Suspensão' | 'Trem de força' | 'CVT' | 'Qualidade';
 
@@ -91,12 +101,42 @@ export interface SummaryMetric {
   text?: string;                 /* valor formatado como na ficha (toFixed) */
   explain: string;               /* id do card de explicação */
   sensors: SensorId[];           /* sensores que entraram na conta nesta sessão */
+  /** 'range' = segue o trecho pedido (sem trecho, a sessão inteira); 'session' = sempre da
+   *  sessão inteira (duração, voltas, melhor volta, fator do pneu, teste de queda, sensores). */
+  scope: SummaryScope;
+  /** Direção melhor para o projeto quando é óbvia ('up' = maior é melhor); sem = não óbvio. */
+  better?: 'up' | 'down';
+  /** Casas decimais para exibir (as do text; a diferença entre sessões usa as mesmas). */
+  digits: number;
 }
+
+export type SummaryScope = 'session' | 'range';
 
 export interface SessionSummary {
   version: number;
   metrics: SummaryMetric[];
+  /** Só com trecho: índices e tempos (s) do trecho usado nas métricas scope 'range'. */
+  range?: { i0: number; i1: number; t0: number; t1: number };
 }
+
+/** Métricas que são sempre da sessão inteira, mesmo com trecho. */
+export const SUMMARY_SESSION_SCOPE: readonly string[] = [
+  'session.duration', 'session.laps', 'session.bestLap',
+  'susp.fn.F', 'susp.fn.R', 'susp.zeta.F', 'susp.zeta.R', 'susp.k.F', 'susp.k.R', 'susp.c.F', 'susp.c.R',
+  'power.tireFactor', 'power.tireError', 'quality.sensors',
+];
+
+/** Direção melhor para o projeto (só as óbvias). */
+export const SUMMARY_BETTER: Readonly<Record<string, 'up' | 'down'>> = {
+  'session.bestLap': 'down', 'session.vmax': 'up', 'power.vmax': 'up',
+  'power.pmax': 'up', 'power.traction': 'up',
+  'power.launch30': 'down', 'power.launch20kmh': 'down', 'power.launchSlip': 'down',
+  'power.crr': 'down', 'power.cda': 'down',
+  'susp.bottomOuts.F': 'down', 'susp.bottomOuts.R': 'down',
+  'cvt.tmax': 'down', 'cvt.steady': 'down', 'cvt.endTemp': 'down', 'cvt.coolingExtra': 'down',
+  'cvt.margin': 'up', 'cvt.timeToLimit': 'up',
+  'quality.gpsValid': 'up', 'quality.sensors': 'up',
+};
 
 const ok = (v: number | null | undefined): v is number => v !== null && v !== undefined && v === v && isFinite(v);
 
@@ -107,18 +147,26 @@ const sens = (...lists: (SensorId | SensorId[] | null | undefined | false)[]): S
   return SENSOR_IDS.filter(id => set.has(id));
 };
 
-/** Resumo da sessão inteira. Reaproveita a ficha de projeto do trecho [0, n−1] (passe uma
- *  já calculada em `design` para não recalcular). */
-export function sessionSummary(ctx: SessionContext, design?: DesignReport): SessionSummary {
+/** Resumo da sessão. Sem `range`: a sessão inteira (o que o servidor guarda). Com
+ *  `range` = [i0, i1]: as métricas scope 'range' seguem o trecho e as scope 'session' ficam
+ *  da sessão inteira. Reaproveita a ficha de projeto do trecho (passe uma já calculada em
+ *  `design` — do MESMO trecho — para não recalcular). */
+export function sessionSummary(ctx: SessionContext, design?: DesignReport, range?: [number, number]): SessionSummary {
   const { S, track, laps, veh } = ctx, t = S.t, n = t.length, car = ctx.cfg.car;
-  const r = design || designReport(ctx, 0, n - 1), f = r.facts;
+  let i0 = 0, i1 = n - 1;
+  if (range) {
+    i0 = Math.max(0, Math.min(n - 1, Math.floor(+range[0]) || 0));
+    i1 = Math.max(i0, Math.min(n - 1, Math.floor(+range[1]) || 0));
+  }
+  const r = design || designReport(ctx, i0, i1), f = r.facts;
   const metrics: SummaryMetric[] = [];
   /* sensores de uma linha da ficha (a ficha já decide o que entrou em cada conta) */
   const rowS = (item: string): SensorId[] => r.rows.find(x => x.item === item)?.sensors ?? [];
   const m = (group: SummaryGroup, key: string, label: string, value: number | null | undefined, unit: string, digits: number,
     explain: string, sensors: SensorId[], text?: string) => {
-    const v = ok(value) ? value : null;
-    metrics.push({ key, group, label, value: v, unit, ...(text !== undefined ? { text } : v !== null ? { text: v.toFixed(digits) } : {}), explain, sensors: v !== null || text !== undefined ? sensors : [] });
+    const v = ok(value) ? value : null, better = SUMMARY_BETTER[key];
+    metrics.push({ key, group, label, value: v, unit, ...(text !== undefined ? { text } : v !== null ? { text: v.toFixed(digits) } : {}), explain, sensors: v !== null || text !== undefined ? sensors : [],
+      scope: SUMMARY_SESSION_SCOPE.includes(key) ? 'session' : 'range', ...(better ? { better } : {}), digits });
   };
   const velS: SensorId[] = veh.src === 'roda' ? (veh.kN ? ['gps', 'wheel'] : ['wheel']) : veh.src === 'GPS' ? ['gps'] : [];
 
@@ -126,10 +174,11 @@ export function sessionSummary(ctx: SessionContext, design?: DesignReport): Sess
   m('Sessão', 'session.duration', 'Duração', n ? t[n - 1] - t[0] : null, 's', 1, 'design.duration', ['logger']);
   let dist: number | null = null, distS: SensorId[] = [];
   if (track.ok) {
-    let mx = -Infinity;
-    for (let i = 0; i < n; i++) if (track.dist[i] > mx) mx = track.dist[i];
-    dist = mx; distS = ['gps'];
-  } else if (veh.dist) { dist = veh.dist[n - 1]; distS = velS; }
+    let mx = -Infinity, mn = Infinity;
+    for (let i = i0; i <= i1; i++) { if (track.dist[i] > mx) mx = track.dist[i]; if (track.dist[i] < mn) mn = track.dist[i]; }
+    /* sessão inteira: o máximo da distância acumulada (como sempre); trecho: máx − mín nele */
+    dist = range ? mx - mn : mx; distS = ['gps'];
+  } else if (veh.dist) { dist = range ? veh.dist[i1] - veh.dist[i0] : veh.dist[n - 1]; distS = velS; }
   m('Sessão', 'session.distance', 'Distância', dist, 'm', 0, 'track.distance', distS);
   m('Sessão', 'session.laps', 'Voltas', track.ok ? laps.length : null, '', 0, 'laps.lapTimes', ['gps']);
   let best: number | null = null;
@@ -196,7 +245,7 @@ export function sessionSummary(ctx: SessionContext, design?: DesignReport): Sess
   let Ftr: number | null = null;
   if (veh.v && veh.ax) {
     const accs: number[] = [];
-    for (let i = 0; i <= n - 1; i++) if (veh.ax[i] > 0.05) accs.push(veh.ax[i]);
+    for (let i = i0; i <= i1; i++) if (veh.ax[i] > 0.05) accs.push(veh.ax[i]);
     accs.sort((a, b) => a - b);
     const aTr = quant(accs, 0.98);
     Ftr = (+car.mass) * aTr * 9.81;
@@ -233,15 +282,15 @@ export function sessionSummary(ctx: SessionContext, design?: DesignReport): Sess
   let gpsValid: number | null = null;
   if (track.ok) {
     let c = 0;
-    for (let i = 0; i < n; i++) if (track.valid[i]) c++;
-    gpsValid = n ? c / n * 100 : null;
+    for (let i = i0; i <= i1; i++) if (track.valid[i]) c++;
+    gpsValid = n ? c / (i1 - i0 + 1) * 100 : null;
   } else if (S.gps || ctx.cfg.chX) gpsValid = 0;
   m('Qualidade', 'quality.gpsValid', 'GPS válido', gpsValid, '%', 0, 'quality.validSamples', ['gps']);
   const av = sensorAvailability(ctx), present = SENSOR_IDS.filter(id => av[id] === 'present');
   m('Qualidade', 'quality.sensors', 'Sensores presentes', present.length, '', 0, 'design.sensorCoverage', present,
     present.map(id => SENSORS[id].short).join(', '));
 
-  return { version: SUMMARY_VERSION, metrics };
+  return { version: SUMMARY_VERSION, metrics, ...(range && n ? { range: { i0, i1, t0: t[i0], t1: t[i1] } } : {}) };
 }
 
 /** Métrica pela chave (ou undefined). */

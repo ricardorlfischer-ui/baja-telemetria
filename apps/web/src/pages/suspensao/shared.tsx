@@ -1,50 +1,25 @@
 /* Peças comuns das páginas Suspensão e Ressonância (só desenho; as contas são do core:
  * suspensionReport / resonanceReport).
  *
- * - suspSpec(): spec do relatório (SuspPlot, sem cores) → spec do XYPlot, com as cores do
- *   tema pelo papel de cada série/barra/marcador (como o app antigo pintava).
- * - PlotCard: ChartCard + XYPlot, com estado vazio grande quando o relatório diz o que falta.
+ * - PlotCard: ChartCard + XYPlot (reportSpec de components/), com estado vazio grande quando
+ *   o relatório diz o que falta.
  * - NoSession / NoShocks: estados vazios úteis.
  * - Num: número clicável que abre o card de explicação (todo número diz de onde saiu).
+ * - Callout / StillShocks / DeadShocks: avisos dentro da página, com os sensores.
  * - CommitNumber: campo numérico que só aplica ao sair do campo / Enter (cada mudança
  *   recalcula a sessão). */
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
-import { Badge, Button, Group, NumberInput, Paper, Stack, Text, Tooltip, UnstyledButton } from '@mantine/core';
+import { Button, Group, NumberInput, Paper, Stack, Text, UnstyledButton } from '@mantine/core';
 import { IconCar, IconChartAreaLine } from '@tabler/icons-react';
 import { useNavigate } from 'react-router';
-import { esc, fmtRep, suspCornerSensor, type SensorId, type Shock, type SuspPlot } from '@baja/core';
+import { suspCornerSensor, type SensorId, type Shock, type SuspPlot, type SuspStillWarning } from '@baja/core';
 import {
-  ChartCard, EmptyState, NoSessionState, SensorChips, XYPlot, useExplain, type XYSpec,
+  ChartCard, EmptyState, InfoButton, NoSessionState, SensorChips, XYPlot, reportSpec, useExplain, type XYSpec,
 } from '../../components';
-import { resolveColor, useChartTheme, type ChartTheme, type Corner } from '../../theme';
+import { useChartTheme, type Corner } from '../../theme';
 import classes from './susp.module.css';
 
-/* ---------------------------------------------------------------- cores por papel */
-/* Papéis que os relatórios devolvem → cor do tema (o antigo usava --pos/--neg/--muted/--c1...). */
-const ROLE_COLOR: Record<string, string> = {
-  comp: 'pos', ext: 'neg', knee: 'muted', static: 'fg', band: 'axis', drop: 'fg', peak: 'muted',
-  fit: 'c2', brake: 'c2', accel: 'c3', slow: 'c1', fast: 'c2', road: 'c1',
-};
-export const roleColor = (th: ChartTheme, role: string | undefined): string =>
-  resolveColor(th, role ? ROLE_COLOR[role] ?? role : undefined) ?? th.fg;
-
-/** Spec do relatório (SuspPlot) → spec do XYPlot, com cores e tooltips (RepFmt/barTips). */
-export function suspSpec(p: SuspPlot, th: ChartTheme, extra: Partial<XYSpec> = {}): XYSpec {
-  if (p.empty) return { empty: p.empty };
-  const tipX = p.tipX, fmtY = p.fmtY, tips = p.barTips;
-  return {
-    series: p.series?.map(s => ({ x: s.x, y: s.y, label: s.label, width: s.width, dots: s.dots, color: roleColor(th, s.id) })),
-    bars: p.bars && { x0: p.bars.x0, w: p.bars.w, y: p.bars.y, colors: p.bars.roles.map(r => roleColor(th, r)) },
-    points: p.points && { x: p.points.x, y: p.points.y, alpha: p.points.alpha, color: th.series[0] },
-    markers: p.markers?.map(m => ({ x: m.x, label: m.label, row: m.row, color: roleColor(th, m.role) })),
-    legend: p.legend?.map(l => ({ label: l.label, color: roleColor(th, l.role) })),
-    xLabel: p.xLabel, yLabel: p.yLabel, logY: p.logY, zeroY: p.zeroY, xRange: p.xRange,
-    tipX: tipX ? x => `<b>${fmtRep(tipX, x)}</b>` : undefined,
-    fmtY: fmtY ? v => fmtRep(fmtY, v) : undefined,
-    tipBar: tips ? k => (tips[k] ? `<b>${esc(tips[k].title)}</b>${tips[k].note ? ' ' + esc(tips[k].note!) : ''}<br>${esc(tips[k].text)}` : '') : undefined,
-    ...extra,
-  };
-}
+export { RangeBadge } from '../../components';
 
 /* ---------------------------------------------------------------- gráfico do relatório */
 export interface PlotCardProps {
@@ -60,8 +35,7 @@ export interface PlotCardProps {
 }
 
 export function PlotCard({ plot, title, subtitle, height = 280, emptyHint, extra, actions, footer }: PlotCardProps) {
-  const th = useChartTheme();
-  const spec = useMemo(() => suspSpec(plot, th, extra), [plot, th, extra]);
+  const spec = useMemo(() => reportSpec(plot, { extra }), [plot, extra]);
   return (
     <ChartCard title={title ?? plot.title} subtitle={subtitle} explain={plot.explain} sensors={plot.sensors} actions={actions} footer={footer}>
       {plot.empty ? (
@@ -99,15 +73,6 @@ export function Num({ children, explain, sensors, title, strong, dim, wrap }: {
 export function CornerSwatch({ id, size = 12 }: { id: Corner; size?: number }) {
   const th = useChartTheme();
   return <span className={classes.swatch} style={{ width: size, height: size, background: th.corner[id] }} aria-hidden />;
-}
-
-/** Rótulo do trecho em análise (o seletor fica no cabeçalho). */
-export function RangeBadge({ label }: { label: string }) {
-  return (
-    <Tooltip label="Mude no seletor Trecho, no topo da página">
-      <Badge size="lg" variant="light" color="gray" radius="sm" tt="none" fw={500}>Trecho: {label}</Badge>
-    </Tooltip>
-  );
 }
 
 export function CarButton() {
@@ -178,6 +143,20 @@ export function DeadShocks({ shocks, why }: { shocks: Shock[]; why: string }) {
           ? `: ${constant.map(k => k.id).join(', ')} com canal constante (sensor desligado ou calibração zerada?), os outros sem canal no log`
           : ': o log não tem esses canais'}.
       {' '}Só {live.map(k => k.id).join(', ')} entra nas contas. {why} Para conferir: empurre cada canto com o log gravando e veja se o canal mexe.
+    </Callout>
+  );
+}
+
+/** Amortecedores com sinal mas quase parados no trecho (suspensionReport.still do core: curso
+ *  usado < SHOCK_STILL_MM). O texto é o do core; o ⓘ abre o card quality.shockStill. */
+export function StillShocks({ still }: { still: SuspStillWarning | null }) {
+  if (!still) return null;
+  return (
+    <Callout tone="warn" sensors={still.sensors}>
+      <Group component="span" gap={4} wrap="nowrap" align="flex-start" style={{ display: 'inline-flex' }}>
+        <span>{still.text} Com o carro parado, comprima o canto e veja o canal mexer vários mm.</span>
+        <InfoButton explain={still.explain} sensors={still.sensors} title="Amortecedor quase parado" size="sm" />
+      </Group>
     </Callout>
   );
 }

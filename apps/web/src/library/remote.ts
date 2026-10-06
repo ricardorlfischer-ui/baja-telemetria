@@ -48,8 +48,9 @@ export interface AuthResult { token: string; user: User }
 export class RemoteLibrary implements Library {
   readonly mode = 'remote' as const;
   readonly baseUrl: string;
-  /** chamado quando o servidor responde 401 (token inválido): a interface volta ao login */
-  onUnauthorized: (() => void) | null = null;
+  /** chamado quando o servidor recusa o token (401: venceu, senha trocada em outro lugar,
+   *  usuário desativado): a interface volta ao login e mostra o motivo (mensagem do servidor) */
+  onUnauthorized: ((message: string) => void) | null = null;
 
   constructor(baseUrl = '') {
     this.baseUrl = baseUrl.replace(/\/+$/, '');
@@ -59,8 +60,8 @@ export class RemoteLibrary implements Library {
 
   private async req<T>(method: string, path: string, body?: unknown, opts: { raw?: boolean; form?: FormData; auth?: boolean } = {}): Promise<T> {
     const headers: Record<string, string> = {};
-    const tok = getToken();
-    if (tok && opts.auth !== false) headers.Authorization = `Bearer ${tok}`;
+    const tok = opts.auth !== false ? getToken() : null;
+    if (tok) headers.Authorization = `Bearer ${tok}`;
     let payload: BodyInit | undefined;
     if (opts.form) payload = opts.form;
     else if (body !== undefined) { headers['Content-Type'] = 'application/json'; payload = JSON.stringify(body); }
@@ -73,13 +74,22 @@ export class RemoteLibrary implements Library {
     if (!res.ok) {
       let j: Record<string, unknown> = {};
       try { j = await res.json() as Record<string, unknown>; } catch { /* sem corpo JSON */ }
-      if (res.status === 401 && tok) { setToken(null); this.onUnauthorized?.(); }
-      throw this.error(res.status, j);
+      const err = this.error(res.status, j);
+      /* só pedido com token: o 401 de um login com senha errada não derruba a conta */
+      if (res.status === 401 && tok) this.dropToken(tok, err.message);
+      throw err;
     }
     if (opts.raw) return res as unknown as T;
     if (res.status === 204) return undefined as T;
     const ct = res.headers.get('content-type') || '';
     return (ct.includes('json') ? await res.json() : await res.text()) as T;
+  }
+
+  /** Token recusado: esquece (se ainda for o guardado: um login novo no meio não é apagado) e avisa. */
+  private dropToken(tok: string, message: string): void {
+    if (getToken() !== tok) return;
+    setToken(null);
+    this.onUnauthorized?.(message);
   }
 
   /** Erro em português: a mensagem do servidor ({ error }) ou a do status. */
@@ -165,8 +175,9 @@ export class RemoteLibrary implements Library {
         let j: Record<string, unknown> = {};
         try { j = JSON.parse(xhr.responseText || '{}') as Record<string, unknown>; } catch { /* sem JSON */ }
         if (xhr.status >= 200 && xhr.status < 300) { resolve(j as unknown as SessionMeta); return; }
-        if (xhr.status === 401 && tok) { setToken(null); this.onUnauthorized?.(); }
-        reject(this.error(xhr.status, j));
+        const err = this.error(xhr.status, j);
+        if (xhr.status === 401 && tok) this.dropToken(tok, err.message);
+        reject(err);
       };
       xhr.send(fd);
     });

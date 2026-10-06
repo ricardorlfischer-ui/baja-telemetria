@@ -35,7 +35,7 @@ describe('fluxo setup → login → convite → cadastro', () => {
     t = await makeApp();
     const { app } = t;
     let r = await app.inject('/api/info');
-    expect(json(r)).toEqual({ name: 'Baja Telemetria', version: expect.any(String), needsSetup: true });
+    expect(json(r)).toEqual({ name: 'Telemetria · Mauá Racing Baja', version: expect.any(String), needsSetup: true });
 
     /* senha curta: mensagem em português */
     r = await app.inject({ method: 'POST', url: '/api/auth/setup', payload: { name: 'A', email: 'a@b.c', password: '123' } });

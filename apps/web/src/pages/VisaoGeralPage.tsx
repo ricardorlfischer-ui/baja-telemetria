@@ -4,18 +4,20 @@
  * dados (dataQuality), dados da sessão e anotações no tempo.
  *
  * A página só desenha: as contas são do @baja/core. O trecho do cabeçalho (useRange) vale
- * para o mapa, os pontos de atenção e os blocos que dependem do trecho (v máx, CVT, curso,
- * saltos); duração, distância e voltas são da sessão inteira. */
+ * para o mapa, os pontos de atenção e os blocos: sessionSummary(ctx, ficha do trecho, trecho)
+ * marca cada métrica com scope — 'range' segue o trecho (v máx, distância, CVT, curso,
+ * saltos...), 'session' é sempre da sessão inteira (duração, voltas, melhor volta) e o bloco
+ * diz isso. */
 import './sessoes/sessoes.css';
-import { useMemo } from 'react';
 import { Alert, Badge, Box, Group, Loader, Paper, SimpleGrid, Stack, Text } from '@mantine/core';
 import { IconLayoutDashboard } from '@tabler/icons-react';
 import {
-  SENSOR_IDS, dataQuality, designReport, sessionSummary, type DataQuality, type DesignReport, type SessionSummary,
+  SENSOR_IDS, designReport, sessionSummary, type DesignReport, type SessionSummary,
 } from '@baja/core';
-import { NoSessionState, PageHeader, Section, SensorChips, InfoButton } from '../components';
+import { ComputingState, NoSessionState, PageHeader, Section, SensorChips, InfoButton } from '../components';
 import { routeByPath } from '../routes';
 import { useRange, useSessionStore } from '../state/session';
+import { useComputed, useQuality } from '../state/heavy';
 import { Tiles } from './visao-geral/Tiles';
 import { MiniMap } from './visao-geral/MiniMap';
 import { LapsCard } from './visao-geral/LapsCard';
@@ -38,11 +40,19 @@ export default function VisaoGeralPage() {
   const rangeLabel = range ? range[2] : '';
   const whole = !!ctx && i0 === 0 && i1 === ctx.S.t.length - 1;
 
-  const design = useMemo(() => (ctx ? safe<DesignReport>(() => designReport(ctx, i0, i1)) : null), [ctx, i0, i1]);
-  /* resumo com a ficha do trecho: os números que vêm da ficha (v máx, CVT, curso, saltos)
-   * seguem o trecho; duração, distância e voltas são sempre da sessão inteira */
-  const summary = useMemo(() => (ctx && design?.v ? safe<SessionSummary>(() => sessionSummary(ctx, design.v!)) : null), [ctx, design]);
-  const dq = useMemo(() => (ctx ? safe<DataQuality>(() => dataQuality(ctx.S, ctx)) : null), [ctx]);
+  /* ficha do trecho e o resumo do trecho com a ficha do MESMO trecho: as métricas scope 'range'
+   * seguem o trecho (inclusive distância, força trativa e GPS válido); as scope 'session' ficam
+   * da sessão inteira. Log grande: primeiro o aviso "Calculando…" (useComputed). */
+  const calc = useComputed(() => {
+    if (!ctx) return null;
+    const design = safe<DesignReport>(() => designReport(ctx, i0, i1));
+    const summary = design.v ? safe<SessionSummary>(() => sessionSummary(ctx, design.v!, [i0, i1])) : null;
+    return { design, summary };
+  }, [ctx, i0, i1]);
+  const design = calc?.design ?? null, summary = calc?.summary ?? null;
+  /* qualidade dos dados: calculada uma vez por sessão e compartilhada com as outras páginas */
+  const quality = useQuality();
+  const dq = quality ? { v: quality.dq, err: quality.err } : null;
 
   const header = (
     <PageHeader title={r.label} subtitle={r.question} />
@@ -95,7 +105,7 @@ export default function VisaoGeralPage() {
       )}
 
       <Section title="Números do teste" description="Clique em qualquer número (ou no ⓘ) para ver o que ele é, de quais sensores saiu e como usar no projeto do carro do ano que vem.">
-        {summary?.v && design?.v
+        {!calc ? <ComputingState what="os números do trecho" /> : summary?.v && design?.v
           ? <Tiles ctx={ctx} summary={summary.v} design={design.v} rangeLabel={rangeLabel} whole={whole} />
           : <Text c="dimmed">Sem resumo para este log.</Text>}
       </Section>
@@ -110,11 +120,11 @@ export default function VisaoGeralPage() {
       <SimpleGrid cols={{ base: 1, lg: 2 }} spacing={48} verticalSpacing={0} className="bt-section bt-ss-pair">
         <Section title="Pontos de atenção para o projeto" explain="design.recommendations"
           description={`O que os números deste trecho (${rangeLabel}) pedem para o carro do ano que vem.`}>
-          {design?.v ? <DesignRecs design={design.v} rangeLabel={rangeLabel} shocks={shocks} /> : <Text c="dimmed">Sem ficha para este log.</Text>}
+          {!calc ? <ComputingState what="os pontos de atenção" /> : design?.v ? <DesignRecs design={design.v} rangeLabel={rangeLabel} shocks={shocks} /> : <Text c="dimmed">Sem ficha para este log.</Text>}
         </Section>
         <Section title="Qualidade dos dados" explain="quality.validSamples"
           description="Se os sensores mandaram sinal e se dá para confiar nos números (detalhes em Aquisição).">
-          {dq?.v ? <QualitySummary dq={dq.v} /> : <Text c="dimmed">Não deu para avaliar a qualidade deste log.</Text>}
+          {!quality ? <ComputingState what="a qualidade dos dados" /> : dq?.v ? <QualitySummary dq={dq.v} /> : <Text c="dimmed">Não deu para avaliar a qualidade deste log.</Text>}
         </Section>
       </SimpleGrid>
 

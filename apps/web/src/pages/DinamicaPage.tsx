@@ -3,7 +3,7 @@
  * cursor, e o tempo por faixa de velocidade.
  *
  * Tudo vem de dynamicsReport (core); a página só desenha. */
-import { useMemo, useRef } from 'react';
+import { useRef } from 'react';
 import { Alert, Button, Stack, Text } from '@mantine/core';
 import { useElementSize } from '@mantine/hooks';
 import { IconActivity, IconAlertTriangle, IconMapPin } from '@tabler/icons-react';
@@ -12,7 +12,8 @@ import { dynamicsReport, idxAt, type SessionContext } from '@baja/core';
 import { PageHeader, Section, type XYPlotHandle } from '../components';
 import { routeByPath } from '../routes';
 import { useCtx, useCursorEffect, useRange, useSessionStore } from '../state/session';
-import { MissingState, Grid2, NeedSensors, NoSession, RangeBadge, RepChart, RepTiles, SourceNote, VehStyles } from './veiculo/shared';
+import { ComputingPage, MissingState, Grid2, NeedSensors, NoSession, RangeBadge, RepChart, RepTiles, SourceNote, VehStyles } from './veiculo/shared';
+import { useComputed } from '../state/heavy';
 
 const ROUTE = '/dinamica';
 
@@ -25,9 +26,16 @@ export default function DinamicaPage() {
 }
 
 function Body({ ctx, i0, i1, label }: { ctx: SessionContext; i0: number; i1: number; label: string }) {
+  /* log grande: primeiro o aviso "Calculando…" (useComputed), depois a conta */
+  const rep = useComputed(() => dynamicsReport(ctx, i0, i1), [ctx, i0, i1]);
+  const r = routeByPath(ROUTE)!;
+  if (!rep) return <ComputingPage title={r.label} subtitle={r.question} label={label} what="as acelerações e o g-g" />;
+  return <Content ctx={ctx} label={label} rep={rep} />;
+}
+
+function Content({ ctx, label, rep }: { ctx: SessionContext; label: string; rep: ReturnType<typeof dynamicsReport> }) {
   const r = routeByPath(ROUTE)!;
   const nav = useNavigate();
-  const rep = useMemo(() => dynamicsReport(ctx, i0, i1), [ctx, i0, i1]);
   /* lado do g-g: largura da coluna menos o padding do cartão (24 px), entre 300 e 620 px */
   const { ref, width } = useElementSize();
   const side = Math.max(300, Math.min((width || 504) - 24, 620));

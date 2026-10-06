@@ -11,13 +11,12 @@ import {
   type LapTableReport, type LapTableRow, type SensorId, type SessionContext,
 } from '@baja/core';
 import {
-  ChartCard, DataTable, EmptyState, InfoButton, PageHeader, Section, StatTile, XYPlot,
+  ChartCard, DataTable, EmptyState, InfoButton, PageHeader, Section, StatTile, XYPlot, reportSpec,
   type Column, type XYPlotHandle,
 } from '../components';
 import { routeByPath } from '../routes';
 import { useCtx, useCursorEffect, useSessionReady, useSessionStore } from '../state/session';
 import { NoSession, applyAutoLine, useCursorLap } from './mapa/common';
-import { repToSpec } from './voltas/repPlot';
 import './mapa/mapa.css';
 
 const LAP_SENSORS: SensorId[] = ['gps', 'logger'];
@@ -111,9 +110,9 @@ function VoltasBody({ ctx }: { ctx: SessionContext }) {
   const specs = useMemo(() => {
     const go = (d: number) => { const t = lapSeekTime(rep, d); if (isFinite(t)) seek(t); };
     return {
-      speed: rep.speed ? repToSpec(rep.speed, go) : null,
-      delta: rep.delta ? repToSpec(rep.delta, go) : null,
-      sectors: rep.sectors ? repToSpec(rep.sectors) : null,
+      speed: rep.speed ? reportSpec(rep.speed, { onClick: go }) : null,
+      delta: rep.delta ? reportSpec(rep.delta, { onClick: go }) : null,
+      sectors: rep.sectors ? reportSpec(rep.sectors) : null,
     };
   }, [rep, seek]);
   const placeMarker = (t: number) => {
