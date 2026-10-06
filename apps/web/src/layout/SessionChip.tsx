@@ -1,11 +1,13 @@
 /* Seletor da sessão aberta no cabeçalho (docs/ARQUITETURA.md 4.2): nome, tipo, duração e um
- * menu (trocar sessão → biblioteca, abrir o exemplo, fechar). Mostra "abrindo…" e
+ * menu (guardar na biblioteca a sessão aberta sem salvar, trocar sessão → biblioteca, abrir o
+ * exemplo, fechar — fechar também faz o app não reabrir a sessão ao carregar). Mostra "abrindo…" e
  * "recalculando…" enquanto o core trabalha. */
 import { Badge, Box, Button, Group, Loader, Menu, Text, Tooltip } from '@mantine/core';
-import { IconChevronDown, IconFlask, IconFolderOpen, IconX } from '@tabler/icons-react';
+import { IconChevronDown, IconDatabasePlus, IconFlask, IconFolderOpen, IconX } from '@tabler/icons-react';
 import { useNavigate } from 'react-router';
 import { fmtTime } from '@baja/core';
 import { useRange, useSessionStore } from '../state/session';
+import { useSaveOpenSession } from '../state/useSaveOpenSession';
 
 export function SessionChip() {
   const S = useSessionStore(s => s.S);
@@ -21,6 +23,7 @@ export function SessionChip() {
   const laps = useSessionStore(s => s.ctx?.laps) ?? [];
   const range = useRange();
   const nav = useNavigate();
+  const saver = useSaveOpenSession();
 
   if (status === 'loading') {
     return (
@@ -70,6 +73,11 @@ export function SessionChip() {
           ))}
           <Menu.Divider />
         </Box>
+        {saver.canSave && (
+          <Menu.Item leftSection={<IconDatabasePlus size={16} />} disabled={saver.saving} onClick={() => { void saver.save(); }}>
+            Guardar na biblioteca
+          </Menu.Item>
+        )}
         <Menu.Item leftSection={<IconFolderOpen size={16} />} onClick={() => nav('/')}>Trocar sessão</Menu.Item>
         {!S.demo && <Menu.Item leftSection={<IconFlask size={16} />} onClick={() => void openDemo()}>Abrir o exemplo</Menu.Item>}
         <Menu.Divider />

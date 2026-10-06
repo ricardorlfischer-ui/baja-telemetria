@@ -1,7 +1,8 @@
 /* Ligações entre a biblioteca (contexto React), os perfis e a sessão aberta:
  *  - LibrarySync: registra a biblioteca ativa para openFromLibrary e carrega os perfis de
  *    carro/pista dela (de novo quando a biblioteca muda ou alguém chama bump()). Também abre
- *    a sessão de exemplo quando a URL pede (?exemplo, ver wantsDemoFromUrl).
+ *    a sessão de exemplo quando a URL pede (?exemplo, ver wantsDemoFromUrl) e, sem isso,
+ *    reabre a última sessão da biblioteca (state/reopen.ts) depois de carregar os perfis.
  *  - SessionSensorProvider: alimenta os chips dos sensores com sensorAvailability(ctx) da
  *    sessão aberta (verde/cinza/tracejado). Sem sessão: chips neutros (só o catálogo). */
 import { useEffect, type ReactNode } from 'react';
@@ -9,6 +10,9 @@ import { useLibrary } from '../library/context';
 import { SensorAvailabilityProvider } from '../components/SensorChips';
 import { setSessionLibrary, useSessionStore } from './session';
 import { useProfiles } from './profiles';
+import { getPrefs } from './prefs';
+import { planReopen, reopenLastSession } from './reopen';
+import type { Library } from '../library/types';
 
 /** A URL pede a sessão de exemplo? `?exemplo` (ou `?exemplo=1`) antes do # ou na rota
  *  (`#/canais?exemplo=1`). `exemplo=0`/`false` não pede. Para apresentar aos juízes e para
@@ -36,6 +40,27 @@ function useDemoFromUrl(): void {
   }, []);
 }
 
+/* também uma vez por carga da página */
+let reopenChecked = false;
+
+/** Reabre a última sessão da biblioteca, se for a hora (ver planReopen). */
+function maybeReopen(lib: Library | null, libLoading: boolean, signedIn: boolean): void {
+  if (reopenChecked || typeof window === 'undefined') return;
+  const st = useSessionStore.getState();
+  const prefs = getPrefs();
+  const plan = planReopen({
+    reopenLast: prefs.reopenLast, last: prefs.lastSession, lib, libLoading, signedIn,
+    sessionStatus: st.status, wantsDemo: wantsDemoFromUrl(window.location),
+  });
+  if (plan.action === 'wait') return;
+  reopenChecked = true;
+  if (plan.action !== 'open' || !lib) return;
+  void reopenLastSession(lib, plan.id, {
+    isEmpty: () => useSessionStore.getState().status === 'empty',
+    openFromLibrary: (meta, l, opts) => useSessionStore.getState().openFromLibrary(meta, l, opts),
+  });
+}
+
 export function LibrarySync() {
   const { lib, version, user, loading } = useLibrary();
   /* servidor sem ninguém conectado: os perfis da equipe não aparecem (a API responderia 401);
@@ -45,7 +70,11 @@ export function LibrarySync() {
   useEffect(() => {
     setSessionLibrary(lib);
     if (loading) return;
-    void useProfiles.getState().load(signedOut ? null : lib);
+    let alive = true;
+    /* reabre depois dos perfis: openFromLibrary ativa o carro/pista da sessão se existirem */
+    void useProfiles.getState().load(signedOut ? null : lib)
+      .then(() => { if (alive) maybeReopen(lib, loading, !signedOut); });
+    return () => { alive = false; };
   }, [lib, version, uid, signedOut, loading]);
   useDemoFromUrl();
   return null;

@@ -12,6 +12,7 @@ import { computeSession, fmtTime, type SessionContext } from '@baja/core';
 import type { Comment, SessionMeta } from '../../library';
 import { useLibrary } from '../../library';
 import { useCursorTime, useSessionStore, type SessionSource } from '../../state/session';
+import { useSaveOpenSession } from '../../state/useSaveOpenSession';
 import { useProfiles } from '../../state/profiles';
 import { trySummary } from '../../state/librarySave';
 import { MetaFields } from '../sessoes/MetaFields';
@@ -28,6 +29,7 @@ export function SessionData({ source, ctx }: { source: SessionSource; ctx: Sessi
   const [saving, setSaving] = useState(false);
   const [all, setAll] = useState<SessionMeta[]>([]);
   const [err, setErr] = useState<string | null>(null);
+  const saver = useSaveOpenSession();
 
   /* dados atuais da biblioteca (podem ter mudado desde que a sessão abriu) */
   useEffect(() => {
@@ -55,9 +57,13 @@ export function SessionData({ source, ctx }: { source: SessionSource; ctx: Sessi
           <Text c="dimmed">
             {source.type === 'demo'
               ? 'Os dados de exemplo são simulados e não ficam guardados: não há data, piloto nem anotações para editar.'
-              : `“${source.name}” foi aberta sem salvar. Para guardar com data, pista, carro, piloto, etiquetas e anotações, envie o arquivo na página Sessões.`}
+              : saver.canSave
+                ? `“${source.name}” foi aberta sem salvar. Guarde na biblioteca para editar data, pista, carro, piloto, etiquetas e anotações.`
+                : `“${source.name}” foi aberta sem salvar. Para guardar com data, pista, carro, piloto, etiquetas e anotações, envie o arquivo na página Sessões.`}
           </Text>
-          <Button variant="light" w="fit-content" onClick={() => nav('/')}>Ir para Sessões</Button>
+          {saver.canSave
+            ? <Button variant="light" w="fit-content" loading={saver.saving} onClick={() => { void saver.save(); }}>Guardar na biblioteca</Button>
+            : <Button variant="light" w="fit-content" onClick={() => nav('/')}>Ir para Sessões</Button>}
         </Stack>
       </Paper>
     );

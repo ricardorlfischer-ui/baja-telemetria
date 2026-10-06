@@ -4,7 +4,11 @@
  * servido pelo próprio servidor (/api/info responde na mesma origem). Senão, local. */
 export * from './types';
 export { detectLibrary, type Detected } from './detect';
-export { LocalLibrary, LocalDuplicateError, gzipText, gunzipToText, hasCompression, newId, guessKind, sha256Hex } from './local';
+export { LocalLibrary, LocalDuplicateError, LocalNotFoundError, gzipText, gunzipToText, hasCompression, newId, guessKind, sha256Hex } from './local';
 export { RemoteLibrary, ApiError, getToken, setToken, type AuthResult, type UploadProgress } from './remote';
 export { LibraryProvider, useLibrary, type LibraryState } from './context';
+export {
+  LocalQuotaError, QUOTA_MESSAGE, ensurePersisted, fmtBytes, isQuotaError, requestPersist, storageErrorMessage, storageStatus,
+  type StorageStatus,
+} from './storage';
 export { fmtSessionDate, fmtDateTime, sessionDateText } from './format';

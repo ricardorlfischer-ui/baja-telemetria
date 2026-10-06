@@ -1,5 +1,6 @@
 /* Preferências do usuário neste navegador (docs/ARQUITETURA.md 4.3): tema, endereço do
- * servidor da equipe, layouts da página Canais, barra lateral recolhida.
+ * servidor da equipe, layouts da página Canais, barra lateral recolhida, a última sessão
+ * aberta da biblioteca (reabre ao carregar o app, state/reopen.ts).
  * Ficam no localStorage, sempre com try/catch (aba anônima, armazenamento bloqueado...):
  * sem localStorage o app funciona com os padrões. */
 import { create } from 'zustand';
@@ -12,6 +13,12 @@ export interface ChannelPanel {
   keys: string[];
   height?: number;        /* px */
 }
+/** Última sessão aberta da biblioteca: id e de qual biblioteca ('local' ou 'remote:<endereço>'). */
+export interface LastSession {
+  id: string;
+  lib: string;
+}
+
 /** Layout salvo da página Canais. */
 export interface ChannelLayout {
   name: string;
@@ -27,6 +34,8 @@ export interface Prefs {
   lastChannelLayout: string | null;
   navCollapsed: boolean;                       /* barra lateral recolhida no computador */
   localOnly: boolean;                          /* escolheu "só este navegador": ignora o servidor padrão do build */
+  reopenLast: boolean;                         /* reabrir a última sessão da biblioteca ao abrir o app */
+  lastSession: LastSession | null;             /* a última sessão aberta da biblioteca (null = nenhuma ou fechada) */
 }
 
 const KEY = 'baja:prefs';
@@ -37,6 +46,8 @@ export const DEFAULT_PREFS: Prefs = {
   lastChannelLayout: null,
   navCollapsed: false,
   localOnly: false,
+  reopenLast: true,
+  lastSession: null,
 };
 
 /* ---------------------------------------------------------------- localStorage seguro */
@@ -61,6 +72,9 @@ function load(): Prefs {
       theme: p.theme === 'light' || p.theme === 'auto' || p.theme === 'dark' ? p.theme : 'dark',
       serverUrl: typeof p.serverUrl === 'string' ? p.serverUrl : '',
       localOnly: p.localOnly === true,
+      reopenLast: p.reopenLast !== false,
+      lastSession: p.lastSession && typeof p.lastSession === 'object' && typeof p.lastSession.id === 'string' && typeof p.lastSession.lib === 'string'
+        ? { id: p.lastSession.id, lib: p.lastSession.lib } : null,
       channelLayouts: p.channelLayouts && typeof p.channelLayouts === 'object' ? p.channelLayouts : {},
     };
   } catch {
@@ -76,8 +90,8 @@ interface PrefsStore extends Prefs {
 
 export const usePrefs = create<PrefsStore>((set, get) => {
   const save = () => {
-    const { theme, serverUrl, channelLayouts, lastChannelLayout, navCollapsed, localOnly } = get();
-    lsSet(KEY, JSON.stringify({ theme, serverUrl, channelLayouts, lastChannelLayout, navCollapsed, localOnly }));
+    const { theme, serverUrl, channelLayouts, lastChannelLayout, navCollapsed, localOnly, reopenLast, lastSession } = get();
+    lsSet(KEY, JSON.stringify({ theme, serverUrl, channelLayouts, lastChannelLayout, navCollapsed, localOnly, reopenLast, lastSession }));
   };
   return {
     ...load(),

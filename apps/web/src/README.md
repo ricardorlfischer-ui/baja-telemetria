@@ -12,10 +12,10 @@ Contrato completo: `docs/ARQUITETURA.md` seção 4. Resumo do que já existe:
 | `layout/` | `AppLayout` (AppShell: barra lateral 260 px, cabeçalho 60 px, rodapé 64 px nas rotas com `player`; liga os atalhos do play), `NavMenu`, `SessionChip` (sessão aberta + menu trocar/fechar; no celular também o trecho), `RangeControl` (Sessão/Volta/Janela + volta), `PlayerBar` (play, velocidade, barra de tempo com voltas, repetir), `HeaderParts` (modo da biblioteca, tema) |
 | `components/` | componentes compartilhados (abaixo); importe de `../components` |
 | `theme.ts` | tema Mantine + tokens dos gráficos (`useChartTheme`, `resolveColor`, cores dos cantos e status) |
-| `state/` | `session.ts` (store da sessão, play, trecho, hooks), `heavy.ts` (contas pesadas com log grande, qualidade dos dados), `profiles.ts` (perfis de carro/pista, configuração em uso, fórmulas), `hotkeys.ts`, `SessionSync.tsx` (biblioteca → perfis; disponibilidade dos sensores → chips; `?exemplo` na URL), `librarySave.ts` (guardar log com resumo) |
+| `state/` | `session.ts` (store da sessão, play, trecho, hooks), `heavy.ts` (contas pesadas com log grande, qualidade dos dados), `profiles.ts` (perfis de carro/pista, configuração em uso, fórmulas), `hotkeys.ts`, `SessionSync.tsx` (biblioteca → perfis; disponibilidade dos sensores → chips; `?exemplo` na URL), `librarySave.ts` (guardar log com resumo), `reopen.ts` (lembrar/reabrir a última sessão da biblioteca), `useSaveOpenSession.ts` ("Guardar na biblioteca" a sessão aberta sem salvar) |
 | `explain/` | `ExplainHost` (monta o contexto de explicação) e `ExplainDrawer` (o card) |
-| `state/prefs.ts` | preferências (tema, servidor, layouts da página Canais, menu recolhido); `lsGet/lsSet` com try/catch |
-| `library/` | biblioteca local (IndexedDB) e remota (API 5.3); `useLibrary()` |
+| `state/prefs.ts` | preferências (tema, servidor, layouts da página Canais, menu recolhido, última sessão e "reabrir ao abrir o app"); `lsGet/lsSet` com try/catch |
+| `library/` | biblioteca local (IndexedDB) e remota (API 5.3); `useLibrary()`; `storage.ts` (espaço usado/disponível, `persist()`, erro de falta de espaço com mensagem clara); `detect.ts` (no build estático `VITE_STATIC=1` não procura `/api` na mesma origem) |
 | `styles/global.css` | CSS global (tokens `--bt-*`, cartões, chips, tooltips) |
 
 ## Regras das páginas
@@ -81,8 +81,9 @@ Ações (todas em `useSessionStore.getState()` ou por seletor):
 | ação | o que faz |
 |---|---|
 | `openFile(file, { saveTo?: lib })` | lê, calcula e (opcional) guarda na biblioteca com o resumo. Devolve `true` se abriu |
-| `openText(text, name, source?)` / `openDemo()` / `openFromLibrary(meta, lib?)` | idem (exemplo = carro DEMO_CAR + linha automática; da biblioteca ativa os perfis carro/pista da sessão) |
-| `close()` | fecha a sessão |
+| `openText(text, name, source?)` / `openDemo()` / `openFromLibrary(meta, lib?, { silent? })` | idem (exemplo = carro DEMO_CAR + linha automática; da biblioteca ativa os perfis carro/pista da sessão e lembra o id para reabrir ao carregar o app; `silent` = sem aviso de erro) |
+| `saveToLibrary(lib?)` | guarda na biblioteca a sessão aberta sem salvar com o texto já carregado (`unsavedText`); a sessão passa a ser da biblioteca sem reabrir. Devolve `{ meta, duplicate }` ou null; sem espaço lança `LocalQuotaError` (use `storageErrorMessage(e)`). Chamado de novo enquanto guarda: a mesma promessa (`savingToLibrary` = guardando; use `useSaveOpenSession`) |
+| `close()` | fecha a sessão; se for a última sessão lembrada da biblioteca, esquece (não reabre ao carregar o app). Fechar o exemplo ou um log sem salvar não mexe na memória |
 | `updateConfig(patch)` | muda pista/carro/susp/fórmulas (`AnalysisConfigInput`) e recalcula; mantém cursor e volta. Com o exemplo aberto o carro e a linha vão para a memória (não estragam o carro real) |
 | `setLine(pts \| null)` | linha de largada (arredonda a 2 casas, zera a volta, recalcula) — use no `onLineDrawn` do TrackMap |
 | `seek(t)`, `play()`, `pause()`, `togglePlay()`, `setSpeed(x)`, `setLoop(b)` | player (um único laço rAF; o play fica na volta selecionada) |
@@ -112,6 +113,13 @@ explicação aberto e quando um elemento da página já usou a tecla (`preventDe
 `?exemplo` (ou `?exemplo=1`) antes do `#` ou na rota abre a sessão de exemplo ao carregar o app, na página pedida — para
 apresentar aos juízes e para as capturas de tela: `https://…/#/canais?exemplo=1`, `https://…/?exemplo#/ressonancia`.
 `exemplo=0` não abre. Só vale ao carregar a página e com nada aberto (`wantsDemoFromUrl` em state/SessionSync.tsx).
+
+## Reabrir a última sessão
+
+Abrir da biblioteca (ou guardar a sessão aberta) lembra o id nas preferências, com a biblioteca (`'local'` ou
+`'remote:<endereço>'`). Ao carregar o app, depois dos perfis, com nada aberto e sem `?exemplo`, `LibrarySync` reabre em
+silêncio (`planReopen` + `reopenLastSession` em state/reopen.ts; no servidor só depois do login; sessão apagada → esquece).
+`close()` da sessão lembrada esquece (fechar o exemplo não). Opção em Preferências → Logs neste navegador.
 
 ## Perfis e configuração (`state/profiles.ts`)
 

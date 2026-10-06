@@ -480,35 +480,51 @@ cartões, e você administra o Linux (firewall, atualizações, backup).
 ## 5. App no GitHub Pages (opcional)
 
 O GitHub Pages publica **só o app** (sem servidor) em
-`https://ricardorlfischer-ui.github.io/baja-telemetria/`. Serve para:
+`https://ricardorlfischer-ui.github.io/baja-telemetria/`, de novo a cada push em `main`.
+Serve para:
 
-- ter o app num endereço fixo mesmo sem servidor (biblioteca local no navegador, funciona
-  offline depois de aberto);
+- ter o app num **endereço fixo sem servidor nenhum**: cada pessoa usa a biblioteca local
+  do próprio navegador (os logs que ela guarda continuam lá quando ela volta ao endereço;
+  funciona offline depois de aberto). Não há compartilhamento entre os integrantes: para
+  passar logs de um para outro, use o backup (**Preferências → Backup deste navegador**) ou
+  o arquivo original. Como usar: [`USO.md`, "Usar pelo endereço fixo"](USO.md#usar-pelo-endereço-fixo-github-pages);
 - usar o app pelo Pages e a biblioteca num servidor em outro lugar.
 
 Se o servidor já serve o app (opções A–D), o Pages é dispensável.
 
-**Requisitos:** Pages em repositório **privado** só funciona com **GitHub Pro** (grátis
-para estudantes no [GitHub Student Developer Pack](https://education.github.com/pack)),
-Team ou Enterprise. **Atenção:** o site publicado é **público** (qualquer um com o link
-abre o app), mesmo com o repositório privado. Os **dados** continuam protegidos pelo login
-do servidor; o workflow não publica os *source maps*.
+**Requisitos:** o repositório precisa ser **público**, ou, se for **privado**, a conta
+precisa de **GitHub Pro** (grátis para estudantes no
+[GitHub Student Developer Pack](https://education.github.com/pack)), Team ou Enterprise.
+**Atenção:** o site publicado é **público** (qualquer um com o link abre o app), mesmo com
+o repositório privado — mas o site é só o programa: os **logs nunca saem do navegador de
+quem usa** (ficam no IndexedDB daquele navegador; nada é enviado para o GitHub). Com um
+servidor, os dados dele continuam protegidos pelo login. O workflow não publica os
+*source maps*. O navegador guarda os dados por **origem** (`https://ricardorlfischer-ui.github.io`),
+que é a mesma para todos os sites do Pages dessa conta: o "espaço usado" mostrado no app
+inclui os outros sites, e "limpar os dados do site" apaga os logs junto com os deles.
 
 Passo a passo:
 
-1. **Settings → Pages → Build and deployment → Source: GitHub Actions.**
-2. **Settings → Secrets and variables → Actions → aba Variables → New repository
-   variable:**
-   - `PAGES_ENABLED` = `true`
-   - `API_URL` = endereço do servidor da equipe com **HTTPS**, sem barra no fim (ex.:
-     `https://telemetria.seudominio.com.br`). Opcional: sem ele, cada pessoa pode
-     informar o servidor em **Preferências → Servidor da equipe** (**Testar conexão** →
-     **Conectar**), ou abrir um link de convite, que já leva o endereço.
-3. No **servidor**, libere a origem do Pages (só a origem, sem o caminho):
-   `CORS_ORIGINS=https://ricardorlfischer-ui.github.io` (no `docker-compose.yml`, no
-   `fly.toml`/`fly secrets` ou nas Variables do Railway) e reinicie o servidor.
-4. Rode o workflow: **Actions → GitHub Pages → Run workflow** (ou faça um push em `main`).
-   O endereço aparece no resumo da execução.
+1. **Settings → Pages → Build and deployment → Source: GitHub Actions.** É só isso: o
+   workflow `pages.yml` roda a cada push em `main` (não existe mais a variável
+   `PAGES_ENABLED`). Para publicar agora sem push: **Actions → GitHub Pages → Run
+   workflow**. O endereço aparece no resumo da execução.
+2. *(Só se houver servidor da equipe.)* **Settings → Secrets and variables → Actions → aba
+   Variables → New repository variable:** `API_URL` = endereço do servidor com **HTTPS**,
+   sem barra no fim (ex.: `https://telemetria.seudominio.com.br`). Opcional: sem ele, cada
+   pessoa pode informar o servidor em **Preferências → Servidor da equipe** (**Testar
+   conexão** → **Conectar**), ou abrir um link de convite, que já leva o endereço.
+3. *(Só se houver servidor.)* No **servidor**, libere a origem do Pages (só a origem, sem
+   o caminho): `CORS_ORIGINS=https://ricardorlfischer-ui.github.io` (no
+   `docker-compose.yml`, no `fly.toml`/`fly secrets` ou nas Variables do Railway) e
+   reinicie o servidor.
+
+O build do Pages usa `VITE_BASE=/baja-telemetria/` (o caminho do site) e `VITE_STATIC=1`
+(hospedagem estática: o app não procura `/api` no próprio endereço, vai direto para a
+biblioteca local se não houver servidor configurado). Para testar o mesmo build no PC:
+`VITE_BASE=/baja-telemetria/ VITE_STATIC=1 npm run build -w @baja/web` e sirva
+`apps/web/dist` no caminho `/baja-telemetria/`. No Git Bash do Windows, ponha `MSYS_NO_PATHCONV=1` antes do comando (senão o Git Bash troca
+`/baja-telemetria/` por `C:/Program Files/Git/baja-telemetria/` e os arquivos do app dão 404).
 
 O servidor precisa estar em **HTTPS**: o navegador bloqueia chamadas de uma página HTTPS
 (o Pages) para um servidor HTTP.
@@ -682,7 +698,7 @@ São duas coisas **separadas**:
 |---|---|---|
 | `ci.yml` | todo push e pull request | `npm ci`, `npm run typecheck`, `npm test`, `npm run build` |
 | `docker.yml` | push em `main` e tags `v*` | constrói a imagem, testa (sobe, responde `/api/health`, roda como não-root, grava em `/data`) e publica em `ghcr.io/ricardorlfischer-ui/baja-telemetria` |
-| `pages.yml` | push em `main` e manual, **só com** `PAGES_ENABLED=true` | build do app com `VITE_BASE=/baja-telemetria/` e `VITE_API_URL=$API_URL` e publica no GitHub Pages |
+| `pages.yml` | push em `main` e manual (precisa de **Settings → Pages → Source: GitHub Actions**) | build do app com `VITE_BASE=/baja-telemetria/`, `VITE_STATIC=1` e `VITE_API_URL=$API_URL` e publica no GitHub Pages |
 
 Versão nova "oficial": crie uma tag (`git tag v1.0.0 && git push origin v1.0.0`) e a imagem
 sai também como `:1.0.0` e `:1.0`.
@@ -698,6 +714,7 @@ sai também como `:1.0.0` e `:1.0`.
 | `docker compose ps` mostra `unhealthy` | o servidor não responde `/api/health`; veja os logs |
 | Do celular/outro PC não abre `http://IP:8080` | firewall do PC bloqueando a porta 8080 (libere para redes privadas) ou dispositivos em redes diferentes |
 | App no Pages não conecta no servidor | `CORS_ORIGINS` sem `https://ricardorlfischer-ui.github.io`, servidor sem HTTPS, ou `API_URL` com barra/caminho errado |
+| Os logs sumiram do app no Pages | Os logs ficam no navegador de quem guardou: outro navegador, outro computador, aba anônima ou "limpar dados do site" não têm (ou apagam) os logs. Volte ao mesmo navegador ou importe um backup (**Preferências → Backup deste navegador**). **Preferências → Logs neste navegador** mostra se estão protegidos contra limpeza automática |
 | Todo mundo foi desconectado | o `JWT_SECRET` (ou o arquivo `secret`) mudou: é só entrar de novo |
 | Esqueci a senha do admin | outro admin redefine; se não houver outro, restaure um backup ou peça ajuda a quem mantém o código |
 | Fly: "volume not found" / dados sumiram depois do deploy | o volume é de uma região/máquina: confira `fly volumes list` e mantenha **uma** máquina (`fly scale count 1`) |

@@ -114,6 +114,8 @@ body {
 
 /* ---------------------------------------------------------------- seções e cartões */
 .bt-section + .bt-section { margin-top: 40px; }
+/* seção com id (link "Backup"): o título não fica atrás do cabeçalho fixo de 60 px */
+.bt-section[id] { scroll-margin-top: 76px; }
 .bt-chart-card { overflow: hidden; }
 .bt-chart-body { padding: 4px 12px 12px; }
 .bt-chart-body--flush { padding: 0; }

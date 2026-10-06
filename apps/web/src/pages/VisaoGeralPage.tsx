@@ -9,8 +9,8 @@
  * saltos...), 'session' é sempre da sessão inteira (duração, voltas, melhor volta) e o bloco
  * diz isso. */
 import './sessoes/sessoes.css';
-import { Alert, Badge, Box, Group, Loader, Paper, SimpleGrid, Stack, Text } from '@mantine/core';
-import { IconLayoutDashboard } from '@tabler/icons-react';
+import { Alert, Badge, Box, Button, Group, Loader, Paper, SimpleGrid, Stack, Text } from '@mantine/core';
+import { IconDatabasePlus, IconLayoutDashboard } from '@tabler/icons-react';
 import {
   SENSOR_IDS, designReport, sessionSummary, type DesignReport, type SessionSummary,
 } from '@baja/core';
@@ -18,6 +18,8 @@ import { ComputingState, NoSessionState, PageHeader, Section, SensorChips, InfoB
 import { routeByPath } from '../routes';
 import { useRange, useSessionStore } from '../state/session';
 import { useComputed, useQuality } from '../state/heavy';
+import { useSaveOpenSession } from '../state/useSaveOpenSession';
+import { usePrefs } from '../state/prefs';
 import { Tiles } from './visao-geral/Tiles';
 import { MiniMap } from './visao-geral/MiniMap';
 import { LapsCard } from './visao-geral/LapsCard';
@@ -35,6 +37,8 @@ export default function VisaoGeralPage() {
   const source = useSessionStore(s => s.source);
   const busy = useSessionStore(s => s.busy);
   const range = useRange();
+  const saver = useSaveOpenSession();
+  const reopenLast = usePrefs(s => s.reopenLast);
 
   const i0 = range ? range[0] : 0, i1 = range ? range[1] : 0;
   const rangeLabel = range ? range[2] : '';
@@ -97,6 +101,20 @@ export default function VisaoGeralPage() {
           <Box style={{ flex: '1 1 240px', minWidth: 0 }}><SensorChips sensors={SENSOR_IDS} size="sm" /></Box>
         </Group>
       </Paper>
+
+      {/* aberta sem salvar: oferece guardar (o texto do log já está carregado) */}
+      {saver.canSave && (
+        <Alert variant="light" color="gray" radius="md" mb="xl" icon={<IconDatabasePlus size={20} />} className="bt-print-hide">
+          <Group justify="space-between" gap="sm" wrap="wrap">
+            <Text size="sm" style={{ flex: '1 1 260px', minWidth: 0 }}>
+              Este log foi aberto sem salvar: ao fechar ou recarregar o app ele não volta. Guarde na biblioteca para ele ficar na lista
+              de sessões{reopenLast ? ' e reabrir sozinho da próxima vez' : ''}.
+            </Text>
+            <Button size="sm" variant="light" leftSection={<IconDatabasePlus size={16} />} loading={saver.saving}
+              onClick={() => { void saver.save(); }}>Guardar na biblioteca</Button>
+          </Group>
+        </Alert>
+      )}
 
       {errs.length > 0 && (
         <Alert color="red" variant="light" mb="xl" title="Parte das contas falhou neste log">

@@ -55,12 +55,15 @@ funciona sem internet na pista. O servidor da equipe serve para guardar e compar
 
 ## 2. Primeiros passos
 
-1. Abra o endereço do app que a equipe usa (o do servidor, ex.:
-   `https://telemetria.suaequipe.com.br`, ou `http://localhost:8080` no PC).
+1. Abra o endereço do app que a equipe usa: o endereço fixo do GitHub Pages
+   (`https://ricardorlfischer-ui.github.io/baja-telemetria/`, sem servidor — veja
+   [Usar pelo endereço fixo](#usar-pelo-endereço-fixo-github-pages)) ou o do servidor da
+   equipe (ex.: `https://telemetria.suaequipe.com.br`, ou `http://localhost:8080` no PC).
 2. **Biblioteca local ou servidor.** O selo no canto direito do cabeçalho diz onde as
    sessões ficam:
-   - **Local** — só neste navegador (somem se os dados do site forem apagados). Funciona
-     sem conta e sem internet.
+   - **Local** — só neste navegador, neste computador (somem se os dados do site forem
+     apagados; veja [Usar pelo endereço fixo](#usar-pelo-endereço-fixo-github-pages)).
+     Funciona sem conta e sem internet.
    - **Servidor · seu nome** — a biblioteca da equipe. Aparecendo **Servidor · entrar**,
      clique nele para abrir a tela **Entrar** (e-mail e senha). Primeira vez? Use o link
      de convite que um admin mandou, ou a aba **Criar conta com convite** e o código.
@@ -83,6 +86,56 @@ sessão de exemplo, na página pedida — bom para apresentar sem procurar nada:
 Tema escuro por padrão; troque no botão de sol/lua do cabeçalho ou em **Preferências →
 Tema** (Escuro, Claro ou Automático).
 
+### Usar pelo endereço fixo (GitHub Pages)
+
+**Endereço:** `https://ricardorlfischer-ui.github.io/baja-telemetria/` — salve nos
+favoritos. É sempre o mesmo e é atualizado sozinho a cada versão nova do app. Não tem
+servidor: cada integrante usa o app sozinho, e o que cada um guarda fica com ele.
+
+**Onde ficam os logs.** Os logs que você guarda na página **Sessões** ficam **neste
+navegador, neste computador** (no armazenamento do site, o IndexedDB). Nada vai para o
+GitHub nem para os colegas. Voltando ao endereço no mesmo navegador do mesmo computador,
+a lista de sessões está lá — e a **última sessão aberta reabre sozinha** ao recarregar a
+página ou voltar outro dia. **Fechar sessão** (menu da sessão no cabeçalho) faz ela não
+reabrir; para nunca reabrir, desligue **Preferências → Logs neste navegador → Reabrir a
+última sessão ao abrir o app**. Outro navegador (Chrome × Edge), outro perfil do navegador
+ou outro computador têm uma biblioteca própria, vazia.
+
+**Abriu sem salvar?** Um log aberto com **Abrir arquivo sem salvar** (ou **Abrir
+arquivo…** das páginas sem sessão) não fica guardado. Para guardar depois, sem abrir o
+arquivo de novo: menu da sessão no cabeçalho → **Guardar na biblioteca**, ou o aviso no
+topo da **Visão geral**.
+
+**Proteção contra limpeza.** O aviso **Biblioteca local** da página Sessões e
+**Preferências → Logs neste navegador** mostram o espaço usado e disponível e se os logs
+estão **protegidos contra limpeza automática**. Sem proteção, o navegador pode apagar os
+dados do site sozinho se o disco encher; clique em **Proteger os logs** (o Firefox
+pergunta; Chrome e Edge decidem sozinhos e liberam para sites usados com frequência ou
+nos favoritos). O app já pede isso ao guardar a primeira sessão. Mesmo protegidos, os
+logs **somem** se você **limpar os dados do site** (ou "cookies e outros dados" do
+navegador), e numa **aba anônima** nada fica guardado depois de fechar. Se acabar o
+espaço, o app avisa: apague sessões antigas (exporte um backup antes, se quiser ficar com
+elas).
+
+**Backup para levar a outro computador** (ou guardar uma cópia, ou passar os logs a um
+colega): **Preferências → Backup deste navegador → Exportar backup** gera um arquivo
+`baja-backup-….json` com as sessões (o log inteiro), anotações, perfis de carro e pista,
+configuração, fórmulas e layouts. Leve o arquivo (pendrive, Drive, e-mail) e, no outro
+computador, abra o endereço → **Preferências → Importar backup…**. Sessões que já existem
+lá são puladas. Faça um backup de vez em quando — é a única cópia fora deste navegador.
+
+**A 1ª vez de cada integrante:**
+
+1. Abra o endereço e salve nos favoritos. O selo do cabeçalho mostra **Local**; não
+   precisa de conta.
+2. A página Sessões aparece vazia (**Nenhuma sessão neste navegador ainda**). Para começar
+   com os logs e perfis de um colega, importe o backup dele (**Preferências → Importar
+   backup…**); para começar do zero, abra o **exemplo** para conhecer o app.
+3. Configure **Carro** e **Pista e GPS** ([seções 9](#9-pista-e-gps) e
+   [10](#10-dados-do-carro)) — os perfis também ficam neste navegador.
+4. Arraste os logs para **Enviar logs** e clique em **Guardar**. Confira no aviso da
+   página Sessões se os logs ficaram **protegidos contra limpeza automática**.
+
 ---
 
 ## 3. A tela: menu, cabeçalho, Trecho e reprodução
@@ -94,8 +147,9 @@ Tema** (Escuro, Claro ou Automático).
   apagadas até você abrir uma; **Equipe** só funciona com servidor. O botão no canto
   esquerdo do cabeçalho recolhe o menu (no celular ele vira um menu ☰).
 - **Sessão aberta** (cabeçalho): nome, tipo (FT, CAN ou EXEMPLO) e duração. Clique para
-  escolher **Sessão inteira** ou uma volta, **Trocar sessão** (vai para Sessões), **Abrir o
-  exemplo** ou **Fechar sessão**. Sem sessão aberta, o botão vira **Abrir sessão**.
+  escolher **Sessão inteira** ou uma volta, **Guardar na biblioteca** (só para um log
+  aberto sem salvar), **Trocar sessão** (vai para Sessões), **Abrir o exemplo** ou **Fechar
+  sessão** (também faz o app não reabrir essa sessão ao carregar). Sem sessão aberta, o botão vira **Abrir sessão**.
 - **Trecho** — **Sessão** (tudo), **Volta** (a volta escolhida no seletor ao lado) ou
   **Janela** (o que está visível nos gráficos da página Canais). O trecho vale para todas
   as páginas de análise e aparece nelas como “Trecho: …”. Na Ficha do carro, os números
@@ -115,8 +169,9 @@ Tema** (Escuro, Claro ou Automático).
 ![Página Sessões com os logs de 05/10](img/sessoes.png)
 
 A página **Sessões** é a biblioteca. Em cima: **Dados de exemplo** e **Abrir arquivo sem
-salvar** (só analisa, o arquivo não vai para a biblioteca), e o aviso do modo (biblioteca
-local ou servidor da equipe).
+salvar** (só analisa, o arquivo não vai para a biblioteca; dá para guardar depois pelo menu
+da sessão → **Guardar na biblioteca**), e o aviso do modo (biblioteca local — com o espaço
+usado, a proteção contra limpeza e o link do backup — ou servidor da equipe).
 
 ### Enviar logs
 
@@ -151,7 +206,8 @@ Resumo marcado **versão antiga** foi calculado com uma versão anterior das con
 **Recalcular o resumo** (local) ou **Pedir ao servidor para recalcular**.
 
 No modo local, **Preferências → Backup deste navegador** exporta tudo (sessões com o log,
-anotações, perfis, configuração, fórmulas, layouts) num JSON para levar a outro computador.
+anotações, perfis, configuração, fórmulas, layouts) num JSON para levar a outro computador
+([Usar pelo endereço fixo](#usar-pelo-endereço-fixo-github-pages)).
 
 ### Formatos
 
@@ -359,8 +415,9 @@ inserir. A conta é conferida enquanto você digita. Exemplo: torção da diante
   Detalhes em [`IMPLANTACAO.md`](IMPLANTACAO.md#3-primeiro-acesso-admin-convites-e-papéis).
 - **Preferências**: **Tema**; **Servidor da equipe** (**Endereço do servidor**, **Testar
   conexão**, **Conectar**, **Desconectar (usar só este navegador)**); **Conta** (**Equipe e
-  trocar a senha**, **Sair**, **Entrar**); **Backup deste navegador** (**Exportar
-  backup**, **Importar backup…**).
+  trocar a senha**, **Sair**, **Entrar**); **Logs neste navegador** (espaço usado e
+  disponível, **Proteger os logs**, **Reabrir a última sessão ao abrir o app**); **Backup
+  deste navegador** (**Exportar backup**, **Importar backup…**).
 
 ---
 

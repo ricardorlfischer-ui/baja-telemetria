@@ -1,9 +1,10 @@
 /* Página /config — Preferências: tema, servidor da equipe (endereço, testar /api/info,
- * conectar/desconectar), conta (sair), backup da biblioteca local (JSON com o texto das
- * sessões) e sobre (versões). Tudo fica neste navegador (state/prefs). */
-import { useRef, useState } from 'react';
+ * conectar/desconectar), conta (sair), os logs neste navegador (espaço, proteção contra limpeza,
+ * reabrir a última sessão), backup da biblioteca local (JSON com o texto das sessões) e sobre
+ * (versões). Tudo fica neste navegador (state/prefs). */
+import { useEffect, useRef, useState } from 'react';
 import {
-  Alert, Badge, Button, Checkbox, Group, Modal, Paper, Progress, SegmentedControl, Stack, Text, TextInput,
+  Alert, Badge, Button, Checkbox, Group, Modal, Paper, Progress, SegmentedControl, Stack, Switch, Text, TextInput,
   useMantineColorScheme,
 } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
@@ -11,9 +12,9 @@ import {
   IconCloud, IconCloudOff, IconDatabase, IconDeviceDesktop, IconDownload, IconLogin, IconLogout, IconMoon, IconPlugConnected,
   IconSun, IconUpload, IconUsers,
 } from '@tabler/icons-react';
-import { useNavigate } from 'react-router';
+import { useLocation, useNavigate } from 'react-router';
 import { SUMMARY_VERSION } from '@baja/core';
-import { PageHeader, Section, downloadText } from '../components';
+import { LocalStorageInfo, PageHeader, Section, downloadText } from '../components';
 import { routeByPath } from '../routes';
 import { RemoteLibrary, useLibrary, type ServerInfo } from '../library';
 import { DEFAULT_SERVER_URL, normalizeServerUrl, serverUrlInUse, usePrefs, type ThemePref } from '../state/prefs';
@@ -28,6 +29,15 @@ const APP_VERSION: string = (webPkg as { version?: string }).version ?? '?';
 
 export default function PreferenciasPage() {
   const r = routeByPath('/config')!;
+  const loc = useLocation();
+  /* link "Backup" (Sessões, aviso dos logs): rola até a seção pedida. Depois do scrollTo(0) do
+   * AppLayout ao trocar de página, por isso no frame seguinte */
+  const section = (loc.state as { section?: string } | null)?.section;
+  useEffect(() => {
+    if (!section) return;
+    const t = setTimeout(() => document.getElementById(section)?.scrollIntoView({ block: 'start' }), 80);
+    return () => clearTimeout(t);
+  }, [section, loc.key]);
   return (
     <>
       <PageHeader title={r.label} subtitle={r.question} />
@@ -38,6 +48,7 @@ export default function PreferenciasPage() {
         </div>
       </Section>
       <ServerSection />
+      <LocalLogsSection />
       <BackupSection />
     </>
   );
@@ -209,6 +220,36 @@ function ServerSection() {
   );
 }
 
+/* ---------------------------------------------------------------- logs neste navegador */
+function LocalLogsSection() {
+  const { mode, version } = useLibrary();
+  const reopenLast = usePrefs(s => s.reopenLast);
+  const setPrefs = usePrefs(s => s.set);
+  return (
+    <Section id="armazenamento" title="Logs neste navegador"
+      description={mode === 'remote'
+        ? 'Você está no servidor da equipe: as sessões ficam nele. Aqui fica só a biblioteca local deste navegador (o que foi guardado no modo local).'
+        : 'Onde ficam as sessões da biblioteca local, quanto espaço usam e se o navegador pode apagá-las sozinho.'}>
+      <div className="cfg-groups">
+        <Paper withBorder radius="md" p="lg">
+          <Stack gap="sm">
+            <Text fw={650} size="lg">Armazenamento</Text>
+            <LocalStorageInfo version={version} />
+          </Stack>
+        </Paper>
+        <Paper withBorder radius="md" p="lg">
+          <Stack gap="sm">
+            <Text fw={650} size="lg">Ao abrir o app</Text>
+            <Switch size="md" checked={reopenLast} onChange={e => setPrefs({ reopenLast: e.currentTarget.checked })}
+              label="Reabrir a última sessão ao abrir o app"
+              description="Recarregou a página ou voltou outro dia: a última sessão aberta da biblioteca abre sozinha. Fechar a sessão (menu da sessão → Fechar sessão) faz ela não abrir. No servidor da equipe, só depois de entrar." />
+          </Stack>
+        </Paper>
+      </div>
+    </Section>
+  );
+}
+
 /* ---------------------------------------------------------------- backup local */
 function BackupSection() {
   const { lib, mode, bump } = useLibrary();
@@ -260,7 +301,7 @@ function BackupSection() {
   };
 
   return (
-    <Section title="Backup deste navegador"
+    <Section id="backup" title="Backup deste navegador"
       description="Um arquivo JSON com a biblioteca local: sessões (com o log inteiro), anotações, perfis de carro e pista, a configuração em uso, fórmulas e layouts da página Canais. Use para levar tudo para outro computador ou antes de limpar o navegador.">
       <Paper withBorder radius="md" p="lg">
         <Stack gap="md">

@@ -48,6 +48,27 @@ físico do carro, abre sozinha na página pedida. O guia [`docs/USO.md`](docs/US
 capturas de todas as páginas, o roteiro para apresentar aos juízes e os achados dos logs
 reais de 05/10.
 
+## Usar pelo endereço fixo (GitHub Pages)
+
+O app fica publicado em **https://ricardorlfischer-ui.github.io/baja-telemetria/** (atualizado
+a cada push em `main`), sem servidor e sem conta:
+
+- **Onde ficam os logs:** no navegador de quem usa, neste computador (IndexedDB). Nada vai
+  para o GitHub nem para os outros integrantes; cada um tem a sua biblioteca. Voltando ao
+  endereço no mesmo navegador, as sessões estão lá e a última sessão aberta reabre sozinha.
+- **Proteção contra limpeza:** a página Sessões e **Preferências → Logs neste navegador**
+  mostram o espaço usado e se os logs estão protegidos contra a limpeza automática do
+  navegador (botão **Proteger os logs**). Limpar os dados do site ou usar aba anônima apaga.
+- **Backup para outro PC:** **Preferências → Backup deste navegador → Exportar backup**
+  gera um JSON com tudo; no outro computador, **Importar backup…**. Serve também para
+  passar logs a um colega.
+- **1ª vez de cada integrante:** abrir o endereço (e salvar nos favoritos), configurar
+  **Carro** e **Pista e GPS** (ou importar o backup de um colega) e arrastar os logs para
+  **Sessões → Enviar logs**.
+
+Detalhes: [`docs/USO.md`](docs/USO.md#usar-pelo-endereço-fixo-github-pages). Para publicar
+(Settings → Pages → Source: GitHub Actions): [`docs/IMPLANTACAO.md`](docs/IMPLANTACAO.md#5-app-no-github-pages-opcional).
+
 ## Como rodar
 
 Precisa do **Node.js 22.12+** e do Git.

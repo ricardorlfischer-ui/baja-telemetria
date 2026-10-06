@@ -20,8 +20,10 @@ import {
 import type { Library, SessionMeta } from '../library/types';
 import { ApiError } from '../library/remote';
 import { LocalDuplicateError } from '../library/local';
+import { storageErrorMessage } from '../library/storage';
 import { configInput, useProfiles } from './profiles';
 import { addLogToLibrary } from './librarySave';
+import { forgetSession, rememberSession } from './reopen';
 
 export type SessionStatus = 'empty' | 'loading' | 'ready' | 'error';
 export type XAxis = 'time' | 'dist';
@@ -45,6 +47,11 @@ export interface SessionState {
   /** recalculando depois de mudar a configuração (a sessão continua na tela) */
   busy: boolean;
   source: SessionSource | null;
+  /** texto do log aberto sem salvar (arquivo, arrastar, texto): permite "Guardar na biblioteca"
+   *  depois sem pedir o arquivo de novo. null para o exemplo e para sessões da biblioteca */
+  unsavedText: string | null;
+  /** saveToLibrary em andamento (os botões "Guardar na biblioteca" de todas as telas esperam) */
+  savingToLibrary: boolean;
   S: Session | null;
   /** SessionContext do core (computeSession) */
   ctx: SessionContext | null;
@@ -75,7 +82,14 @@ export interface SessionState {
   openText: (text: string, name: string, source?: Partial<SessionSource>) => Promise<boolean>;
   openFile: (file: File, opts?: { saveTo?: Library | null }) => Promise<boolean>;
   openDemo: () => Promise<boolean>;
-  openFromLibrary: (meta: SessionMeta, lib?: Library | null) => Promise<boolean>;
+  /** silent: sem aviso de erro (reabrir a última sessão ao carregar o app) */
+  openFromLibrary: (meta: SessionMeta, lib?: Library | null, opts?: { silent?: boolean }) => Promise<boolean>;
+  /** guarda na biblioteca a sessão aberta sem salvar (com o texto já carregado, sem reabrir o
+   *  log): a sessão aberta passa a ser da biblioteca. Log repetido liga à sessão que já existe
+   *  (duplicate). null = nada a guardar. Erros (sem espaço: LocalQuotaError) sobem. Chamado de
+   *  novo enquanto guarda a mesma sessão: devolve a mesma promessa (não guarda duas vezes) */
+  saveToLibrary: (lib?: Library | null) => Promise<{ meta: SessionMeta; duplicate: boolean } | null>;
+  /** fecha a sessão (se ela é a última sessão lembrada, esquece: não reabre ao carregar o app) */
   close: () => void;
   updateConfig: (patch: AnalysisConfigInput) => void;
   setLine: (pts: Pt[] | null) => void;
@@ -123,6 +137,10 @@ const yieldFrame = (): Promise<void> => new Promise(res => {
 });
 
 const msgOf = (e: unknown): string => (e instanceof Error ? e.message : String(e));
+
+/** Id da sessão que já existe quando o log é repetido (409 do servidor ou sha256 igual no local). */
+const duplicateIdOf = (e: unknown): string | null =>
+  e instanceof LocalDuplicateError ? e.existingId : e instanceof ApiError && e.status === 409 ? e.existingId : null;
 
 /* canal que colore o mapa ao abrir um log: mantém o escolhido se ele existir e variar neste
  * log; senão gps:speed ou o primeiro não constante (recompute() do antigo). Sem a checagem
@@ -176,9 +194,13 @@ export function keepLap(
 /* ---------------------------------------------------------------- store */
 let gen = 0;                 /* geração da abertura (abrir outra cancela a anterior) */
 let raf = 0, lastWall = 0;   /* laço do play */
+/* saveToLibrary em andamento: a sessão (S) e a promessa. Dois botões "Guardar na biblioteca"
+ * (menu da sessão, aviso e cartão da Visão geral) clicados juntos guardavam o log duas vezes */
+type SaveResult = { meta: SessionMeta; duplicate: boolean } | null;
+let saving: { S: Session; p: Promise<SaveResult> } | null = null;
 
 const EMPTY = {
-  status: 'empty' as SessionStatus, error: null, loadingText: null, busy: false, source: null,
+  status: 'empty' as SessionStatus, error: null, loadingText: null, busy: false, source: null, unsavedText: null, savingToLibrary: false,
   S: null, ctx: null, cfg: null, availability: null,
   cursor: 0, playing: false, selLap: -1, view: null,
 };
@@ -214,7 +236,7 @@ export const useSessionStore = create<SessionState>((set, get) => {
 
   /* ---------------------------------------------------------- abrir */
   /** setSession + recompute(true) do antigo, com a configuração dos perfis */
-  async function finish(S: Session, source: SessionSource, myGen: number): Promise<boolean> {
+  async function finish(S: Session, source: SessionSource, myGen: number, rawText: string | null = null): Promise<boolean> {
     set({ loadingText: `Calculando ${S.name}…` });
     await yieldFrame();
     if (myGen !== gen) return false;
@@ -228,6 +250,9 @@ export const useSessionStore = create<SessionState>((set, get) => {
     const st = get();
     set({
       status: 'ready', error: null, loadingText: null, busy: false, source,
+      unsavedText: source.libraryId || demo ? null : rawText,
+      /* um guardar da sessão anterior pode seguir sozinho; os botões são da sessão nova */
+      savingToLibrary: false,
       S, ctx, cfg: ctx.cfg, availability: sensorAvailability(ctx),
       cursor: S.t.length ? S.t[0] : 0, playing: false, selLap: -1, view: null,
       /* sessão nova começa sem volta: o trecho "Volta" (de outro log) vira "Sessão" */
@@ -281,7 +306,7 @@ export const useSessionStore = create<SessionState>((set, get) => {
       if (myGen !== gen) return false;
       try {
         const S = parseLog(text, name);
-        return await finish(S, { type: 'text', name, ...source }, myGen);
+        return await finish(S, { type: 'text', name, ...source }, myGen, text);
       } catch (e) { return fail(e, name, myGen); }
     },
 
@@ -292,23 +317,17 @@ export const useSessionStore = create<SessionState>((set, get) => {
         const text = await file.text();
         if (myGen !== gen) return false;
         const S = parseLog(text, file.name);
-        const ok = await finish(S, { type: 'file', name: file.name }, myGen);
+        const ok = await finish(S, { type: 'file', name: file.name }, myGen, text);
         if (ok && opts?.saveTo) {
-          /* guarda na biblioteca (resumo calculado aqui no modo local) */
+          /* guarda na biblioteca (resumo calculado aqui no modo local); log repetido liga a
+           * sessão aberta à que já existe, em vez de duplicar */
           try {
-            const meta = await addLogToLibrary(opts.saveTo, { name: file.name, text }, {}, get().ctx);
-            if (myGen === gen) set(s => ({ source: s.source ? { ...s.source, libraryId: meta.id, meta } : s.source }));
-          } catch (e) {
-            /* o mesmo log já está guardado (409 do servidor ou sha256 igual no local): liga a
-             * sessão aberta à que já existe, em vez de duplicar */
-            const dupId = e instanceof LocalDuplicateError ? e.existingId : e instanceof ApiError && e.status === 409 ? e.existingId : null;
-            const existing = dupId ? await opts.saveTo.getSession(dupId).catch(() => null) : null;
-            if (existing && myGen === gen) {
-              set(s => ({ source: s.source ? { ...s.source, name: existing.name, libraryId: existing.id, meta: existing } : s.source }));
-              notifications.show({ title: 'Este log já estava na biblioteca', message: `Abri “${existing.name}” sem guardar de novo.`, autoClose: 6000 });
-            } else {
-              notifications.show({ color: 'yellow', title: 'O log abriu, mas não foi guardado na biblioteca', message: msgOf(e) });
+            const r = await get().saveToLibrary(opts.saveTo);
+            if (r?.duplicate && myGen === gen) {
+              notifications.show({ title: 'Este log já estava na biblioteca', message: `Abri “${r.meta.name}” sem guardar de novo.`, autoClose: 6000 });
             }
+          } catch (e) {
+            if (myGen === gen) notifications.show({ color: 'yellow', title: 'O log abriu, mas não foi guardado na biblioteca', message: storageErrorMessage(e), autoClose: 10_000 });
           }
         }
         return ok;
@@ -328,7 +347,7 @@ export const useSessionStore = create<SessionState>((set, get) => {
       } catch (e) { return fail(e, 'exemplo', myGen); }
     },
 
-    openFromLibrary: async (meta, lib) => {
+    openFromLibrary: async (meta, lib, opts) => {
       const L = lib ?? activeLib;
       const myGen = await begin(`Baixando ${meta.name}…`);
       if (myGen !== gen) return false;
@@ -344,12 +363,62 @@ export const useSessionStore = create<SessionState>((set, get) => {
         await yieldFrame();
         if (myGen !== gen) return false;
         const S = parseLog(text, meta.fileName || meta.name);
-        return await finish(S, { type: 'library', name: meta.name, libraryId: meta.id, meta }, myGen);
-      } catch (e) { return fail(e, meta.name, myGen); }
+        const ok = await finish(S, { type: 'library', name: meta.name, libraryId: meta.id, meta }, myGen);
+        if (ok) rememberSession(L, meta.id);
+        return ok;
+      } catch (e) {
+        if (opts?.silent) {
+          /* reabrir ao carregar o app: sem aviso; a tela volta a "nenhuma sessão" */
+          if (myGen !== gen) return false;
+          console.warn('Não consegui reabrir a última sessão', e);
+          set(get().S ? { status: 'ready', loadingText: null } : { ...EMPTY });
+          return false;
+        }
+        return fail(e, meta.name, myGen);
+      }
+    },
+
+    saveToLibrary: lib => {
+      const L = lib ?? activeLib;
+      const st = get();
+      const { S, source, unsavedText: text } = st;
+      if (!S || !source || source.libraryId || text === null || S.demo || st.status !== 'ready') return Promise.resolve(null);
+      /* já guardando esta sessão (outro botão, duplo clique): a mesma promessa */
+      if (saving && saving.S === S) return saving.p;
+      if (!L) return Promise.reject(new Error('a biblioteca ainda não está pronta'));
+      const p = (async (): Promise<SaveResult> => {
+        let meta: SessionMeta, duplicate = false;
+        try {
+          meta = await addLogToLibrary(L, { name: source.name, text }, {}, st.ctx);
+        } catch (e) {
+          const dupId = duplicateIdOf(e);
+          const existing = dupId ? await L.getSession(dupId).catch(() => null) : null;
+          if (!existing) throw e;
+          meta = existing; duplicate = true;
+        }
+        /* outra sessão abriu (ou fechou) enquanto guardava: a guardada fica só na biblioteca */
+        if (get().S !== S) return { meta, duplicate };
+        set(s => ({
+          source: s.source ? { ...s.source, type: 'library', name: meta.name, libraryId: meta.id, meta } : s.source,
+          unsavedText: null,
+        }));
+        rememberSession(L, meta.id);
+        return { meta, duplicate };
+      })();
+      saving = { S, p };
+      set({ savingToLibrary: true });
+      const done = () => { if (saving?.p === p) { saving = null; set({ savingToLibrary: false }); } };
+      p.then(done, done);
+      return p;
     },
 
     close: () => {
       gen++;
+      /* "Fechar sessão" da sessão lembrada: não reabre ao carregar o app. Fechar o exemplo ou um
+       * log aberto sem salvar não esquece a última sessão da biblioteca (abrir o exemplo pelo
+       * link ?exemplo=1 e fechar não pode apagar a memória do que a pessoa estava vendo) */
+      const id = get().source?.libraryId;
+      if (id) forgetSession(id);
       set({ ...EMPTY });
     },
 

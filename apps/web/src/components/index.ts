@@ -18,3 +18,4 @@ export * from './download';
 export * from './RangeBadge';
 export * from './ComputingState';
 export * from './PageErrorBoundary';
+export * from './LocalStorageInfo';

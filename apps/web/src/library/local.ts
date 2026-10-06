@@ -3,6 +3,7 @@
  * senão, como texto puro. Carros, pistas e anotações também ficam aqui. */
 import { openDB, type DBSchema, type IDBPDatabase } from 'idb';
 import { SUMMARY_VERSION } from '@baja/core';
+import { LocalQuotaError, ensurePersisted, isQuotaError } from './storage';
 import type {
   CarProfile, Comment, Library, LogInput, SessionKind, SessionMeta, SessionPatch, SessionQuery, TrackProfile,
 } from './types';
@@ -74,6 +75,14 @@ export class LocalDuplicateError extends Error {
   }
 }
 
+/** Sessão que não existe (mais) na biblioteca local (como o 404 do servidor). */
+export class LocalNotFoundError extends Error {
+  constructor(message = 'Sessão não encontrada na biblioteca local') {
+    super(message);
+    this.name = 'LocalNotFoundError';
+  }
+}
+
 async function readInput(f: LogInput): Promise<{ name: string; text: string }> {
   if (typeof File !== 'undefined' && f instanceof File) return { name: f.name, text: await f.text() };
   return f as { name: string; text: string };
@@ -91,6 +100,9 @@ const matches = (m: SessionMeta, q?: SessionQuery): boolean => {
   }
   return true;
 };
+
+/* fila do addSession (da página, não da instância: o StrictMode e o redetect criam outras) */
+let addQueue: Promise<unknown> = Promise.resolve();
 
 export class LocalLibrary implements Library {
   readonly mode = 'local' as const;
@@ -124,21 +136,29 @@ export class LocalLibrary implements Library {
 
   async getSession(id: string): Promise<SessionMeta> {
     const m = await (await this.db()).get('sessions', id);
-    if (!m) throw new Error('Sessão não encontrada na biblioteca local');
+    if (!m) throw new LocalNotFoundError();
     return withFlags(m);
   }
 
   async getSessionText(id: string): Promise<string> {
     const f = await (await this.db()).get('files', id);
-    if (!f) throw new Error('O arquivo desta sessão não está na biblioteca local');
+    if (!f) throw new LocalNotFoundError('O arquivo desta sessão não está na biblioteca local');
     if (!f.gz) return typeof f.data === 'string' ? f.data : await f.data.text();
     if (!hasCompression()) throw new Error('Este navegador não sabe descomprimir o log guardado (sem DecompressionStream)');
     return gunzipToText(f.data as Blob);
   }
 
   /** Guarda o log. Mesmo sha256 de uma sessão já guardada → LocalDuplicateError (a não ser
-   *  com meta.allowDuplicate), como o 409 do servidor. */
-  async addSession(file: LogInput, meta: Parameters<Library['addSession']>[1] & { allowDuplicate?: boolean } = {}): Promise<SessionMeta> {
+   *  com meta.allowDuplicate), como o 409 do servidor. Um de cada vez nesta aba: a procura do
+   *  sha256 e a gravação são passos separados (o gzip fica no meio), e dois guardar do mesmo log
+   *  ao mesmo tempo (página Sessões + "Guardar na biblioteca") passariam os dois pela procura. */
+  addSession(file: LogInput, meta: Parameters<Library['addSession']>[1] & { allowDuplicate?: boolean } = {}): Promise<SessionMeta> {
+    const run = addQueue.then(() => this.addSessionNow(file, meta));
+    addQueue = run.catch(() => undefined);
+    return run;
+  }
+
+  private async addSessionNow(file: LogInput, meta: Parameters<Library['addSession']>[1] & { allowDuplicate?: boolean }): Promise<SessionMeta> {
     const { name, text } = await readInput(file);
     const sha256 = await sha256Hex(text);
     if (sha256 && !meta.allowDuplicate) {
@@ -167,14 +187,23 @@ export class LocalLibrary implements Library {
       : { id, gz: false, data: text };
     const db = await this.db();
     const tx = db.transaction(['sessions', 'files'], 'readwrite');
-    await Promise.all([tx.objectStore('sessions').put(m), tx.objectStore('files').put(stored), tx.done]);
+    try {
+      await Promise.all([tx.objectStore('sessions').put(m), tx.objectStore('files').put(stored), tx.done]);
+    } catch (e) {
+      /* sem espaço: o put pode falhar com AbortError e a transação com QuotaExceededError */
+      if (isQuotaError(e) || isQuotaError(tx.error)) throw new LocalQuotaError();
+      throw e;
+    }
+    /* 1ª sessão guardada (ou ainda sem proteção): pede ao navegador para não apagar os logs
+     * sozinho quando faltar espaço no disco (uma vez por carga da página) */
+    void ensurePersisted();
     return m;
   }
 
   async updateSession(id: string, patch: SessionPatch): Promise<SessionMeta> {
     const db = await this.db();
     const m = await db.get('sessions', id);
-    if (!m) throw new Error('Sessão não encontrada na biblioteca local');
+    if (!m) throw new LocalNotFoundError();
     const { summaryOutdated: _o, ...n } = { ...m, ...patch, id } as SessionMeta;
     await db.put('sessions', n);
     return withFlags(n);

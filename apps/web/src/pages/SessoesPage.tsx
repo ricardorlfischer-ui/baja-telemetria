@@ -15,11 +15,12 @@ import {
 } from '@tabler/icons-react';
 import { useNavigate } from 'react-router';
 import { computeSession, parseLog } from '@baja/core';
-import { PageHeader, Section } from '../components';
+import { LocalStorageInfo, PageHeader, Section } from '../components';
 import { BrandHero } from '../brand';
 import { routeByPath } from '../routes';
 import { ApiError, useLibrary, type SessionMeta } from '../library';
 import { useSessionStore } from '../state/session';
+import { forgetSession } from '../state/reopen';
 import { useProfiles } from '../state/profiles';
 import { trySummary } from '../state/librarySave';
 import { UploadPanel } from './sessoes/UploadPanel';
@@ -170,6 +171,7 @@ export default function SessoesPage() {
       await lib.deleteSession(deleting.id);
       /* a sessão aberta continua na memória até fechar, mas deixa de ser da biblioteca */
       useSessionStore.getState().detachFromLibrary(deleting.id);
+      forgetSession(deleting.id);   /* não tenta reabrir ao carregar o app */
       bump();
       notifications.show({ title: 'Sessão apagada', message: deleting.name });
       setDeleting(null);
@@ -203,7 +205,8 @@ export default function SessoesPage() {
         onChange={e => { void openNoSave(e.target.files?.[0]); e.target.value = ''; }} />
 
       <ModeBanner mode={mode} loading={libLoading} offline={offline} serverName={info?.name} userName={user?.name}
-        role={user?.role} onLogin={() => nav('/login', { state: { from: '/' } })} onPrefs={() => nav('/config')} />
+        role={user?.role} onLogin={() => nav('/login', { state: { from: '/' } })} onPrefs={() => nav('/config')}
+        hasSessions={!!list && list.length > 0} version={version} />
 
       <Section title="Enviar logs" description="Cada arquivo vira uma sessão da biblioteca, com o resumo dos números (voltas, velocidade, suspensão, CVT) já calculado.">
         {lib ? (
@@ -329,20 +332,21 @@ export default function SessoesPage() {
 }
 
 /* ---------------------------------------------------------------- modo da biblioteca */
-function ModeBanner({ mode, loading, offline, serverName, userName, role, onLogin, onPrefs }: {
+function ModeBanner({ mode, loading, offline, serverName, userName, role, onLogin, onPrefs, hasSessions, version }: {
   mode: 'local' | 'remote' | null; loading: boolean; offline: boolean; serverName?: string; userName?: string; role?: string;
-  onLogin: () => void; onPrefs: () => void;
+  onLogin: () => void; onPrefs: () => void; hasSessions: boolean; version: number;
 }) {
   if (loading || !mode) return null;
   if (mode === 'local') {
+    /* onde ficam os logs, espaço, proteção contra limpeza e o caminho do backup */
     return (
       <Alert variant="light" color="gray" radius="md" icon={<IconDatabase size={22} />} mb="xl"
         title={<Text fw={650} size="md">Biblioteca local · neste navegador</Text>}>
-        <Group justify="space-between" gap="sm" wrap="wrap">
-          <Text size="md" maw={760} style={{ flex: '1 1 240px', minWidth: 0 }}>
-            As sessões ficam guardadas só neste navegador (e somem se os dados do site forem apagados). Para dividir com a equipe,
-            ligue o servidor da equipe em Preferências.
-          </Text>
+        <Group justify="space-between" gap="sm" wrap="wrap" align="flex-start">
+          <Stack gap="xs" maw={820} style={{ flex: '1 1 240px', minWidth: 0 }}>
+            <LocalStorageInfo hasSessions={hasSessions} version={version} />
+            <Text size="sm" c="dimmed">Para dividir as sessões com a equipe, ligue um servidor da equipe em Preferências.</Text>
+          </Stack>
           <Button variant="default" onClick={onPrefs}>Preferências</Button>
         </Group>
       </Alert>
