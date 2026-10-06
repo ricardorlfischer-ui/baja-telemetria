@@ -1,0 +1,95 @@
+# Constrói a imagem do servidor (Dockerfile), testa se ela sobe e publica no GitHub
+# Container Registry: ghcr.io/<dono>/<repositório>.
+#   push em main  -> :latest, :main e :sha-<commit>
+#   tag v1.2.3    -> :1.2.3 e :1.2
+# Imagem para linux/amd64 (PC, Fly.io, Railway) e linux/arm64 (Oracle Ampere, Raspberry Pi).
+name: Imagem Docker
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: docker-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  IMAGE: ghcr.io/${{ github.repository }}
+
+jobs:
+  image:
+    name: Construir e publicar
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: docker/setup-qemu-action@v4
+
+      - uses: docker/setup-buildx-action@v4
+
+      - name: Entrar no GHCR
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Tags e rótulos
+        id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ${{ env.IMAGE }}
+          tags: |
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=ref,event=branch
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=sha
+
+      # 1) imagem amd64 só local, para testar antes de publicar
+      - name: Construir (teste)
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          platforms: linux/amd64
+          load: true
+          tags: baja-telemetria:teste
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Testar a imagem (sobe, responde /api/health, roda como não-root, grava em /data)
+        run: |
+          mkdir -p "$RUNNER_TEMP/data"
+          docker run -d --name baja --init -p 8080:8080 -v "$RUNNER_TEMP/data:/data" baja-telemetria:teste
+          ok=0
+          for i in $(seq 1 30); do
+            if curl -fsS http://localhost:8080/api/health; then ok=1; echo; break; fi
+            sleep 2
+          done
+          docker logs baja
+          if [ "$ok" != 1 ]; then echo "::error::o servidor não respondeu em /api/health"; exit 1; fi
+          docker top baja -eo pid,uid,args
+          uid=$(docker top baja -eo pid,uid,args | awk '$3 == "node" && /dist\/index\.js/ {print $2; exit}')
+          echo "uid do processo do servidor: $uid"
+          if [ -z "$uid" ] || [ "$uid" = "0" ]; then echo "::error::o servidor não está rodando como usuário não-root"; exit 1; fi
+          docker exec -u node baja sh -c 'touch "$DATA_DIR/.teste-escrita" && rm "$DATA_DIR/.teste-escrita"'
+          docker rm -f baja
+
+      # 2) amd64 + arm64 para o registro (reaproveita o cache do passo 1)
+      - name: Construir e publicar
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

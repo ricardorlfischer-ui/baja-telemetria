@@ -1,0 +1,66 @@
+# Publica o app web no GitHub Pages (https://<dono>.github.io/<repositório>/).
+# Só roda com a variável do repositório PAGES_ENABLED = true
+# (Settings → Secrets and variables → Actions → Variables). Ver docs/IMPLANTACAO.md.
+#   API_URL  endereço HTTPS do servidor da equipe (opcional; sem ele o app usa a
+#            biblioteca local do navegador e o servidor pode ser escolhido em Preferências)
+# No servidor, CORS_ORIGINS precisa ter https://<dono>.github.io
+name: GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Construir o app web
+    if: vars.PAGES_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Instalar dependências
+        run: npm ci --no-audit --no-fund
+
+      - name: Build do web
+        run: npm run build -w @baja/web
+        env:
+          VITE_BASE: /${{ github.event.repository.name }}/
+          VITE_API_URL: ${{ vars.API_URL }}
+
+      # o site do Pages é público mesmo com o repositório privado: não publica os
+      # mapas de código-fonte (*.map), que mostrariam o código original com comentários
+      - name: Tirar os source maps
+        run: find apps/web/dist -name '*.map' -delete
+
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: apps/web/dist
+
+  deploy:
+    name: Publicar
+    needs: build
+    if: vars.PAGES_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v5

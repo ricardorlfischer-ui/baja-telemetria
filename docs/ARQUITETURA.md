@@ -338,18 +338,28 @@ Fastify 5, `better-sqlite3`, `@fastify/jwt`, `@fastify/multipart`, `@fastify/sta
 | Variável | Padrão | |
 |---|---|---|
 | `PORT` | `8080` | |
+| `HOST` | `0.0.0.0` | |
 | `DATA_DIR` | `./data` | banco `db.sqlite`, logs em `sessions/<id>.gz`, segredo do JWT em `secret` (gerado se não existir) |
-| `JWT_SECRET` | (arquivo) | sobrepõe o segredo gerado |
-| `CORS_ORIGINS` | vazio | origens permitidas, separadas por vírgula (ex.: o GitHub Pages) |
+| `JWT_SECRET` | (arquivo) | sobrepõe o segredo gerado; mínimo 32 caracteres, o texto de exemplo do compose é recusado |
+| `CORS_ORIGINS` | vazio | origens permitidas, separadas por vírgula (ex.: o GitHub Pages); vazio = só a mesma origem |
+| `TRUST_PROXY` | desligado | `true` = confia em 1 proxy vindo de rede local (Cloudflare Tunnel, Caddy, nginx); número = saltos; lista de IPs/CIDR |
 | `MAX_UPLOAD_MB` | `100` | |
-| `WEB_DIST` | `../web/dist` | build do app servido em `/` |
+| `ANALYSIS_MEMORY_MB` | `1536` | memória máxima do processo filho que lê e analisa os logs |
+| `ANALYSIS_TIMEOUT_S` | `300` | tempo máximo da análise de um log |
+| `WEB_DIST` | `apps/web/dist` | build do app servido em `/` (relativo à pasta `apps/server`) |
+| `LOG_LEVEL` | `info` | |
+
+A leitura e a análise dos logs rodam num **processo filho** (`src/analyzer.ts` +
+`src/analysis-worker.ts`), um log por vez, com limite de memória e de tempo: um log
+malformado (ex.: um ponto absurdo de velocidade) mata só o filho, nunca o servidor. O
+build gera `dist/index.js`, `dist/analysis-worker.js` e um chunk, que ficam juntos.
 
 ### 5.2 Dados
 
-`users(id, name, email UNIQUE, pass_hash, role 'admin'|'member'|'viewer', disabled, created_at)`,
-`invites(code, role, created_by, created_at, expires_at, used_by)`,
+`users(id, name, email UNIQUE, pass_hash, role 'admin'|'member'|'viewer', disabled, token_version, created_at)`,
+`invites(code, role, created_by, created_at, expires_at, used_by, used_at)`,
 `sessions(id, name, file_name, kind, size, sha256, uploaded_by, created_at, date, track_id,
-car_id, driver, tags JSON, notes, summary JSON, summary_version)`,
+car_id, driver, tags JSON, notes, summary JSON, summary_version, summary_error)`,
 `cars(id, name, params JSON, created_by, updated_at)`, `tracks(id, name, params JSON, created_by, updated_at)`,
 `comments(id, session_id, user_id, t, text, created_at)`. Migrações numeradas em código.
 Senhas com `scrypt` do `node:crypto` + sal; comparação em tempo constante.
@@ -367,15 +377,38 @@ GET/POST /invites ; DELETE /invites/:code          (admin)
 GET  /sessions?q&trackId&carId&tag  ; POST /sessions (multipart: file + meta JSON)
 GET/PATCH/DELETE /sessions/:id ; GET /sessions/:id/file (texto do log, gzip)
 POST /sessions/:id/summary      recalcula com o carro/pista da sessão
-GET/POST /cars ; PUT/DELETE /cars/:id ; GET/POST /tracks ; PUT/DELETE /tracks/:id
+GET/POST /cars ; GET/PUT/DELETE /cars/:id ; GET/POST /tracks ; GET/PUT/DELETE /tracks/:id
 GET/POST /sessions/:id/comments ; DELETE /comments/:id
 GET  /health
 ```
 
-Papéis: `viewer` só lê; `member` envia e edita o que é seu; `admin` tudo. Ao receber um
-log, o servidor lê com `parseLog`, calcula `computeSession` + `sessionSummary` com o carro e
-a pista escolhidos e guarda o resumo. Na subida, recalcula resumos com versão antiga.
-Validação de entrada por JSON Schema em todas as rotas; erros em português.
+Papéis: `viewer` só lê; `member` envia sessões, cria perfis e edita/apaga **o que é seu**
+(sessões, anotações, carros e pistas que criou — PUT de perfil de outro dá 403);
+`admin` tudo. O último admin não pode ser rebaixado, desativado nem apagado.
+
+Detalhes que a interface precisa saber:
+
+- `GET /auth/me` → `{ user }`; `POST /auth/password` → `{ token, user }` novo (o token
+  antigo deixa de valer: guarde o novo). Senha, login, setup e register têm limite de 10
+  tentativas/min por IP. JWT de 30 dias com versão (`tv`) que muda ao trocar a senha ou
+  desativar o usuário.
+- `POST /users` aceita `password` opcional; sem ela gera e devolve `tempPassword` uma vez.
+- `POST /sessions` com o mesmo sha256 de uma sessão existente → 409 `{ error, id }`
+  (a menos que `meta.allowDuplicate`). `date` pode vir como `AAAA-MM-DD` ou
+  `AAAA-MM-DDTHH:MM` (tirada do nome do arquivo da FT ou do cabeçalho do BUSMASTER).
+- Sessões trazem também `sha256`, `uploadedById`, `summaryVersion`, `summaryError`
+  (ex.: análise passou do limite de memória/tempo), `summaryOutdated`; carros/pistas
+  trazem `createdBy`, `createdByName`, `sessions` (quantidade); convites trazem `status`,
+  `createdByName`, `usedByName`, `usedAt`.
+- `GET /sessions/:id/file` → `text/plain` com `Content-Encoding: gzip` quando aceito.
+- `POST /sessions/:id/summary` vale para qualquer membro. Mudar params de um perfil
+  recalcula em segundo plano as sessões que o usam; o resumo só é gravado se o perfil não
+  mudou durante a conta.
+
+Ao receber um log, o servidor lê com `parseLog`, calcula `computeSession` +
+`sessionSummary` com o carro e a pista escolhidos e guarda o resumo. Na subida, recalcula
+resumos com versão antiga. Validação de entrada por JSON Schema em todas as rotas; erros em
+português (`{ error }`).
 
 ## 6. Implantação
 

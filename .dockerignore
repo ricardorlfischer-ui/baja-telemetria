@@ -1,0 +1,33 @@
+# O build da imagem só faz "npm ci" + "npm run build" (ver Dockerfile): não precisa dos
+# testes, do app antigo, dos logs reais nem dos dados do servidor.
+
+# dependências e saídas de build da máquina de quem constrói (o npm ci refaz no Linux)
+**/node_modules
+**/dist
+**/.vite
+**/coverage
+
+# dados do servidor (banco, logs enviados, segredo do JWT): nunca vão para a imagem
+data
+apps/server/data
+.env
+.env.*
+
+# logs reais, firmware do PIC, app antigo e testes de equivalência
+samples
+legacy
+packages/core/test
+**/*.log
+
+# repositório, CI, editor e documentação
+.git
+.github
+.claude
+.vscode
+.idea
+docs
+Dockerfile
+.dockerignore
+docker-compose*.yml
+**/.DS_Store
+**/Thumbs.db

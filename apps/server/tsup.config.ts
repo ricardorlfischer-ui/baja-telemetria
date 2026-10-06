@@ -1,8 +1,9 @@
 import { defineConfig } from 'tsup';
 
-/* um arquivo só (dist/index.js) com o @baja/core embutido; better-sqlite3 fica de fora (nativo) */
+/* dist/index.js (servidor) e dist/analysis-worker.js (processo filho que lê e analisa os logs,
+ * ver src/analyzer.ts), com o @baja/core embutido; better-sqlite3 e fastify ficam de fora */
 export default defineConfig({
-  entry: ['src/index.ts'],
+  entry: ['src/index.ts', 'src/analysis-worker.ts'],
   format: ['esm'],
   platform: 'node',
   target: 'node22',

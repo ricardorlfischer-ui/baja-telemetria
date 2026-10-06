@@ -1,0 +1,39 @@
+# Servidor da equipe num PC/VM com Docker (guia completo: docs/IMPLANTACAO.md).
+#
+#   docker compose up -d --build        constrói a partir do código desta pasta e sobe
+#   docker compose pull && docker compose up -d
+#                                       usa a imagem pronta do GitHub (precisa de
+#                                       "docker login ghcr.io" antes: o repositório é privado)
+#   docker compose logs -f              ver o que o servidor está fazendo
+#   docker compose down                 parar (os dados ficam em ./data)
+#
+# Depois abra http://localhost:8080 (ou http://IP-DO-PC:8080 na rede local).
+
+services:
+  baja-telemetria:
+    image: ghcr.io/ricardorlfischer-ui/baja-telemetria:latest
+    build: .
+    init: true                     # repassa o Ctrl+C / docker stop para o node
+    restart: unless-stopped        # volta sozinho depois de reiniciar o PC ou de um erro
+    ports:
+      - "8080:8080"                # use "127.0.0.1:8080:8080" se o acesso for só por túnel/proxy
+    volumes:
+      - ./data:/data               # banco (db.sqlite), logs enviados e segredo do JWT: FAÇA BACKUP
+    environment:
+      TZ: America/Sao_Paulo
+      # Origens que podem chamar a API de outro endereço (ex.: o app no GitHub Pages),
+      # separadas por vírgula, sem barra no fim:
+      # CORS_ORIGINS: "https://ricardorlfischer-ui.github.io"
+      # Atrás de túnel/proxy (Cloudflare Tunnel, Caddy, nginx): IP real no limite de tentativas
+      # de login. "true" confia em 1 proxy vindo da rede local; Fly.io/Railway podem precisar
+      # do número de saltos ("2") ou da lista de IPs do proxy. Desligado se a 8080 ficar exposta:
+      # TRUST_PROXY: "true"
+      # Tamanho máximo de um log enviado (MB):
+      # MAX_UPLOAD_MB: "100"
+      # Segredo dos logins. Sem ele o servidor gera um em ./data/secret (serve na maioria
+      # dos casos). Se definir, gere com `openssl rand -hex 32` (mínimo 32 caracteres; o
+      # texto de exemplo abaixo é recusado e o servidor não sobe). Trocar desconecta todos:
+      # JWT_SECRET: "troque-por-um-texto-longo-e-aleatorio"
+      # Memória máxima (MB) do processo que analisa cada log enviado. Em VM pequena (1 GB),
+      # use 512:
+      # ANALYSIS_MEMORY_MB: "1536"
