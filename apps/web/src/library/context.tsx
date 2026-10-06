@@ -1,0 +1,86 @@
+/* Contexto da biblioteca ativa: useLibrary() dá a biblioteca (local ou remota), o usuário
+ * conectado (remoto), as informações do servidor e ações para trocar/atualizar. */
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { detectLibrary } from './detect';
+import { RemoteLibrary } from './remote';
+import { LocalLibrary } from './local';
+import type { Library, ServerInfo, User } from './types';
+
+export interface LibraryState {
+  /** null enquanto detecta */
+  lib: Library | null;
+  mode: 'local' | 'remote' | null;
+  loading: boolean;
+  info: ServerInfo | null;
+  /** servidor salvo nas preferências, mas sem resposta */
+  offline: boolean;
+  /** usuário conectado (só remoto) */
+  user: User | null;
+  /** cliente remoto (para login/equipe), null no modo local */
+  remote: RemoteLibrary | null;
+  setUser: (u: User | null) => void;
+  /** detecta de novo (depois de mudar o servidor nas preferências) */
+  redetect: () => Promise<void>;
+  /** sai da conta (remoto) */
+  logout: () => void;
+  /** incrementa quando a lista de sessões/perfis mudou (para recarregar listas) */
+  version: number;
+  bump: () => void;
+}
+
+const Ctx = createContext<LibraryState | null>(null);
+
+export function LibraryProvider({ children }: { children: ReactNode }) {
+  const [lib, setLib] = useState<Library | null>(null);
+  const [info, setInfo] = useState<ServerInfo | null>(null);
+  const [offline, setOffline] = useState(false);
+  const [user, setUser] = useState<User | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [version, setVersion] = useState(0);
+
+  const redetect = useCallback(async () => {
+    setLoading(true);
+    try {
+      const d = await detectLibrary();
+      setLib(d.lib); setInfo(d.info); setOffline(!!d.offline);
+      setUser(null);
+      if (d.lib instanceof RemoteLibrary && d.info && d.lib.loggedIn) {
+        try { setUser(await d.lib.me()); } catch { /* token vencido: fica deslogado */ }
+      }
+    } catch {
+      setLib(new LocalLibrary()); setInfo(null); setOffline(false);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { void redetect(); }, [redetect]);
+
+  /* 401 do servidor: limpa o usuário */
+  useEffect(() => {
+    if (lib instanceof RemoteLibrary) lib.onUnauthorized = () => setUser(null);
+  }, [lib]);
+
+  const value = useMemo<LibraryState>(() => ({
+    lib,
+    mode: lib ? lib.mode : null,
+    loading,
+    info,
+    offline,
+    user,
+    remote: lib instanceof RemoteLibrary ? lib : null,
+    setUser,
+    redetect,
+    logout: () => { if (lib instanceof RemoteLibrary) lib.logout(); setUser(null); },
+    version,
+    bump: () => setVersion(v => v + 1),
+  }), [lib, loading, info, offline, user, redetect, version]);
+
+  return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
+}
+
+export function useLibrary(): LibraryState {
+  const v = useContext(Ctx);
+  if (!v) throw new Error('useLibrary fora do LibraryProvider');
+  return v;
+}

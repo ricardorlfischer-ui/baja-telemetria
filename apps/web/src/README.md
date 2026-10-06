@@ -1,0 +1,115 @@
+# apps/web/src — guia para quem escreve as páginas
+
+Contrato completo: `docs/ARQUITETURA.md` seção 4. Resumo do que já existe:
+
+## Estrutura
+
+| Pasta/arquivo | O que é |
+|---|---|
+| `main.tsx`, `App.tsx` | entrada; MantineProvider (tema escuro padrão), Notifications, LibraryProvider, ExplainProvider, HashRouter |
+| `routes.tsx` | **registro único** das páginas: `path`, `label`, ícone, `group`, `needsSession`, `serverOnly`, `player`, `question` (frase do subtítulo) e componente lazy. Página nova = uma linha aqui + `pages/<Nome>Page.tsx` com `export default` |
+| `pages/` | uma página por rota (placeholders "em construção" até alguém preencher). `#/dev/componentes` é a vitrine |
+| `layout/` | `AppLayout` (AppShell: barra lateral 260 px, cabeçalho 60 px, rodapé 64 px nas rotas com `player`; liga os atalhos do play), `NavMenu`, `SessionChip` (sessão aberta + menu trocar/fechar; no celular também o trecho), `RangeControl` (Sessão/Volta/Janela + volta), `PlayerBar` (play, velocidade, barra de tempo com voltas, repetir), `HeaderParts` (modo da biblioteca, tema) |
+| `components/` | componentes compartilhados (abaixo); importe de `../components` |
+| `theme.ts` | tema Mantine + tokens dos gráficos (`useChartTheme`, `resolveColor`, cores dos cantos e status) |
+| `state/` | `session.ts` (store da sessão, play, trecho, hooks), `profiles.ts` (perfis de carro/pista, configuração em uso, fórmulas), `hotkeys.ts`, `SessionSync.tsx` (biblioteca → perfis; disponibilidade dos sensores → chips), `librarySave.ts` (guardar log com resumo) |
+| `explain/` | `ExplainHost` (monta o contexto de explicação) e `ExplainDrawer` (o card) |
+| `state/prefs.ts` | preferências (tema, servidor, layouts da página Canais, menu recolhido); `lsGet/lsSet` com try/catch |
+| `library/` | biblioteca local (IndexedDB) e remota (API 5.3); `useLibrary()` |
+| `styles/global.css` | CSS global (tokens `--bt-*`, cartões, chips, tooltips) |
+
+## Regras das páginas
+
+- Comece com `<PageHeader title=… subtitle={route.question} />` (use `routeByPath('/x')`).
+- Sem sessão / sem sensor: `<EmptyState title="…" description="o que fazer" />` (nunca tela em branco).
+- Seções com `<Section title="…" description="…">` (título 18 px, 40 px entre seções).
+- **Todo gráfico** dentro de `<ChartCard title explain sensors>`; **todo número** em `<StatTile label value unit explain sensors status>`.
+  `explain` é o id do catálogo `EXPLAIN` do core; `sensors` são os `SensorId` que **de fato** entraram na conta nesta sessão
+  (vêm dos relatórios do core). O título e o ⓘ abrem o card (`useExplain().open(id, { sensors })`).
+- Gráficos com no mínimo 240 px de altura (XYPlot padrão 280). Um eixo Y por gráfico.
+- Textos em português do Brasil; números com `toFixed` como no app antigo (ponto decimal).
+
+## Componentes
+
+- **`XYPlot`** (`spec`, `height`, `ref`): porte do `BT.Plot` com o mesmo spec (`series`, `bars`, `points`, `markers`, `hlines`,
+  `circles`, `xLabel`, `yLabel`, `logY`, `equal`, `xRange`, `yRange`, `zeroY`, `hi`, `onClick`, `tipX`, `tipBar`, `fmtY`, `empty`, `legend`).
+  Cor opcional: série sem `color` usa `id`/`role` (`FL FR RL RR`, `cmp`, `ref`, `pos`, `neg`, `muted`, `fg`, `c1..c8`, `good/warn/serious/crit`)
+  e depois o slot pela ordem. `tipX`/`tipBar` devolvem HTML: passe textos do usuário por `esc()`.
+  Ponto atual sem re-render: `ref.current.setHi({x, y})`; marcadores: `ref.current.update({ markers })`.
+- **`TrackMap`** (`source: MapSource`, `satellite`, `follow`, `lineMode`, `onLegend`, `ref`): porte do `BT.MapView`.
+  `MapSource` = `{ t, track, hasLatLon?, span?, range? | laps+selLap, colorValues?, colorRange?, line?, cursor?, tipHtml?, onSeek?, onLineDrawn? }`.
+  Cursor 60×/s: `ref.current.setCursor(t)` (só a camada do carro). `fit()`, `invalidate()`, `zoom(f)`.
+  Legenda: `<MapLegend lo hi dark unit decimals={decimalsFor(c.lo, c.hi)} />` com o que vier de `onLegend`.
+  `onLineDrawn` recebe os pontos crus: arredonde como o antigo (`+p.x.toFixed(2)`).
+- **`UPlotChart`** (`data`, `series`, `syncKey`, `xLabel`, `yLabel`, `onCursor`, `onZoom`, `onClick`, `ref`): uPlot com tema;
+  `ref.current.setCursorTime(t)` move a linha do play sem redesenhar; `setXRange`, `resetX`, `getPlot`.
+- **`ChartCard`**, **`StatTile`**, **`SensorChips`** (estado `present/absent/planned` por `availability` ou pelo
+  `SensorAvailabilityProvider`; rótulos provisórios em `SENSOR_LABELS` até o catálogo `SENSORS` do core),
+  **`PageHeader`**, **`Section`**, **`EmptyState`**, **`DataTable`** (`columns`, `rows`, `onRowClick`, `selected`, `maxHeight`; `numeric` alinha à direita).
+- **`InfoButton`**, **`ExplainProvider`** (`onExplain`), **`useExplain`**.
+
+## Tema e cores
+
+- `useChartTheme()` devolve as cores do esquema atual para canvas (`surface`, `grid`, `axis`, `text`, `fg`, `cursor`,
+  `series[0..7]`, `corner.FL..RR`, `status`, `pos`, `neg`). Nunca leia CSS no canvas.
+- Paleta das séries com ordem fixa (slot 1 azul = FL / volta comparada / série única, 2 laranja = FR / referência, 3 água = RL,
+  4 amarelo = RR...). Status sempre com ícone + texto. Pista colorida com `heat()` do core.
+- No HTML use as variáveis do Mantine (`--mantine-color-dimmed`...) e as `--bt-*` de `styles/global.css`.
+
+## Estado da sessão (`state/session.ts`)
+
+`useSessionStore` (zustand) é o objeto `A` do app antigo. Campos: `status` ('empty' | 'loading' | 'ready' | 'error'),
+`error`, `loadingText`, `busy` (recalculando), `source` ({ type: 'file'|'text'|'demo'|'library', name, libraryId?, meta? }),
+`S`, `ctx` (SessionContext do core), `cfg` (= ctx.cfg), `availability` (sensorAvailability(ctx)), `cursor` (s),
+`playing`, `speed`, `loop`, `selLap` (-1 = nenhuma), `rangeMode` ('session'|'lap'|'view'), `view` ([t0, t1] da janela dos
+gráficos; null = sessão inteira), `follow` (janela acompanha o cursor no play), `colorKey` (canal do mapa), `xAxis` ('time'|'dist').
+
+Ações (todas em `useSessionStore.getState()` ou por seletor):
+
+| ação | o que faz |
+|---|---|
+| `openFile(file, { saveTo?: lib })` | lê, calcula e (opcional) guarda na biblioteca com o resumo. Devolve `true` se abriu |
+| `openText(text, name, source?)` / `openDemo()` / `openFromLibrary(meta, lib?)` | idem (exemplo = carro DEMO_CAR + linha automática; da biblioteca ativa os perfis carro/pista da sessão) |
+| `close()` | fecha a sessão |
+| `updateConfig(patch)` | muda pista/carro/susp/fórmulas (`AnalysisConfigInput`) e recalcula; mantém cursor e volta. Com o exemplo aberto o carro e a linha vão para a memória (não estragam o carro real) |
+| `setLine(pts \| null)` | linha de largada (arredonda a 2 casas, zera a volta, recalcula) — use no `onLineDrawn` do TrackMap |
+| `seek(t)`, `play()`, `pause()`, `togglePlay()`, `setSpeed(x)`, `setLoop(b)` | player (um único laço rAF; o play fica na volta selecionada) |
+| `setLap(k)` | selectLap do antigo: janela na volta ±2 % e cursor no começo; `-1` = sessão |
+| `setRangeMode(m)`, `setView([t0, t1] \| null)`, `resetView()`, `zoomView(f, tc?)`, `setFollow(b)` | trecho e janela dos gráficos (mín. 0,2 s, dentro da sessão) |
+| `setColorKey(k)`, `setXAxis(x)` | canal do mapa, eixo da página Canais |
+
+Hooks:
+
+- `useSessionReady()`, `useHasSession()`, `useCtx()`.
+- `useRange()` → `[i0, i1, rótulo] | null` (rangeOf do core). Relatórios: `useMemo(() => xReport(ctx, i0, i1), [ctx, i0, i1])`.
+- `useCursorEffect((t, state) => ref.current?.setCursor(t))` — gráficos e mapa, 60×/s **sem re-render**.
+- `useCursorTime()` / `useCursorIndex()` — textos e tabelas (limitado a ~20×/s no play).
+- `window.__baja.session` / `.profiles` no `npm run dev`, para depurar no console.
+
+Atalhos globais (state/hotkeys.ts, ligados no AppLayout): espaço, ← → (Shift = 1 s), Home, End — ignorados em campos,
+menus e no card de explicação aberto.
+
+## Perfis e configuração (`state/profiles.ts`)
+
+`useProfiles`: `cars`, `tracks` (da biblioteca ativa), `activeCarId`, `activeTrackId` (lembrados neste navegador), `draft`
+(a configuração em uso = o `cfg` que o antigo guardava: `{ track, car, susp }`), `carDirty`/`trackDirty`, `formulas`.
+Ações: `setActiveCar(id|null)` / `setActiveTrack(id|null)` (copia o perfil para o draft e recalcula),
+`saveCarProfile(lib, nome?)` / `saveTrackProfile(lib, nome?)` (grava o draft; sem nome = no perfil ativo),
+`deleteCarProfile`, `deleteTrackProfile`, `setFormulas(list)`, `resetCar(demo)`. Para editar números use
+`useSessionStore.getState().updateConfig(patch)` (vale com ou sem sessão aberta). Os valores efetivos (padrões aplicados)
+estão em `ctx.cfg`; `useActiveProfiles()` dá os objetos dos perfis ativos.
+
+## Cards de explicação
+
+`useExplain().open(id, { sensors, title })` abre o card (explain/ExplainDrawer.tsx) com o catálogo `EXPLAIN` do core:
+o que mostra, sensores (com estado neste log), como é calculado, **para o carro do ano que vem**, limitações, teste e
+"veja também". `ChartCard`, `StatTile`, `PageHeader`, `Section` e `InfoButton` já chamam isso; os chips de sensor abrem
+o card `sensor.<id>`. Id fora do catálogo mostra um aviso com o id: é o sinal para escrever o card em
+`packages/core/src/explain.ts`. `#/dev/componentes` tem um botão por card do catálogo.
+
+## Biblioteca
+
+- `usePrefs()` para tema/servidor/layouts. `useLibrary()` → `{ lib, mode, user, remote, info, offline, redetect, logout, bump, version }`.
+  `lib` implementa `Library` (ARQUITETURA 4.4); `remote` tem login, conta e equipe (só no modo servidor).
+- Guardar um log: `addLogToLibrary(lib, fileOuTexto, meta?, ctx?)` (state/librarySave.ts) — no modo local calcula `kind` e o
+  resumo (`sessionSummary` do core, quando existir) e marca os perfis ativos como carro/pista; depois chame `bump()`.

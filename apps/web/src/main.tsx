@@ -1,10 +1,13 @@
-/* Esqueleto: substituído pela casca do app. */
+/* Entrada do app web. */
+import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
-import { MantineProvider } from '@mantine/core';
 import '@mantine/core/styles.css';
+import '@mantine/notifications/styles.css';
+import './styles/global.css';
+import { App } from './App';
 
 createRoot(document.getElementById('root')!).render(
-  <MantineProvider defaultColorScheme="dark">
-    <h1>Baja Telemetria</h1>
-  </MantineProvider>,
+  <StrictMode>
+    <App />
+  </StrictMode>,
 );

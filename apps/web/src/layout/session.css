@@ -1,0 +1,36 @@
+/* Barra de reprodução e indicadores da sessão (layout/PlayerBar.tsx). */
+.bt-player-step { font-size: 12.5px; font-weight: 650; width: auto; min-width: 38px; padding: 0 6px; }
+.bt-player-time { font-size: 13.5px; color: var(--mantine-color-dimmed); white-space: nowrap; min-width: 128px; text-align: right; }
+@media (max-width: 36em) { .bt-player-time { min-width: 0; font-size: 12px; } }
+
+.bt-scrub {
+  position: relative; height: 32px; cursor: pointer; touch-action: none; user-select: none;
+  display: flex; align-items: center; outline: none;
+}
+.bt-scrub[data-disabled] { cursor: default; opacity: 0.5; }
+.bt-scrub:focus-visible .bt-scrub-track { outline: 2px solid var(--mantine-primary-color-filled); outline-offset: 2px; }
+.bt-scrub-track {
+  position: relative; width: 100%; height: 14px; border-radius: 4px; overflow: hidden;
+  background: var(--mantine-color-default-border);
+}
+.bt-scrub[data-disabled] .bt-scrub-track { height: 6px; }
+.bt-scrub-lap {
+  position: absolute; top: 0; bottom: 0;
+  background: color-mix(in srgb, var(--mantine-primary-color-filled) 18%, transparent);
+  border-left: 1px solid color-mix(in srgb, var(--mantine-primary-color-filled) 65%, transparent);
+  font-size: 10px; line-height: 14px; color: var(--mantine-color-dimmed); padding-left: 3px; overflow: hidden;
+}
+.bt-scrub-lap[data-odd] { background: color-mix(in srgb, var(--mantine-primary-color-filled) 28%, transparent); }
+.bt-scrub-lap[data-sel] {
+  background: color-mix(in srgb, var(--mantine-primary-color-filled) 50%, transparent);
+  color: var(--bt-text-strong); font-weight: 700;
+}
+.bt-scrub-fill {
+  position: absolute; left: 0; top: 0; bottom: 0; width: 0;
+  background: color-mix(in srgb, var(--bt-text-strong) 22%, transparent); pointer-events: none;
+}
+.bt-scrub-thumb {
+  position: absolute; top: 4px; bottom: 4px; width: 3px; margin-left: -1.5px; left: 0;
+  background: var(--bt-text-strong); border-radius: 2px; pointer-events: none;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--mantine-color-body) 70%, transparent);
+}

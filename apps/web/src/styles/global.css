@@ -1,0 +1,171 @@
+/* CSS global do app (docs/ARQUITETURA.md 4.5). Cores dos canvas ficam em theme.ts
+ * (useChartTheme); aqui só o que é HTML: tokens --bt-*, casca, cartões, chips, tooltips. */
+
+:root {
+  --bt-surface: #ffffff;
+  --bt-card-border: var(--mantine-color-gray-3);
+  --bt-text-strong: #141517;
+  --bt-tip-bg: rgba(255, 255, 255, 0.97);
+  --bt-tip-border: rgba(20, 21, 23, 0.14);
+  --bt-tip-shadow: 0 6px 24px rgba(0, 0, 0, 0.12);
+  --bt-good: #0ca30c;
+  --bt-warn: #fab219;
+  --bt-serious: #ec835a;
+  --bt-crit: #d03b3b;
+  --bt-chip-present: #0ca30c;
+  --bt-chip-absent: #868e96;
+  --bt-sel-row: rgba(42, 120, 214, 0.12);
+  --bt-page-max: 1440px;
+}
+[data-mantine-color-scheme='dark'] {
+  --bt-surface: #141517;
+  --bt-card-border: var(--mantine-color-dark-4);
+  --bt-text-strong: #f1f3f5;
+  --bt-tip-bg: rgba(26, 27, 30, 0.97);
+  --bt-tip-border: rgba(255, 255, 255, 0.14);
+  --bt-tip-shadow: 0 8px 28px rgba(0, 0, 0, 0.55);
+  --bt-chip-present: #2fbf4f;
+  --bt-chip-absent: #6b7079;
+  --bt-sel-row: rgba(57, 135, 229, 0.2);
+}
+
+html, body { min-height: 100%; }
+body {
+  font-size: var(--mantine-font-size-md);
+  -webkit-font-smoothing: antialiased;
+}
+[data-mantine-color-scheme='dark'] body { background: var(--mantine-color-dark-7); }
+
+/* números sempre com algarismos de largura fixa */
+.bt-num, .bt-stat-num, .bt-table td.bt-num { font-variant-numeric: tabular-nums; }
+
+/* ---------------------------------------------------------------- casca */
+.bt-header { display: flex; flex-direction: column; justify-content: center; }
+.bt-brand {
+  display: inline-flex; align-items: center; gap: 10px;
+  color: inherit; text-decoration: none; white-space: nowrap;
+}
+.bt-brand-mark {
+  display: inline-grid; place-items: center;
+  width: 30px; height: 30px; border-radius: 8px;
+  background: var(--mantine-primary-color-filled); color: #fff;
+  font-weight: 800; font-size: 16px;
+}
+.bt-navbar { display: flex; flex-direction: column; }
+.bt-nav-group { letter-spacing: 0.06em; font-size: 11.5px; }
+.bt-nav-link { border-radius: var(--mantine-radius-md); font-size: var(--mantine-font-size-md); }
+.bt-nav-link[data-disabled] { opacity: 0.45; cursor: not-allowed; }
+.bt-page { max-width: var(--bt-page-max); margin: 0 auto; }
+.bt-footer { display: flex; flex-direction: column; justify-content: center; }
+.bt-player { width: 100%; }
+.bt-session-chip { max-width: 360px; }
+.bt-lib-badge { font-weight: 600; }
+
+/* ---------------------------------------------------------------- seções e cartões */
+.bt-section + .bt-section { margin-top: 40px; }
+.bt-chart-card { overflow: hidden; }
+.bt-chart-body { padding: 4px 12px 12px; }
+.bt-chart-body--flush { padding: 0; }
+.bt-card-title {
+  font-size: 16px; font-weight: 650; line-height: 1.35; color: var(--bt-text-strong);
+}
+.bt-card-title--link { cursor: pointer; border-radius: 4px; text-align: left; }
+.bt-card-title--link:hover { text-decoration: underline; text-decoration-color: var(--mantine-color-dimmed); text-underline-offset: 3px; }
+.bt-card-title--link:focus-visible { outline: 2px solid var(--mantine-primary-color-filled); outline-offset: 2px; }
+
+/* bloco de número */
+.bt-stat { height: 100%; }
+.bt-stat-label { font-size: 14px; font-weight: 500; color: var(--mantine-color-dimmed); line-height: 1.3; text-align: left; }
+.bt-stat-value { display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; }
+.bt-stat-num { font-size: 28px; font-weight: 650; line-height: 1.1; color: var(--bt-text-strong); letter-spacing: -0.01em; }
+.bt-stat-num--missing { color: var(--mantine-color-dimmed); }
+.bt-stat-unit { font-size: 15px; color: var(--mantine-color-dimmed); }
+.bt-status {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: 13px; font-weight: 600; color: var(--bt-text-strong);
+}
+.bt-status svg { color: var(--bt-status); }
+
+/* chips dos sensores */
+.bt-sensor-chip {
+  display: inline-flex; align-items: center; gap: 4px;
+  border-radius: 999px; border: 1px solid var(--bt-card-border);
+  color: var(--mantine-color-dimmed); white-space: nowrap; line-height: 1;
+  background: transparent;
+}
+.bt-sensor-chip--xs { font-size: 11.5px; padding: 3px 8px 3px 6px; }
+.bt-sensor-chip--sm { font-size: 13px; padding: 4px 10px 4px 8px; }
+.bt-sensor-chip[data-state='present'] {
+  border-color: color-mix(in srgb, var(--bt-chip-present) 55%, transparent);
+  background: color-mix(in srgb, var(--bt-chip-present) 14%, transparent);
+  color: var(--bt-text-strong);
+}
+.bt-sensor-chip[data-state='present'] svg { color: var(--bt-chip-present); }
+.bt-sensor-chip[data-state='absent'] {
+  color: var(--bt-chip-absent);
+  background: color-mix(in srgb, var(--bt-chip-absent) 10%, transparent);
+  text-decoration: line-through; text-decoration-thickness: 1px;
+}
+.bt-sensor-chip[data-state='planned'] { border-style: dashed; }
+button.bt-sensor-chip { cursor: pointer; }
+button.bt-sensor-chip:hover { border-color: var(--mantine-primary-color-filled); }
+
+/* tabela */
+.bt-table-wrap { border: 1px solid var(--bt-card-border); border-radius: var(--mantine-radius-md); overflow: hidden; }
+.bt-table td.bt-num, .bt-table th[style*='right'] { text-align: right; }
+.bt-table tr[data-clickable] { cursor: pointer; }
+.bt-table tr[data-selected] { background: var(--bt-sel-row); }
+.bt-table tr[data-selected] td:first-child { box-shadow: inset 3px 0 0 var(--mantine-primary-color-filled); }
+.bt-table-empty { color: var(--mantine-color-dimmed); text-align: center; padding: 24px !important; }
+
+/* ---------------------------------------------------------------- XYPlot */
+.bt-plot { position: relative; }
+.bt-plot-legend {
+  display: flex; flex-wrap: wrap; gap: 4px 16px; padding: 2px 4px 8px;
+  font-size: 13px; color: var(--mantine-color-text);
+}
+.bt-plot-legend span { display: inline-flex; align-items: center; gap: 6px; }
+.bt-plot-legend i { width: 14px; height: 3px; border-radius: 2px; display: inline-block; }
+.bt-plot-box { position: relative; width: 100%; }
+.bt-plot-canvas { display: block; width: 100%; height: 100%; touch-action: pan-y; }
+
+.bt-plot-tip, .bt-map-tip {
+  position: absolute; z-index: 5; pointer-events: none;
+  min-width: 120px; max-width: 280px;
+  padding: 8px 10px; border-radius: 8px;
+  background: var(--bt-tip-bg); border: 1px solid var(--bt-tip-border); box-shadow: var(--bt-tip-shadow);
+  color: var(--mantine-color-text); font-size: 13px; line-height: 1.45;
+  font-variant-numeric: tabular-nums; backdrop-filter: blur(4px);
+}
+.bt-plot-tip b, .bt-map-tip b { font-weight: 650; }
+.bt-tip-row { display: grid; grid-template-columns: 12px 1fr auto; align-items: center; gap: 6px; margin-top: 2px; }
+.bt-tip-row i { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+.bt-tip-row span { color: var(--mantine-color-dimmed); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bt-plot-tip i:not(.bt-tip-row i) { width: 10px; height: 10px; border-radius: 3px; display: inline-block; margin-right: 6px; }
+
+/* ---------------------------------------------------------------- TrackMap */
+.bt-map { position: relative; width: 100%; background: var(--bt-surface); overflow: hidden; border-radius: inherit; }
+.bt-map-canvas { display: block; width: 100%; height: 100%; touch-action: none; cursor: grab; }
+.bt-map-canvas:active { cursor: grabbing; }
+.bt-map--line .bt-map-canvas { cursor: crosshair; }
+.bt-map-tools {
+  position: absolute; top: 10px; right: 10px; z-index: 4;
+  display: flex; flex-direction: column; gap: 6px;
+}
+.bt-map-hint { position: absolute; top: 10px; left: 50%; transform: translateX(-50%); z-index: 4; text-transform: none; }
+.bt-map-legend { min-width: 180px; }
+.bt-map-legend-bar { height: 10px; border-radius: 5px; }
+
+/* ---------------------------------------------------------------- uPlot */
+.bt-uplot { width: 100%; }
+.bt-uplot .uplot { font-family: inherit; }
+.bt-uplot .u-legend { font-size: 13px; color: var(--mantine-color-text); text-align: left; margin-top: 2px; }
+.bt-uplot .u-legend .u-marker { width: 12px; height: 4px; border-radius: 2px; }
+.bt-uplot .u-legend th { font-weight: 500; }
+.bt-uplot .u-legend td { font-variant-numeric: tabular-nums; }
+.bt-uplot .u-select { background: rgba(57, 135, 229, 0.18); }
+.bt-uplot .u-cursor-x { border-right: 1px dashed var(--mantine-color-dimmed); }
+.bt-uplot-head {
+  position: absolute; top: 0; bottom: 0; left: 0; width: 2px; margin-left: -1px;
+  pointer-events: none; z-index: 3; display: none;
+}

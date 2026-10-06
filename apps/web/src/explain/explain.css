@@ -1,0 +1,17 @@
+/* Card de explicação (ExplainDrawer). */
+.bt-explain-title { flex: 1; min-width: 0; }
+.bt-explain-body { padding-bottom: 40px; }
+.bt-explain-id { font-size: 12px; }
+.bt-explain-h { font-size: 15px !important; font-weight: 700; letter-spacing: 0.01em; }
+.bt-explain-ico { display: inline-flex; color: var(--mantine-color-dimmed); }
+.bt-explain-text { font-size: 15px; line-height: 1.6; white-space: pre-line; }
+.bt-explain-block--accent {
+  border-left: 3px solid var(--mantine-primary-color-filled);
+  background: color-mix(in srgb, var(--mantine-primary-color-filled) 8%, transparent);
+  border-radius: 0 var(--mantine-radius-md) var(--mantine-radius-md) 0;
+  padding: 12px 14px;
+}
+.bt-explain-block--accent .bt-explain-ico { color: var(--mantine-primary-color-filled); }
+.bt-explain-sensor[data-used] { border-color: color-mix(in srgb, var(--bt-chip-present) 55%, transparent); }
+.bt-explain-related { height: auto; min-height: 28px; white-space: normal; text-align: left; padding-top: 4px; padding-bottom: 4px; }
+.bt-explain-related .mantine-Button-label { white-space: normal; }

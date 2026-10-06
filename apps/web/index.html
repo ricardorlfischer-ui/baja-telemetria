@@ -1,9 +1,18 @@
 <!doctype html>
-<html lang="pt-BR">
+<html lang="pt-BR" data-mantine-color-scheme="dark">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark light">
   <title>Baja Telemetria</title>
+  <script>
+    /* tema salvo antes do React montar (evita piscar claro/escuro) */
+    try {
+      var p = JSON.parse(localStorage.getItem('baja:prefs') || '{}'), t = p.theme || 'dark';
+      if (t === 'auto') t = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+      document.documentElement.setAttribute('data-mantine-color-scheme', t);
+    } catch (e) { /* sem localStorage: escuro */ }
+  </script>
 </head>
 <body>
   <div id="root"></div>
