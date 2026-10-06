@@ -16,6 +16,7 @@ import { routeByPath } from '../routes';
 import { fmtSessionDate, sessionDateText } from '../library';
 import { useRange, useSessionStore } from '../state/session';
 import { useActiveProfiles } from '../state/profiles';
+import { APP_NAME, BrandLogo, TEAM_NAME } from '../brand';
 import { FichaMissing, FichaRecs, FichaTable, SensorMatrix, downloadText, usePrintMode } from './projeto/FichaParts';
 
 /* o que cada grupo da ficha decide no carro novo */
@@ -82,6 +83,7 @@ export default function ProjetoPage() {
     <>
       {/* cabeçalho só da impressão */}
       <div className="bt-print-only bt-print-head">
+        <p className="bt-print-team"><BrandLogo size={40} /> <b>{TEAM_NAME}</b> · {APP_NAME}</p>
         <h1>Ficha do carro — {sessionName}</h1>
         <p>Data do teste: {date} · Carro: {carName} (massa {cfg.car.mass} kg) · Pista: {trackName} · Trecho: {range[2]} · Impresso em {today}</p>
         <p>Cada número abaixo traz os sensores de onde saiu (coluna “Sensores”) e a matriz de sensores no fim.</p>

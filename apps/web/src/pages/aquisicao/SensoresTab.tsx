@@ -12,6 +12,7 @@ import {
 } from '@baja/core';
 import { InfoButton, Section, sensorIcon, useExplain } from '../../components';
 import { STATUS_COLOR } from '../../theme';
+import { TEAM_NAME } from '../../brand';
 
 /* áreas do catálogo de explicações (prefixo do id) agrupadas para a matriz resumida */
 const AREAS: { id: string; label: string; prefixes: string[] }[] = [
@@ -159,7 +160,7 @@ export function SensoresTab({ availability, quality, sessionName }: {
       >
         <div className="bt-print-area">
           <div className="bt-print-only">
-            <Title order={1}>Baja Telemetria — sensores × análises × decisões de projeto</Title>
+            <Title order={1}>{TEAM_NAME} — sensores × análises × decisões de projeto</Title>
             <Text>{sessionName ? `Sessão: ${sessionName} · ` : ''}{new Date().toLocaleDateString('pt-BR')}</Text>
           </div>
           <div className="bt-acq-hscroll">

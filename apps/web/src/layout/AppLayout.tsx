@@ -13,6 +13,7 @@ import { PlayerBar } from './PlayerBar';
 import { routeByPath } from '../routes';
 import { usePrefs } from '../state/prefs';
 import { useSessionHotkeys } from '../state/hotkeys';
+import { APP_NAME, BrandLogo, FULL_NAME, TEAM_NAME } from '../brand';
 
 export function AppLayout() {
   const [mobileOpen, { toggle: toggleMobile, close: closeMobile }] = useDisclosure(false);
@@ -43,9 +44,12 @@ export function AppLayout() {
                 {collapsed ? <IconLayoutSidebarLeftExpand size={20} /> : <IconLayoutSidebarLeftCollapse size={20} />}
               </ActionIcon>
             </Tooltip>
-            <Link to="/" className="bt-brand">
-              <span className="bt-brand-mark" aria-hidden>B</span>
-              <Text span fw={700} size="lg" visibleFrom="xs">Baja Telemetria</Text>
+            <Link to="/" className="bt-brand" aria-label={`${FULL_NAME} — início`}>
+              <BrandLogo size={36} />
+              <span className="bt-brand-text">
+                <Text span fw={750} size="md" visibleFrom="xs" className="bt-brand-team">{TEAM_NAME}</Text>
+                <Text span size="xs" c="dimmed" visibleFrom="xs" className="bt-brand-app">{APP_NAME}</Text>
+              </span>
             </Link>
             <SessionChip />
             <Group visibleFrom="md" gap="sm" wrap="nowrap"><RangeControl /></Group>

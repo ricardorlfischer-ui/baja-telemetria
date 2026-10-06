@@ -16,6 +16,8 @@
   --bt-chip-absent: #868e96;
   --bt-sel-row: rgba(42, 120, 214, 0.12);
   --bt-page-max: 1440px;
+  /* faixas da pintura do carro: amarelo, laranja, vermelho */
+  --bt-stripe: linear-gradient(90deg, #f5b51b 0 33.3%, #ef7d22 33.3% 66.6%, #d23c2a 66.6% 100%);
 }
 [data-mantine-color-scheme='dark'] {
   --bt-surface: #141517;
@@ -40,16 +42,64 @@ body {
 .bt-num, .bt-stat-num, .bt-table td.bt-num { font-variant-numeric: tabular-nums; }
 
 /* ---------------------------------------------------------------- casca */
-.bt-header { display: flex; flex-direction: column; justify-content: center; }
+.bt-header { display: flex; flex-direction: column; justify-content: center; position: relative; }
+/* faixa da pintura logo abaixo do cabeçalho */
+.bt-header::after {
+  content: ''; position: absolute; left: 0; right: 0; bottom: -1px; height: 3px;
+  background: var(--bt-stripe); pointer-events: none;
+}
 .bt-brand {
   display: inline-flex; align-items: center; gap: 10px;
   color: inherit; text-decoration: none; white-space: nowrap;
 }
-.bt-brand-mark {
-  display: inline-grid; place-items: center;
-  width: 30px; height: 30px; border-radius: 8px;
-  background: var(--mantine-primary-color-filled); color: #fff;
-  font-weight: 800; font-size: 16px;
+.bt-brand-text { display: inline-flex; flex-direction: column; line-height: 1.1; }
+.bt-brand-team { letter-spacing: -0.005em; }
+.bt-brand-app { text-transform: uppercase; letter-spacing: 0.12em; font-size: 10.5px; font-weight: 600; }
+
+/* logo redondo: foto do carro com anel nas cores da pintura */
+.bt-logo {
+  position: relative; display: inline-block; flex: none; border-radius: 50%;
+  padding: 2px; background: conic-gradient(#f5b51b 0 33%, #ef7d22 0 66%, #d23c2a 0);
+}
+.bt-logo img {
+  display: block; width: 100%; height: 100%; border-radius: 50%; object-fit: cover;
+  border: 2px solid var(--mantine-color-body);
+}
+
+/* faixa com a foto do carro (login, sessões, páginas sem sessão) */
+.bt-hero {
+  position: relative; overflow: hidden; border-radius: var(--mantine-radius-lg);
+  min-height: 300px; display: flex; align-items: flex-end;
+  background: #0d0d0f; color: #fff; isolation: isolate;
+}
+.bt-hero--compact { min-height: 190px; }
+.bt-hero-img {
+  position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover;
+  object-position: 55% 42%; z-index: -2;
+}
+.bt-hero-shade {
+  position: absolute; inset: 0; z-index: -1;
+  background:
+    linear-gradient(90deg, rgba(8, 8, 10, 0.88) 0%, rgba(8, 8, 10, 0.62) 42%, rgba(8, 8, 10, 0.08) 75%),
+    linear-gradient(0deg, rgba(8, 8, 10, 0.55) 0%, rgba(8, 8, 10, 0) 45%);
+}
+.bt-hero-body { padding: 28px 32px 30px; max-width: 640px; }
+.bt-hero--compact .bt-hero-body { padding: 20px 26px 22px; }
+.bt-hero-kicker {
+  display: inline-block; margin-bottom: 6px; padding: 2px 10px; border-radius: 999px;
+  background: rgba(239, 125, 34, 0.92); color: #111; font-size: 12px; font-weight: 750;
+  letter-spacing: 0.12em; text-transform: uppercase;
+}
+.bt-hero-title { margin: 0; font-size: 34px; line-height: 1.1; font-weight: 800; letter-spacing: -0.01em; color: #fff; }
+.bt-hero--compact .bt-hero-title { font-size: 26px; }
+.bt-hero-sub { margin: 8px 0 0; font-size: 16px; line-height: 1.45; color: rgba(255, 255, 255, 0.86); }
+.bt-hero-actions { margin-top: 18px; display: flex; flex-wrap: wrap; gap: 10px; }
+.bt-stripe { position: absolute; left: 0; right: 0; bottom: 0; height: 5px; background: var(--bt-stripe); }
+@media (max-width: 48em) {
+  .bt-hero { min-height: 240px; }
+  .bt-hero-body { padding: 20px; }
+  .bt-hero-title { font-size: 26px; }
+  .bt-hero-img { object-position: 60% 40%; }
 }
 .bt-navbar { display: flex; flex-direction: column; }
 .bt-nav-group { letter-spacing: 0.06em; font-size: 11.5px; }

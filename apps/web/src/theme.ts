@@ -8,9 +8,12 @@
 import { createTheme, rem, useComputedColorScheme, type MantineColorsTuple } from '@mantine/core';
 import { useMemo } from 'react';
 
-/* Azul da paleta: shade 6 = slot 1 claro (#2a78d6), shade 5 = slot 1 escuro (#3987e5). */
+/* Laranja da pintura do carro da Mauá Racing Baja (preto com faixas amarela/laranja/vermelha).
+ * É a cor da interface (botões, item ativo do menu, foco), não de dados: as séries dos
+ * gráficos seguem a paleta fixa abaixo. Shade 7 no claro e 6 no escuro para o texto branco
+ * dos botões ter contraste. */
 const brand: MantineColorsTuple = [
-  '#e8f1fc', '#d0e2f8', '#a3c5f0', '#72a6e8', '#4f93e6', '#3987e5', '#2a78d6', '#2066bb', '#1a559c', '#13427a',
+  '#fff7ed', '#ffedd5', '#fed7aa', '#fdba74', '#fb923c', '#f97316', '#ea580c', '#c2410c', '#9a3412', '#7c2d12',
 ];
 
 /* Neutros escuros um pouco frios: corpo dark[7] = #1a1b1e, superfície dos gráficos dark[8] = #141517. */
@@ -22,7 +25,7 @@ export const FONT = 'system-ui, "Segoe UI", Roboto, "Helvetica Neue", Arial, san
 
 export const theme = createTheme({
   primaryColor: 'brand',
-  primaryShade: { light: 6, dark: 5 },
+  primaryShade: { light: 7, dark: 6 },
   colors: { brand, dark },
   fontFamily: FONT,
   fontFamilyMonospace: 'ui-monospace, "Cascadia Mono", Consolas, monospace',
