@@ -1,9 +1,10 @@
-# Publica o app web no GitHub Pages (https://<dono>.github.io/<repositório>/).
-# Só roda com a variável do repositório PAGES_ENABLED = true
-# (Settings → Secrets and variables → Actions → Variables). Ver docs/IMPLANTACAO.md.
-#   API_URL  endereço HTTPS do servidor da equipe (opcional; sem ele o app usa a
-#            biblioteca local do navegador e o servidor pode ser escolhido em Preferências)
-# No servidor, CORS_ORIGINS precisa ter https://<dono>.github.io
+# Publica o app web no GitHub Pages (https://<dono>.github.io/<repositório>/) a cada push
+# em main. Antes da 1ª vez: Settings → Pages → Build and deployment → Source: GitHub Actions
+# (repositório privado precisa de GitHub Pro / Student Pack). Ver docs/IMPLANTACAO.md.
+# Sem servidor, o app guarda os logs no próprio navegador (biblioteca local).
+# Variável opcional do repositório (Settings → Secrets and variables → Actions → Variables):
+#   API_URL  endereço HTTPS do servidor da equipe, se um dia houver um
+#            (no servidor, CORS_ORIGINS precisa ter https://<dono>.github.io)
 name: GitHub Pages
 
 on:
@@ -23,7 +24,6 @@ concurrency:
 jobs:
   build:
     name: Construir o app web
-    if: vars.PAGES_ENABLED == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -42,6 +42,8 @@ jobs:
         env:
           VITE_BASE: /${{ github.event.repository.name }}/
           VITE_API_URL: ${{ vars.API_URL }}
+          # hospedagem estática: não procura /api no mesmo endereço (o Pages não tem servidor)
+          VITE_STATIC: '1'
 
       # o site do Pages é público mesmo com o repositório privado: não publica os
       # mapas de código-fonte (*.map), que mostrariam o código original com comentários
@@ -55,7 +57,6 @@ jobs:
   deploy:
     name: Publicar
     needs: build
-    if: vars.PAGES_ENABLED == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     environment:
