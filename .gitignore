@@ -1,0 +1,20 @@
+node_modules/
+dist/
+coverage/
+*.log
+!packages/core/test/fixtures/*.log
+.env
+.env.*
+!.env.example
+
+# dados do servidor (logs enviados, banco SQLite, segredo do JWT)
+data/
+apps/server/data/
+
+# logs reais grandes e firmware do PIC: ficam só no PC (ver samples/README.md)
+samples/*
+!samples/README.md
+
+.vite/
+.DS_Store
+Thumbs.db

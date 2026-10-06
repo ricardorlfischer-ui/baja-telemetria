@@ -1,0 +1,396 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Baja Telemetria</title>
+<link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+
+<header class="top">
+  <div class="brand"><span class="logo" aria-hidden="true"></span>Baja Telemetria</div>
+  <label class="btn primary file-btn">Abrir log<input type="file" id="file" accept=".csv,.txt,.log"></label>
+  <button id="btnDemo" class="btn">Dados de exemplo</button>
+  <div id="fileInfo" class="file-info"><b>Nenhum log aberto</b><span>CSV do FT Manager ou log do BUSMASTER (.txt / .log) · pode arrastar o arquivo para a página</span></div>
+  <div class="top-right">
+    <button id="btnExport" class="btn" disabled>Exportar CSV</button>
+    <button id="btnCar" class="btn">Carro</button>
+    <button id="btnCfg" class="btn">Pista / GPS</button>
+    <button id="btnTheme" class="btn icon" title="Tema claro / escuro / automático" aria-label="Alternar tema">◐</button>
+  </div>
+</header>
+
+<main class="grid">
+  <section class="card map-card">
+    <div class="card-h">
+      <h2>Mapa</h2>
+      <label class="inline">cor por <select id="colorBy"></select></label>
+      <div class="legend" id="legend"><span id="legLo">—</span><i id="legBar"></i><span id="legHi">—</span></div>
+      <span class="grow"></span>
+      <button id="btnSat" class="btn sm" aria-pressed="false" title="Fundo de satélite (precisa de internet e do centro da pista em lat/lon)">Satélite</button>
+      <button id="btnFollow" class="btn sm" aria-pressed="false" title="O mapa acompanha o carro">Seguir carro</button>
+      <button id="btnFit" class="btn sm" title="Enquadrar (ou duplo clique no mapa)">Enquadrar</button>
+    </div>
+    <div class="map-wrap" id="mapWrap">
+      <canvas id="map"></canvas>
+      <div id="mapTip" class="tip" hidden></div>
+      <div id="mapMsg" class="map-msg"><b>Abra um log para ver a pista</b><span>CSV do FT Manager (canais X/Y do GPS) ou log do BUSMASTER.<br>Ou clique em “Dados de exemplo”.</span></div>
+    </div>
+    <div class="card-f">
+      <span class="mut">Linha de largada:</span>
+      <button id="btnLine" class="btn sm">Desenhar (2 cliques)</button>
+      <button id="btnAutoLine" class="btn sm">Automática</button>
+      <button id="btnClearLine" class="btn sm">Apagar</button>
+      <span class="grow"></span>
+      <span class="mut hint">roda = zoom · arrastar = mover · clique = ir ao ponto</span>
+    </div>
+  </section>
+
+  <aside class="card now-card">
+    <div class="card-h"><h2>Agora</h2><span class="grow"></span><span id="gpsBadge" class="badge none">—</span></div>
+    <div class="hero">
+      <div class="hero-main"><span id="heroSpeed">—</span><small>km/h · GPS</small></div>
+      <dl class="hero-side">
+        <dt>Tempo</dt><dd id="nowTime">—</dd>
+        <dt>Volta</dt><dd id="nowLap">—</dd>
+        <dt>X / Y</dt><dd id="nowXY">—</dd>
+        <dt>Lat / Lon</dt><dd id="nowLL">—</dd>
+      </dl>
+    </div>
+    <div class="now-table-wrap"><table id="nowTable" class="now-table"></table></div>
+  </aside>
+
+  <section class="card laps-card">
+    <div class="card-h"><h2>Voltas</h2><span class="grow"></span><button id="btnAllLaps" class="btn sm">Sessão inteira</button></div>
+    <div id="laps" class="laps"><p class="mut">Defina a linha de largada no mapa para separar as voltas.</p></div>
+  </section>
+
+  <section class="card ana-card" id="anaCard">
+    <div class="card-h">
+      <h2>Análises</h2>
+      <div class="tabs" id="anaTabs" role="tablist">
+        <button role="tab" data-tab="design">Projeto</button>
+        <button role="tab" data-tab="maps">Mapas por canal</button>
+        <button role="tab" data-tab="susp">Suspensão</button>
+        <button role="tab" data-tab="freq">Ressonância</button>
+        <button role="tab" data-tab="power">Trem de força</button>
+        <button role="tab" data-tab="cvt">CVT</button>
+        <button role="tab" data-tab="dyn">Dinâmica</button>
+        <button role="tab" data-tab="laps">Comparar voltas</button>
+      </div>
+      <span class="grow"></span>
+      <label class="inline" id="anaWinBox">trecho
+        <select id="anaWin"><option value="session">sessão inteira</option><option value="lap">volta selecionada</option><option value="view">janela dos gráficos</option></select>
+      </label>
+    </div>
+
+    <div class="ana-panel" id="ana-maps">
+      <p class="ana-empty mut pad"></p>
+      <div class="ana-body">
+        <div class="ana-bar">
+          <span class="mut small">Um mapa por canal, cada um com a própria escala (de 2 % a 98 % dos valores). Clique num mapa para colorir o mapa principal por ele.</span>
+          <span class="grow"></span>
+          <label class="inline"><input type="checkbox" id="mmConst"> incluir canais constantes</label>
+        </div>
+        <div class="mm-grid" id="mmGrid"></div>
+      </div>
+    </div>
+
+    <div class="ana-panel" id="ana-susp" hidden>
+      <p class="ana-empty mut pad"></p>
+      <div class="ana-body">
+        <div class="ana-bar">
+          <label class="inline">Compressão quando a posição <select id="spComp"><option value="1">aumenta</option><option value="0">diminui</option></select></label>
+          <label class="inline">Lenta / rápida <input id="spKnee" type="number" min="1" class="w5"> mm/s</label>
+          <label class="inline"><input type="checkbox" id="spMoving"> só com o carro andando</label>
+          <button type="button" class="btn sm" data-car>Dados do carro…</button>
+          <span class="grow"></span><span class="mut small">trecho: <b id="spWin"></b></span>
+        </div>
+        <div id="spBody" class="tbl-wrap"></div>
+        <div id="spPlots">
+          <h3>Velocidade do amortecedor (histograma)</h3>
+          <div class="sm-grid" id="spVel"></div>
+          <h3>Curso em relação ao estático</h3>
+          <div class="sm-grid" id="spPos"></div>
+        </div>
+        <div id="spExtra">
+          <h3>Rolagem e arfagem da carroceria</h3>
+          <p class="mut small" id="grNote"></p>
+          <div class="ana-2col">
+            <div><h4 id="grRollT">Rolagem × aceleração lateral</h4><div id="grRoll" class="plot-m"></div></div>
+            <div><h4 id="grPitchT">Arfagem × aceleração longitudinal</h4><div id="grPitch" class="plot-m"></div></div>
+          </div>
+          <h3>Saltos e impactos</h3>
+          <p class="mut small">Salto = todos os amortecedores com sinal perto da extensão total ao mesmo tempo. Altura h = g·t²/8 e velocidade vertical no pouso v = g·t/2 (supõe decolagem e pouso na mesma altura). Clique numa linha para ir ao salto.</p>
+          <div id="jpTable" class="tbl-wrap"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="ana-panel" id="ana-freq" hidden>
+      <p class="ana-empty mut pad"></p>
+      <div class="ana-body">
+        <div class="ana-bar">
+          <label class="inline">Banda da carroceria <input id="frFmin" type="number" step="0.1" min="0" class="w4">–<input id="frFmax" type="number" step="0.1" min="0" class="w4"> Hz</label>
+          <button type="button" class="btn sm" data-car>Dados do carro…</button>
+          <span class="grow"></span><span class="mut small">trecho: <b id="frWin"></b></span>
+        </div>
+        <div id="frBody"></div>
+        <div id="frContent" class="ana-2col">
+          <div>
+            <h3>Teste de queda (carro parado) → frequência natural e amortecimento</h3>
+            <p class="mut small">Com o log gravando e o carro parado, empurre a dianteira ou a traseira para baixo e solte (ou deixe o carro cair uns 5 cm). O app acha o evento sozinho e mede pelo decaimento: período entre picos e decremento logarítmico.</p>
+            <div class="ana-bar"><select id="frEvent"></select><button class="btn sm" id="frManual" title="Usa o trecho visível nos gráficos de canais (dê zoom no evento com Shift + arrastar)">Analisar trecho dos gráficos</button></div>
+            <div id="frDrop" class="tbl-wrap"></div>
+            <div id="frDropPlot" class="plot-m"></div>
+          </div>
+          <div>
+            <h3>Espectro com o carro andando</h3>
+            <p class="mut small">Picos que aparecem devagar e rápido na mesma frequência são do carro (ressonância). Picos que mudam com a velocidade vêm da pista (costelas, ondulações).</p>
+            <div class="ana-bar"><select id="frPsdMode"></select></div>
+            <div id="frPsd" class="plot-m"></div>
+            <div id="frPeaks" class="tbl-wrap"></div>
+          </div>
+        </div>
+        <div id="rrBox">
+          <h3>Pista × ressonância (espectro em distância)</h3>
+          <p class="mut small">O curso dos amortecedores reamostrado por distância percorrida: ondulações da pista (costelas, valetas) viram picos num comprimento de onda λ fixo. Uma ondulação de λ metros excita a carroceria quando v = f<sub>n</sub> · λ; evite que essa velocidade caia na faixa em que o carro anda naquele trecho.</p>
+          <div class="ana-2col"><div id="rrPlot" class="plot-m"></div><div id="rrTable" class="tbl-wrap"></div></div>
+        </div>
+        <p class="mut small" id="frNote"></p>
+      </div>
+    </div>
+
+    <div class="ana-panel" id="ana-design" hidden>
+      <p class="ana-empty mut pad"></p>
+      <div class="ana-body">
+        <div class="ana-bar">
+          <span class="mut small">Os números do carro medidos neste log, para o projeto do próximo. Várias contas dependem dos dados do carro (massa, geometria): confira.</span>
+          <span class="grow"></span><button type="button" class="btn sm" data-car>Dados do carro…</button><button type="button" class="btn sm" id="dsExport">Exportar ficha (CSV)</button>
+          <span class="mut small">trecho: <b id="dsWin"></b></span>
+        </div>
+        <div id="dsRec"></div>
+        <div id="dsTable" class="tbl-wrap"></div>
+      </div>
+    </div>
+
+    <div class="ana-panel" id="ana-power" hidden>
+      <p class="ana-empty mut pad"></p>
+      <div class="ana-body">
+        <div class="ana-bar"><span class="mut small" id="pwSrc"></span><span class="grow"></span><button type="button" class="btn sm" data-car>Dados do carro…</button><span class="mut small">trecho: <b id="pwWin"></b></span></div>
+        <div class="tiles" id="pwTiles"></div>
+        <div id="pwContent">
+        <div class="ana-2col">
+          <div>
+            <h3>Potência na roda × velocidade</h3>
+            <p class="mut small">P = (m·a + Crr·m·g + ½·ρ·CdA·v²)·v, percentil 90 em cada faixa de velocidade com o carro acelerando. Abaixo da curva de potência constante o limite é a tração (ou o acoplamento da CVT).</p>
+            <div id="pwCurve" class="plot-m"></div>
+          </div>
+          <div>
+            <h3>Largadas (parado → acelerando)</h3>
+            <div id="pwLaunch" class="tbl-wrap"></div>
+            <h4>Escorregamento da roda de tração nos primeiros 30 m</h4>
+            <div id="pwSlip" class="plot-s"></div>
+          </div>
+        </div>
+        <h3>Coast-down: resistência ao rolamento e arrasto</h3>
+        <p class="mut small">Em reta plana, embale, tire o pé (a CVT desacopla) ou ponha em ponto morto e deixe o carro perder velocidade sozinho, sem frear. A desaceleração dá −m·a = Crr·m·g + ½·ρ·CdA·v². O app procura esses trechos sozinho; também dá para usar o trecho dos gráficos.</p>
+        <div class="ana-bar"><select id="cdSel"></select><button type="button" class="btn sm" id="cdManual">Usar trecho dos gráficos</button><button type="button" class="btn sm" id="cdApply">Usar estes Crr e CdA no carro</button></div>
+        <div class="ana-2col"><div id="cdRes"></div><div id="cdPlot" class="plot-m"></div></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="ana-panel" id="ana-cvt" hidden>
+      <p class="ana-empty mut pad"></p>
+      <div class="ana-body">
+        <div class="ana-bar"><span class="mut small" id="cvSrc"></span><span class="grow"></span><button type="button" class="btn sm" data-car>Dados do carro…</button><span class="mut small">trecho: <b id="cvWin"></b></span></div>
+        <div class="tiles" id="cvTiles"></div>
+        <div id="cvBody"></div>
+        <div id="cvPlots" class="ana-2col">
+          <div><h3>Temperatura medida × modelo</h3><div id="cvFit" class="plot-m"></div></div>
+          <div><h3>Projeção para o enduro</h3><div id="cvProj" class="plot-m"></div></div>
+        </div>
+        <p class="mut small" id="cvNote"></p>
+      </div>
+    </div>
+
+    <div class="ana-panel" id="ana-dyn" hidden>
+      <p class="ana-empty mut pad"></p>
+      <div class="ana-body">
+        <div class="ana-bar">
+          <span class="mut small">Acelerações: <b id="dySrc"></b>. Pelo GPS (passos de 0,86 m a 4 Hz) é ordem de grandeza; com a velocidade da roda a longitudinal fica bem melhor.</span>
+          <span class="grow"></span><span class="mut small">trecho: <b id="dyWin"></b></span>
+        </div>
+        <div class="tiles" id="dyTiles"></div>
+        <div id="dyPlots" class="ana-2col">
+          <div><h3>Diagrama g-g</h3><div id="dyGG" class="plot-sq"></div></div>
+          <div><h3>Tempo por faixa de velocidade</h3><div id="dySpd" class="plot-m"></div></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="ana-panel" id="ana-laps" hidden>
+      <p class="ana-empty mut pad"></p>
+      <div class="ana-body">
+        <div id="lpBody"></div>
+        <div id="lpContent">
+          <div class="ana-bar">
+            <label class="inline">Volta <select id="lpCmp"></select></label>
+            <label class="inline">contra <select id="lpRef"></select></label>
+            <span class="grow"></span><span class="small" id="lpSum"></span>
+          </div>
+          <h3>Velocidade ao longo da volta <span class="mut">(clique para ir ao ponto)</span></h3>
+          <div id="lpSpeed" class="plot-m"></div>
+          <h3>Diferença de tempo acumulada</h3>
+          <div id="lpDelta" class="plot-s"></div>
+          <h3>Onde ganhou e perdeu tempo (10 trechos de mesma distância)</h3>
+          <div id="lpSect" class="plot-s"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="card charts-card">
+    <div class="card-h">
+      <h2>Canais</h2>
+      <span class="mut hint">clique/arraste = cursor · Shift+arrastar = zoom no trecho · Ctrl+roda = zoom · Shift+roda = andar · duplo clique = tudo</span>
+      <span class="grow"></span>
+      <button id="btnZoomOut" class="btn sm icon" title="Menos zoom" aria-label="Menos zoom">−</button>
+      <button id="btnZoomIn" class="btn sm icon" title="Mais zoom" aria-label="Mais zoom">+</button>
+      <button id="btnZoomAll" class="btn sm">Tudo</button>
+      <button id="btnFollowChart" class="btn sm" aria-pressed="true" title="No play, a janela de tempo acompanha o cursor">Acompanhar</button>
+    </div>
+    <details class="chips-box" id="chipsBox">
+      <summary>Escolher canais <span id="chipsCount" class="mut"></span></summary>
+      <div class="chips-tools">
+        <button id="btnChipsAll" class="btn sm">Todos</button>
+        <button id="btnChipsNone" class="btn sm">Nenhum</button>
+        <label class="inline"><input type="checkbox" id="showConst"> mostrar canais constantes</label>
+      </div>
+      <div id="chips" class="chips"></div>
+    </details>
+    <div id="charts" class="charts"><p class="mut empty">Os gráficos aparecem aqui, um por canal do log.</p></div>
+  </section>
+</main>
+
+<footer class="player" id="player">
+  <button id="btnStart" class="btn icon" title="Início (Home)" aria-label="Ir para o início">⏮</button>
+  <button id="btnBack" class="btn icon" title="−1 s (←)" aria-label="Voltar 1 segundo">−1s</button>
+  <button id="btnPlay" class="btn primary play" title="Play / pausa (espaço)" aria-label="Play">▶</button>
+  <button id="btnFwd" class="btn icon" title="+1 s (→)" aria-label="Avançar 1 segundo">+1s</button>
+  <select id="speed" title="Velocidade de reprodução">
+    <option value="0.25">0,25×</option><option value="0.5">0,5×</option><option value="1" selected>1× tempo real</option>
+    <option value="2">2×</option><option value="4">4×</option><option value="8">8×</option><option value="16">16×</option>
+  </select>
+  <input type="range" id="scrub" min="0" max="1" step="0.01" value="0" aria-label="Posição no log">
+  <span id="tDisp" class="tdisp">0:00.00 / 0:00.00</span>
+  <label class="inline"><input type="checkbox" id="loop"> repetir</label>
+</footer>
+
+<dialog id="cfgDlg">
+  <form method="dialog" class="cfg">
+    <h2>Pista e GPS</h2>
+    <p class="mut">Use os mesmos números do <code>track_config.h</code> gravado no PIC.</p>
+    <fieldset>
+      <legend>Centro da pista</legend>
+      <label>Latitude<input id="cLat" type="text" inputmode="decimal"></label>
+      <label>Longitude<input id="cLon" type="text" inputmode="decimal"></label>
+      <label class="row"><input type="checkbox" id="cFixed"> centro fixo pelas coordenadas (<code>TRACK_CENTER_FIXED 1</code>)</label>
+    </fieldset>
+    <fieldset>
+      <legend>Tamanho</legend>
+      <label>Pista X · Leste-Oeste (m)<input id="cSX" type="number" min="1"></label>
+      <label>Pista Y · Norte-Sul (m)<input id="cSY" type="number" min="1"></label>
+      <label>Margem de cada lado (m)<input id="cMg" type="number" min="0"></label>
+      <p id="cRes" class="mut full"></p>
+    </fieldset>
+    <fieldset>
+      <legend>Canais no log da FT</legend>
+      <label>X · Leste (entrada 7)<select id="cChX"></select></label>
+      <label>Y · Norte (entrada 8)<select id="cChY"></select></label>
+      <label>Status do GPS (opcional)<select id="cChS"></select></label>
+      <label>Valor gravado<select id="cFmt">
+        <option value="auto">automático</option><option value="V">volts 0–5</option><option value="mV">mV 0–5000</option>
+        <option value="code">código 0–255</option><option value="m">metros</option></select></label>
+      <button type="button" id="cSwap" class="btn sm">Trocar X ↔ Y</button>
+      <p id="cDet" class="mut full"></p>
+    </fieldset>
+    <fieldset>
+      <legend>Processamento</legend>
+      <label>Suavização da posição (s)<input id="cSm" type="number" min="0" max="3" step="0.25"></label>
+      <label>Volta mínima (s)<input id="cMl" type="number" min="1"></label>
+    </fieldset>
+    <div class="note" id="cNote"></div>
+    <div class="cfg-actions">
+      <button type="button" id="cReset" class="btn">Valores do track_config.h</button>
+      <span class="grow"></span>
+      <button value="close" class="btn primary">Fechar</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="carDlg">
+  <form method="dialog" class="cfg">
+    <h2>Dados do carro</h2>
+    <p class="mut">Usados nas contas de potência, rolagem, rigidez e CVT. Meça no carro sempre que der: as contas são tão boas quanto estes números.</p>
+    <fieldset>
+      <legend>Massa e geometria</legend>
+      <label>Massa total com piloto (kg)<input id="carMass" type="number" min="50" step="1"></label>
+      <label>Entre-eixos (mm)<input id="carWb" type="number" min="500" step="5"></label>
+      <label>Bitola dianteira (mm)<input id="carTrackF" type="number" min="500" step="5"></label>
+      <label>Bitola traseira (mm)<input id="carTrackR" type="number" min="500" step="5"></label>
+    </fieldset>
+    <fieldset>
+      <legend>Suspensão</legend>
+      <label>Relação roda/amortecedor diant.<input id="carMrF" type="number" min="0" step="0.05"></label>
+      <label>Relação roda/amortecedor tras.<input id="carMrR" type="number" min="0" step="0.05"></label>
+      <label>Curso total do amortecedor diant. (mm)<input id="carStrokeF" type="number" min="0" step="1"></label>
+      <label>Curso total do amortecedor tras. (mm)<input id="carStrokeR" type="number" min="0" step="1"></label>
+      <label>Massa suspensa por roda diant. (kg)<input id="carMassF" type="number" min="0" step="0.5"></label>
+      <label>Massa suspensa por roda tras. (kg)<input id="carMassR" type="number" min="0" step="0.5"></label>
+      <p class="mut full small">Relação roda/amortecedor = quanto a roda sobe ÷ quanto o amortecedor comprime (ex.: 1,6). 0 = não informado: os ângulos saem com o curso do amortecedor e ficam subestimados.</p>
+    </fieldset>
+    <fieldset>
+      <legend>Velocidade da roda e CVT</legend>
+      <label>Canal da velocidade da roda<select id="carWheelCh"></select></label>
+      <label>O sensor de roda está na<select id="carWheelDriven"><option value="1">roda de tração (traseira / eixo)</option><option value="0">roda livre (dianteira)</option></select></label>
+      <label>Canal da temperatura da CVT<select id="carCvtCh"></select></label>
+      <label>Temperatura ambiente (°C)<input id="carTAmb" type="number" step="1"></label>
+      <label>Limite da CVT (°C)<input id="carTMax" type="number" step="1"></label>
+      <label>Duração do enduro (min)<input id="carEndur" type="number" min="1" step="10"></label>
+    </fieldset>
+    <fieldset>
+      <legend>Resistências e motor</legend>
+      <label>Crr (resistência ao rolamento)<input id="carCrr" type="number" min="0" step="0.005"></label>
+      <label>CdA (m²)<input id="carCda" type="number" min="0" step="0.05"></label>
+      <label>Densidade do ar (kg/m³)<input id="carRho" type="number" min="0.5" step="0.01"></label>
+      <label>Potência do motor (kW)<input id="carPower" type="number" min="0" step="0.1"></label>
+      <p class="mut full small">Crr e CdA saem do coast-down (aba Trem de força). B&amp;S 10 hp ≈ 7,5 kW no motor.</p>
+    </fieldset>
+    <div class="cfg-actions">
+      <button type="button" id="carReset" class="btn">Valores padrão</button>
+      <span class="grow"></span>
+      <button value="close" class="btn primary">Fechar</button>
+    </div>
+  </form>
+</dialog>
+
+<div id="drop" class="drop" hidden><div>Solte o log aqui</div></div>
+<div id="toast" class="toast" hidden></div>
+
+<script src="js/util.js"></script>
+<script src="js/parsers.js"></script>
+<script src="js/gps.js"></script>
+<script src="js/mapview.js"></script>
+<script src="js/charts.js"></script>
+<script src="js/analysis.js"></script>
+<script src="js/vehicle.js"></script>
+<script src="js/plots.js"></script>
+<script src="js/analysisui.js"></script>
+<script src="js/vehicleui.js"></script>
+<script src="js/demo.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>

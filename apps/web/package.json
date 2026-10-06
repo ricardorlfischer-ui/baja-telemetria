@@ -1,0 +1,38 @@
+{
+  "name": "@baja/web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Interface web da telemetria (React + Mantine + uPlot).",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "@baja/core": "^0.1.0",
+    "@mantine/core": "^9.7.1",
+    "@mantine/dropzone": "^9.7.1",
+    "@mantine/hooks": "^9.7.1",
+    "@mantine/notifications": "^9.7.1",
+    "@tabler/icons-react": "^3.49.0",
+    "idb": "^8.0.4",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
+    "react-router": "^7.18.4",
+    "uplot": "^1.6.32",
+    "zustand": "^5.0.15"
+  },
+  "devDependencies": {
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.1.2",
+    "jsdom": "^29.1.1",
+    "postcss": "^8.5.29",
+    "postcss-preset-mantine": "^1.18.0",
+    "postcss-simple-vars": "^7.0.1",
+    "vite": "^8.3.3"
+  }
+}

@@ -1,0 +1,30 @@
+{
+  "name": "@baja/server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Servidor da equipe: contas, biblioteca de sessões (logs), carros, pistas e métricas por sessão.",
+  "main": "dist/index.js",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsup",
+    "start": "node dist/index.js",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@baja/core": "^0.1.0",
+    "@fastify/cors": "^11.3.0",
+    "@fastify/jwt": "^10.2.2",
+    "@fastify/multipart": "^10.1.2",
+    "@fastify/rate-limit": "^11.2.0",
+    "@fastify/static": "^10.1.5",
+    "better-sqlite3": "^13.0.3",
+    "fastify": "^5.12.5"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^9.6.0",
+    "tsup": "^8.5.1",
+    "tsx": "^4.23.15"
+  }
+}
