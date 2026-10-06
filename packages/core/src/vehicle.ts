@@ -309,13 +309,23 @@ export const launches = (t: ArrayLike<number>, v: ArrayLike<number>, dist: Array
 export const powerCurve = (v: ArrayLike<number>, P: ArrayLike<number>, ax: ArrayLike<number>, i0: number, i1: number, bw = 2, slip: ArrayLike<number> | null = null): PowerCurve => {
   let vmax = 0;
   for (let i = i0; i <= i1; i++) if (v[i] > vmax) vmax = v[i];
-  const nb = Math.max(1, Math.ceil(vmax * 3.6 / bw)), B = Array.from({ length: nb }, (): number[] => []);
+  const nb = Math.max(1, Math.ceil(vmax * 3.6 / bw));
+  /* Baldes esparsos (Map) em vez de um array com nb baldes: mesmo resultado, na mesma ordem,
+   * mas um ponto absurdo de velocidade num log corrompido (ex.: 6e8 m/s) não aloca centenas
+   * de milhões de baldes e não derruba a aba nem o servidor. */
+  const B = new Map<number, number[]>();
   for (let i = i0; i <= i1; i++) {
     if (!(v[i] > 1.5) || !(ax[i] > 0.03) || P[i] !== P[i] || (slip && slip[i] > 0.12)) continue;
-    B[Math.min(nb - 1, Math.floor(v[i] * 3.6 / bw))].push(P[i]);
+    const k = Math.min(nb - 1, Math.floor(v[i] * 3.6 / bw));
+    let b = B.get(k);
+    if (!b) B.set(k, b = []);
+    b.push(P[i]);
   }
   const x: number[] = [], y: number[] = [], c: number[] = [];
-  B.forEach((b, k) => { if (b.length >= 10) { b.sort((p, q) => p - q); x.push((k + 0.5) * bw); y.push(quant(b, 0.9)); c.push(b.length); } });
+  [...B.keys()].sort((p, q) => p - q).forEach(k => {
+    const b = B.get(k)!;
+    if (b.length >= 10) { b.sort((p, q) => p - q); x.push((k + 0.5) * bw); y.push(quant(b, 0.9)); c.push(b.length); }
+  });
   const ym = y.map((_, k) => { const w = y.slice(Math.max(0, k - 1), k + 2).sort((p, q) => p - q); return w[w.length >> 1]; });
   return { x: Float64Array.from(x), y: Float64Array.from(ym), n: c };
 };
