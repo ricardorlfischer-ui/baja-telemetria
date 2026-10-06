@@ -11,7 +11,10 @@
  *                                      "true" = um proxy na frente; um número = quantos proxies em fila;
  *                                      ou a lista de IPs/faixas dos proxies ("127.0.0.1, 10.0.0.0/8")
  *   ANALYSIS_MEMORY_MB   1536          memória máxima (heap) da análise de um log, que roda numa thread à parte
- *   ANALYSIS_TIMEOUT_S   300           tempo máximo da análise de um log */
+ *   ANALYSIS_TIMEOUT_S   300           tempo máximo da análise de um log
+ *   LOCAL_MODE           vazio         "1"/"true" = modo local ("este computador"): escuta só em 127.0.0.1,
+ *                                      sem contas nem login, tudo no usuário deste computador (src/local.ts)
+ *   LOCAL_USER_NAME      (usuário do Windows)  nome do usuário local criado na primeira subida do modo local */
 import { BlockList, isIP } from 'node:net';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -28,6 +31,10 @@ export interface ServerConfig {
   trustProxy: boolean | number | string;
   analysisMemoryMb: number;
   analysisTimeoutS: number;
+  /** modo local ("este computador"): só 127.0.0.1, sem contas (docs/ARQUITETURA.md 5.4) */
+  localMode: boolean;
+  /** nome do usuário local criado na primeira subida do modo local (padrão: usuário do sistema) */
+  localUserName?: string;
 }
 
 /* pasta do pacote (apps/server): src/ e dist/ ficam um nível abaixo */
@@ -80,11 +87,16 @@ export function trustProxyOption(v: ServerConfig['trustProxy']): false | string 
   return hops;
 }
 
+/** LOCAL_MODE ligado? ("1", "true", "sim", "on") */
+export const parseLocalMode = (v: string | undefined): boolean => /^(1|true|yes|sim|on)$/i.test((v || '').trim());
+
 /** Lê a configuração do ambiente (padrões da tabela acima). */
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): ServerConfig {
+  const localMode = parseLocalMode(env.LOCAL_MODE);
   return {
     port: num(env.PORT, 8080),
-    host: env.HOST?.trim() || '0.0.0.0',
+    /* no modo local o padrão é 127.0.0.1; outro HOST é recusado na subida (src/local.ts) */
+    host: env.HOST?.trim() || (localMode ? '127.0.0.1' : '0.0.0.0'),
     dataDir: path.resolve(env.DATA_DIR?.trim() || './data'),
     jwtSecret: env.JWT_SECRET?.trim() || undefined,
     corsOrigins: (env.CORS_ORIGINS || '').split(',').map(s => s.trim().replace(/\/+$/, '')).filter(Boolean),
@@ -93,5 +105,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): ServerConfig {
     trustProxy: parseTrustProxy(env.TRUST_PROXY),
     analysisMemoryMb: num(env.ANALYSIS_MEMORY_MB, 1536),
     analysisTimeoutS: num(env.ANALYSIS_TIMEOUT_S, 300),
+    localMode,
+    localUserName: env.LOCAL_USER_NAME?.trim() || undefined,
   };
 }

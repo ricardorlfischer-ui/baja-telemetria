@@ -14,6 +14,7 @@ import { Analyzer } from './analyzer';
 import { loadSecret, TOKEN_TTL } from './auth';
 import { installErrorHandler } from './errors';
 import { registerWeb } from './web';
+import { ensureLocalUser, installLocalGuard, localHost } from './local';
 import infoRoutes from './routes/info';
 import healthRoutes from './routes/health';
 import authRoutes from './routes/auth';
@@ -31,6 +32,8 @@ declare module 'fastify' {
     storage: Storage;
     recalc: RecalcQueue;
     analyzer: Analyzer;
+    /** modo local: id do usuário deste computador (null no modo equipe) */
+    localUserId: string | null;
   }
 }
 
@@ -53,6 +56,12 @@ export const LOG_REDACT = {
 export async function buildApp(opts: BuildOptions = {}): Promise<FastifyInstance> {
   const { logger = false, recalcOnStart = true, loginMax = 10, ...over } = opts;
   const cfg: ServerConfig = { ...loadConfig(), ...Object.fromEntries(Object.entries(over).filter(([, v]) => v !== undefined)) };
+  if (cfg.localMode) {
+    /* modo local (src/local.ts): só 127.0.0.1 (outro HOST para a subida aqui), sem CORS nem proxy */
+    cfg.host = localHost(over.host ?? process.env.HOST);
+    cfg.corsOrigins = [];
+    cfg.trustProxy = false;
+  }
 
   /* antes de abrir qualquer coisa: JWT_SECRET fraco para a subida aqui */
   const secret = loadSecret(cfg.dataDir, cfg.jwtSecret);
@@ -66,6 +75,15 @@ export async function buildApp(opts: BuildOptions = {}): Promise<FastifyInstance
   });
 
   const db = openDb(cfg.dataDir);
+  let localUserId: string | null = null;
+  if (cfg.localMode) {
+    try {
+      localUserId = (await ensureLocalUser(db, cfg.localUserName)).id;
+    } catch (e) {
+      db.close();
+      throw e;
+    }
+  }
   const storage = new Storage(cfg.dataDir);
   const analyzer = new Analyzer({ memoryMb: cfg.analysisMemoryMb, timeoutMs: cfg.analysisTimeoutS * 1000, log: app.log });
   const recalc = new RecalcQueue(db, storage, analyzer, app.log);
@@ -74,6 +92,7 @@ export async function buildApp(opts: BuildOptions = {}): Promise<FastifyInstance
   app.decorate('storage', storage);
   app.decorate('recalc', recalc);
   app.decorate('analyzer', analyzer);
+  app.decorate('localUserId', localUserId);
   app.decorateRequest('me', null);
   app.addHook('onClose', async () => {
     recalc.close();
@@ -83,6 +102,9 @@ export async function buildApp(opts: BuildOptions = {}): Promise<FastifyInstance
   });
 
   installErrorHandler(app, cfg.maxUploadMb);
+
+  /* modo local: loopback + Host + Origin em todo pedido (API e páginas), antes de ler o corpo */
+  if (cfg.localMode) installLocalGuard(app, cfg.port);
 
   /* pedido sem corpo (ex.: POST /sessions/:id/summary) vale como {} para o JSON Schema */
   app.addHook('preValidation', async req => {

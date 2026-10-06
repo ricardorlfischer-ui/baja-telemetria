@@ -320,8 +320,16 @@ amortecedores: ..."), e os textos explicativos do app antigo (física, como medi
 - Atalhos de teclado só nas páginas com reprodução; uma página com erro mostra a mensagem
   nela (`PageErrorBoundary`) sem derrubar o menu. `#/pagina?exemplo=1` abre o exemplo.
 - `profiles.ts`: perfis de carro e pista (biblioteca ativa), perfil ativo, fórmulas.
-- `prefs.ts`: tema, servidor, layouts da página Canais (localStorage, sempre com
+- `prefs.ts`: tema, servidor, layouts da página Canais, a última sessão aberta da
+  biblioteca e "reabrir a última sessão ao abrir o app" (localStorage, sempre com
   try/catch).
+- `reopen.ts`: abrir da biblioteca (ou guardar a sessão aberta) lembra o id e a biblioteca;
+  fechar essa sessão esquece (fechar o exemplo não); ao carregar o app, com nada aberto e
+  sem `?exemplo`, reabre em silêncio (no servidor, depois do login); sessão apagada → esquece o id.
+- Sessão aberta sem salvar (arquivo, texto) guarda o texto (`unsavedText`) e oferece
+  **Guardar na biblioteca** (`saveToLibrary`): a sessão aberta passa a ser da biblioteca sem
+  reabrir o log. Um guardar por vez (clicar em dois botões não grava o log duas vezes); no
+  `local.ts` o `addSession` também é um por vez, para a procura do sha256 valer.
 
 ### 4.4 Biblioteca (`src/library/`)
 
@@ -337,11 +345,14 @@ interface Library {
 ```
 
 `local.ts` (IndexedDB, texto do log comprimido com `CompressionStream('gzip')` quando
-existir) e `remote.ts` (API do servidor, token Bearer). Ordem da escolha: endereço salvo em
+existir; sem espaço → `LocalQuotaError` com mensagem clara; ao guardar pede
+`navigator.storage.persist()` — `storage.ts` mostra espaço usado/disponível e a proteção
+contra limpeza automática nas páginas Sessões e Preferências) e `remote.ts` (API do
+servidor, token Bearer). Ordem da escolha: endereço salvo em
 Preferências > servidor padrão do build (`VITE_API_URL`, que o `pages.yml` passa; ignorado
-se a pessoa escolheu "só este navegador") > servidor na mesma origem (`/api/info` responde)
-> local. Ao adicionar uma sessão local, o resumo é calculado no navegador; no remoto, pelo
-servidor.
+se a pessoa escolheu "só este navegador") > servidor na mesma origem (`/api/info` responde;
+não é perguntado no build estático `VITE_STATIC=1`, o do GitHub Pages) > local. Ao adicionar
+uma sessão local, o resumo é calculado no navegador; no remoto, pelo servidor.
 
 As duas bibliotecas se comportam igual onde a interface precisa: log repetido (mesmo
 sha256) dá erro com o id da sessão que já existe (409 `{ error, id }` no servidor,
@@ -412,6 +423,8 @@ Fastify 5, `better-sqlite3`, `@fastify/jwt`, `@fastify/multipart`, `@fastify/sta
 | `ANALYSIS_TIMEOUT_S` | `300` | tempo máximo da análise de um log |
 | `WEB_DIST` | `apps/web/dist` | build do app servido em `/` (relativo à pasta `apps/server`) |
 | `LOG_LEVEL` | `info` | |
+| `LOCAL_MODE` | desligado | `1`/`true` = modo local, só neste computador, sem contas (5.4) |
+| `LOCAL_USER_NAME` | usuário do Windows | nome do usuário local criado na primeira subida do modo local |
 
 A leitura e a análise dos logs rodam num **processo filho** (`src/analyzer.ts` +
 `src/analysis-worker.ts`), um log por vez, com limite de memória e de tempo: um log
@@ -431,7 +444,7 @@ Senhas com `scrypt` do `node:crypto` + sal; comparação em tempo constante.
 ### 5.3 API (`/api`)
 
 ```
-GET  /info                      { name, version, needsSetup }
+GET  /info                      { name, version, needsSetup }  (modo local: + localMode, dataDir, user — 5.4)
 POST /auth/setup                primeiro admin (só sem usuários)        -> { token, user }
 POST /auth/login                { email, password }  (rate limit)       -> { token, user }
 POST /auth/register             { code, name, email, password }         -> { token, user }
@@ -474,10 +487,58 @@ Ao receber um log, o servidor lê com `parseLog`, calcula `computeSession` +
 resumos com versão antiga. Validação de entrada por JSON Schema em todas as rotas; erros em
 português (`{ error }`).
 
+### 5.4 Modo local ("este computador")
+
+Para quem usa o app só no próprio PC, sempre no mesmo endereço, com os logs guardados numa
+pasta do computador, sem login e sem hospedagem. Liga com `LOCAL_MODE=1` (ou `true`);
+código em `src/local.ts`. O modo equipe não muda em nada.
+
+- **Só 127.0.0.1.** `HOST` vazio, `127.0.0.1` ou `localhost` → escuta em `127.0.0.1`;
+  qualquer outro valor (ex.: `0.0.0.0`) e o servidor **não sobe** ("modo local não pode
+  ficar exposto na rede"). `CORS_ORIGINS` e `TRUST_PROXY` são ignorados. `PORT` como
+  sempre (o atalho usa 8090).
+- **Usuário deste computador.** Na subida: sem usuários no banco, cria um admin com nome
+  `LOCAL_USER_NAME` (ou o usuário do Windows), e-mail `local@este.computador` e uma senha
+  aleatória que ninguém usa; com usuários (pasta já usada no modo equipe), usa o primeiro
+  admin ativo. Toda rota `/api` usa esse usuário, sem token (um `Authorization` que venha é
+  ignorado). Sessões, carros, pistas, anotações, resumos e o processo de análise: iguais.
+- **Defesas** (sem login, a proteção é saber de onde vem o pedido). Todo pedido — API,
+  `/api/info`, `/api/health` e as páginas do app em `/` — precisa ao mesmo tempo:
+  1. vir de loopback (`127.0.0.1`, `::1`, `::ffff:127.0.0.1`);
+  2. ter `Host` `localhost`, `127.0.0.1` ou `[::1]` **com a porta do servidor** (contra DNS
+     rebinding: um site que aponte o nome dele para 127.0.0.1 manda o próprio Host);
+  3. se tiver `Origin`, ser `http://localhost:<porta>`, `http://127.0.0.1:<porta>` ou
+     `http://[::1]:<porta>` (outro site aberto no mesmo navegador não consegue mandar
+     POST/DELETE para o localhost; `Origin: null` também é recusado);
+  4. se tiver `Sec-Fetch-Site`, ser `same-origin` ou `none` (endereço digitado, atalho). De
+     outro site (`cross-site`, ou `same-site` = outra porta do localhost) só vale abrir a
+     página do app por um link (navegação GET fora de `/api`); a API e os arquivos do app
+     não respondem (um `<img>`/`<script>`/`fetch` no-cors, que vai sem `Origin`, não
+     descobre se o app roda aqui nem quais sessões existem).
+
+  Senão → 403 `{ error: 'Modo local: só o app aberto neste computador pode usar este servidor.' }`,
+  antes de ler o corpo do pedido. Continua `X-Frame-Options: DENY` (nada de embutir o app
+  noutro site). Ataques testados em `apps/server/test/local-attacks.test.ts`.
+- **Sem contas.** `POST /auth/setup`, `/auth/login`, `/auth/register`, `/auth/password`,
+  `/users*` e `/invites*` → 404 `{ error: 'No modo local não há contas: o app usa o usuário
+  deste computador.' }`. `GET /auth/me` → `{ user }` do usuário local. A regra vale pelo
+  padrão da rota (tudo em `/api/auth/*` menos `/auth/me`, tudo em `/api/users*` e
+  `/api/invites*`): uma rota de contas nova já nasce fechada no modo local. Nenhuma rota do
+  modo local devolve token nem senha.
+- **Pasta reaproveitada no modo equipe.** O usuário local tem senha aleatória que ninguém
+  conhece; se `local@este.computador` já existia (rebaixado/desativado) e volta a ser admin,
+  ganha senha aleatória nova e os tokens dele caem. Consequência: abrir no modo equipe uma
+  pasta criada no modo local não dá para entrar (não há setup, o único admin não tem senha
+  conhecida); os dados ficam lá, para o modo local.
+- `GET /api/info` → `{ name, version, needsSetup: false, localMode: true, dataDir, user: { id,
+  name, email, role } }` (`dataDir` = caminho absoluto da pasta de dados). No modo equipe
+  `/api/info` continua `{ name, version, needsSetup }`.
+- Na subida, o log diz o endereço (`http://localhost:<porta>`) e a pasta dos dados.
+
 ## 6. Implantação
 
 - `Dockerfile` (multi-stage, `node:22-bookworm-slim`), volume `/data`, porta 8080;
   `docker-compose.yml` para rodar num PC da equipe.
 - GitHub Actions: `ci.yml` (typecheck, testes, build), `docker.yml` (imagem no GHCR),
-  `pages.yml` (app no GitHub Pages, só com a variável `PAGES_ENABLED=true`).
+  `pages.yml` (app no GitHub Pages a cada push em `main`, build com `VITE_STATIC=1`).
 - Guia em `docs/IMPLANTACAO.md`: PC da equipe + Cloudflare Tunnel, Fly.io/Railway, VM.

@@ -18,6 +18,17 @@ Na primeira vez, abra o app (ou chame `POST /api/auth/setup`) para criar o admin
 Depois disso, novas pessoas entram por convite (Equipe → Convites) ou são criadas pelo admin
 com uma senha temporária.
 
+### Modo local (só neste computador, sem login)
+
+```bash
+LOCAL_MODE=1 PORT=8090 DATA_DIR=/c/Users/<voce>/Documents/BajaTelemetria npm start
+# abra http://localhost:8090
+```
+
+Para usar o app só no próprio PC: escuta só em `127.0.0.1`, não tem contas nem login (tudo
+fica no usuário deste computador) e os logs ficam na pasta `DATA_DIR`. Detalhes e defesas
+logo abaixo, em "Modo local".
+
 Testes: `npm test -w @baja/server` (banco em pasta temporária, fixtures reais de
 `packages/core/test/fixtures`). Tipos: `npm run typecheck -w @baja/server`.
 
@@ -36,8 +47,42 @@ Testes: `npm test -w @baja/server` (banco em pasta temporária, fixtures reais d
 | `ANALYSIS_MEMORY_MB` | `1536` | memória máxima do processo que lê e analisa cada log (um log denso de 28 MB usa ~550 MB) |
 | `ANALYSIS_TIMEOUT_S` | `300` | tempo máximo da análise de um log |
 | `LOG_LEVEL` | `info` | nível do log (senhas e tokens nunca aparecem) |
+| `LOCAL_MODE` | vazio | `1` ou `true` = modo local (abaixo): só `127.0.0.1`, sem contas |
+| `LOCAL_USER_NAME` | usuário do Windows | nome do usuário local criado na primeira subida do modo local |
 
 Backup: copie a pasta `DATA_DIR` inteira (com o servidor parado, ou use `sqlite3 db.sqlite .backup`).
+
+## Modo local ("este computador")
+
+Com `LOCAL_MODE=1` (código em `src/local.ts`; contrato em `docs/ARQUITETURA.md` 5.4):
+
+- escuta **só em `127.0.0.1`**. `HOST` vazio, `127.0.0.1` ou `localhost`; outro valor
+  (ex.: `0.0.0.0`) → o servidor não sobe: o modo local não tem login e não pode ficar
+  exposto na rede. `CORS_ORIGINS` e `TRUST_PROXY` são ignorados;
+- **usuário deste computador**: na primeira subida (banco sem usuários) cria um admin com
+  nome `LOCAL_USER_NAME` (ou o usuário do Windows), e-mail `local@este.computador` e senha
+  aleatória que ninguém usa. Se a pasta já foi usada no modo equipe, usa o primeiro admin
+  ativo (as sessões da equipe continuam lá). Toda rota `/api` usa esse usuário sem token;
+- **defesas**: todo pedido (API, `/api/info`, `/api/health` e as páginas em `/`) precisa vir
+  de loopback (`127.0.0.1`/`::1`), com `Host` `localhost`/`127.0.0.1`/`[::1]` **e a porta do
+  servidor** (contra DNS rebinding) e, se tiver `Origin`, ser o próprio app
+  (`http://localhost:<porta>` e afins: outro site aberto no navegador não manda POST/DELETE
+  para cá) e, se tiver `Sec-Fetch-Site`, ser `same-origin` ou `none` (de outro site só abre a
+  página do app por um link, nunca a API: um `<img>` sem `Origin` não descobre nada).
+  Senão → 403 `Modo local: só o app aberto neste computador pode usar este servidor.`
+  (ataques testados em `test/local-attacks.test.ts`);
+- **sem contas**: `POST /auth/setup|login|register|password`, `/users*` e `/invites*` → 404
+  `No modo local não há contas: o app usa o usuário deste computador.`; `GET /auth/me` →
+  `{ user }` do usuário local. Vale pelo padrão da rota (tudo em `/api/auth/*` menos
+  `/auth/me`, `/api/users*`, `/api/invites*`), então uma rota de contas nova já nasce fechada;
+- **pasta reaproveitada no modo equipe**: o usuário local tem senha aleatória (ninguém entra
+  com ela); um `local@este.computador` antigo que volte a ser admin aqui ganha senha nova e
+  perde os tokens. Abrir no modo equipe uma pasta do modo local não deixa ninguém entrar;
+- `GET /info` → `{ name, version, needsSetup: false, localMode: true, dataDir, user: { id, name, email, role } }`
+  (`dataDir` = caminho absoluto da pasta de dados);
+- o resto (sessões, carros, pistas, anotações, resumos, análise num processo à parte) é igual.
+
+Backup: a mesma coisa, copie a pasta `DATA_DIR` com o app fechado.
 
 ## Papéis
 
@@ -58,7 +103,7 @@ Erros sempre em JSON `{ "error": "mensagem em português" }`.
 
 | Rota | Quem | |
 |---|---|---|
-| `GET /info` | todos | `{ name, version, needsSetup }` |
+| `GET /info` | todos | `{ name, version, needsSetup }` (modo local: mais `localMode`, `dataDir`, `user`) |
 | `GET /health` | todos | `{ ok, uptime, pendingSummaries }` |
 | `POST /auth/setup` | só sem usuários | `{ name, email, password }` → `{ token, user }` (primeiro admin) |
 | `POST /auth/login` | todos (10/min por IP) | `{ email, password }` → `{ token, user }` |

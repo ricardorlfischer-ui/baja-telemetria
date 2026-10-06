@@ -149,9 +149,19 @@ export function authenticate(req: FastifyRequest): UserRow | null {
   return u;
 }
 
-/** preHandler: exige usuário com pelo menos o papel `min`. Deixa o usuário em req.me. */
+/** Modo local (src/local.ts): o usuário deste computador, lido do banco a cada pedido. O
+ *  token, se vier, é ignorado (não há login); a guarda do modo local já conferiu a origem. */
+export function localUser(req: FastifyRequest): UserRow {
+  const id = req.server.localUserId;
+  const u = id ? getUser(req.server.db, id) : undefined;
+  if (!u || u.disabled) throw unauthorized('O usuário deste computador não está disponível: feche e abra o app de novo');
+  return u;
+}
+
+/** preHandler: exige usuário com pelo menos o papel `min`. Deixa o usuário em req.me.
+ *  No modo local o usuário é sempre o deste computador (sem token). */
 export const requireRole = (min: Role) => async (req: FastifyRequest, _reply: FastifyReply): Promise<void> => {
-  const u = authenticate(req);
+  const u = req.server.cfg.localMode ? localUser(req) : authenticate(req);
   if (!u) throw unauthorized();
   if (!hasRole(u, min)) {
     throw forbidden(min === 'admin' ? 'Só administradores podem fazer isso'
