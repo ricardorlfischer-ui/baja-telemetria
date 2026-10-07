@@ -51,6 +51,9 @@ export class RemoteLibrary implements Library {
   /** chamado quando o servidor recusa o token (401: venceu, senha trocada em outro lugar,
    *  usuário desativado): a interface volta ao login e mostra o motivo (mensagem do servidor) */
   onUnauthorized: ((message: string) => void) | null = null;
+  /** modo "este computador" (servidor com LOCAL_MODE, ARQUITETURA 5.4): sem contas. Não manda
+   *  token nenhum (o servidor ignoraria) e um 401 não derruba nada nem chama onUnauthorized. */
+  localMode = false;
 
   constructor(baseUrl = '') {
     this.baseUrl = baseUrl.replace(/\/+$/, '');
@@ -60,7 +63,7 @@ export class RemoteLibrary implements Library {
 
   private async req<T>(method: string, path: string, body?: unknown, opts: { raw?: boolean; form?: FormData; auth?: boolean } = {}): Promise<T> {
     const headers: Record<string, string> = {};
-    const tok = opts.auth !== false ? getToken() : null;
+    const tok = opts.auth !== false && !this.localMode ? getToken() : null;
     if (tok) headers.Authorization = `Bearer ${tok}`;
     let payload: BodyInit | undefined;
     if (opts.form) payload = opts.form;
@@ -111,8 +114,9 @@ export class RemoteLibrary implements Library {
   setup(b: { name: string; email: string; password: string }): Promise<AuthResult> { return this.auth('/auth/setup', b); }
   login(email: string, password: string): Promise<AuthResult> { return this.auth('/auth/login', { email, password }); }
   register(b: { code: string; name: string; email: string; password: string }): Promise<AuthResult> { return this.auth('/auth/register', b); }
-  logout(): void { setToken(null); }
-  get loggedIn(): boolean { return !!getToken(); }
+  logout(): void { if (!this.localMode) setToken(null); }
+  /** com token guardado; no modo este computador, sempre (o usuário é o do computador) */
+  get loggedIn(): boolean { return this.localMode || !!getToken(); }
   me(): Promise<User> { return this.req<User | { user: User }>('GET', '/auth/me').then(r => ('user' in r ? r.user : r)); }
   /** Troca a senha. O servidor devolve um token novo e o antigo deixa de valer (ARQUITETURA
    *  5.3): guarda o novo aqui, senão a pessoa seria deslogada na próxima chamada. */
@@ -164,7 +168,7 @@ export class RemoteLibrary implements Library {
     return new Promise<SessionMeta>((resolve, reject) => {
       const xhr = new XMLHttpRequest();
       xhr.open('POST', this.url('/sessions'));
-      const tok = getToken();
+      const tok = this.localMode ? null : getToken();
       if (tok) xhr.setRequestHeader('Authorization', `Bearer ${tok}`);
       onProgress('uploading', 0);
       xhr.upload.onprogress = e => { if (e.lengthComputable && e.total > 0) onProgress('uploading', e.loaded / e.total); };

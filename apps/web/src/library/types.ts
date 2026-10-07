@@ -132,9 +132,15 @@ export interface Library {
   deleteComment?(id: string): Promise<void>;
 }
 
-/** Resposta de GET /api/info. */
+/** Resposta de GET /api/info. No modo "este computador" (servidor com LOCAL_MODE,
+ *  ARQUITETURA 5.4) vem também `localMode`, a pasta dos dados e o usuário deste computador. */
 export interface ServerInfo {
   name: string;
   version: string;
   needsSetup: boolean;
+  localMode?: boolean;
+  /** caminho absoluto da pasta dos dados (só no modo este computador) */
+  dataDir?: string;
+  /** o usuário deste computador (só no modo este computador): já "logado", sem token */
+  user?: User;
 }

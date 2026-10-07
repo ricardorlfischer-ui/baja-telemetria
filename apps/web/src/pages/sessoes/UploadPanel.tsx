@@ -72,6 +72,8 @@ export function UploadPanel({ lib, remote, existing, drivers, tags, canUpload, d
   const openRef = useRef<() => void>(null);
   const keyN = useRef(0);
   const local = lib.mode === 'local';
+  /* modo "este computador" (servidor deste PC, sem contas) */
+  const pc = !!remote?.localMode;
 
   const upd = (key: string, patch: Partial<QueueItem>) => setQueue(q => q.map(x => (x.key === key ? { ...x, ...patch } : x)));
 
@@ -137,7 +139,7 @@ export function UploadPanel({ lib, remote, existing, drivers, tags, canUpload, d
       if (m) { ok++; known.push(m); }
     }
     setRunning(false);
-    if (ok) notifications.show({ color: 'green', title: ok === 1 ? 'Sessão guardada' : `${ok} sessões guardadas`, message: local ? 'Guardadas neste navegador.' : 'Guardadas no servidor da equipe.' });
+    if (ok) notifications.show({ color: 'green', title: ok === 1 ? 'Sessão guardada' : `${ok} sessões guardadas`, message: local ? 'Guardadas neste navegador.' : pc ? 'Guardadas na pasta deste computador.' : 'Guardadas no servidor da equipe.' });
   };
 
   const retry = async (it: QueueItem, allowDuplicate: boolean) => {
@@ -174,7 +176,9 @@ export function UploadPanel({ lib, remote, existing, drivers, tags, canUpload, d
               <Text c="dimmed" size="sm">
                 {local
                   ? 'A análise (voltas, suspensão, resumo) é feita aqui no navegador, sem internet.'
-                  : 'O arquivo vai para o servidor da equipe, que analisa e guarda o resumo para todos.'}
+                  : pc
+                    ? 'O arquivo vai para a pasta deste computador; o app analisa e guarda o resumo (sem internet).'
+                    : 'O arquivo vai para o servidor da equipe, que analisa e guarda o resumo para todos.'}
               </Text>
             )}
           </Stack>

@@ -1,16 +1,30 @@
 /* Peças do cabeçalho (docs/ARQUITETURA.md 4.2): modo da biblioteca e tema.
  * O seletor de sessão e o de trecho ficam em SessionChip.tsx e RangeControl.tsx. */
 import { ActionIcon, Badge, Tooltip, useComputedColorScheme, useMantineColorScheme } from '@mantine/core';
-import { IconCloud, IconCloudOff, IconDatabase, IconMoon, IconSun } from '@tabler/icons-react';
+import { IconCloud, IconCloudOff, IconDatabase, IconDeviceDesktop, IconMoon, IconSun } from '@tabler/icons-react';
 import { useLocation, useNavigate } from 'react-router';
 import { useLibrary } from '../library';
 
-/** Modo da biblioteca: "Local" ou "Servidor · nome do usuário". */
+/** Modo da biblioteca: "Local", "Servidor · nome do usuário" ou "Este computador". */
 export function LibraryBadge() {
-  const { mode, user, info, offline, loading } = useLibrary();
+  const { mode, user, info, offline, loading, pc, dataDir } = useLibrary();
   const nav = useNavigate();
   const { pathname } = useLocation();
   if (loading) return <Badge variant="light" color="gray" size="lg">…</Badge>;
+  if (pc) {
+    /* este computador (atalho da área de trabalho): sem conta; a dica diz onde estão os logs */
+    return (
+      <Tooltip multiline maw={360} label={`Os logs ficam neste computador, na pasta ${dataDir ?? 'de dados do app'}. Clique para ver em Preferências.`}>
+        <Badge
+          variant="light" color="brand" size="lg" radius="sm" className="bt-lib-badge"
+          leftSection={<IconDeviceDesktop size={14} />}
+          onClick={() => nav('/config', { state: { section: 'pasta' } })} style={{ cursor: 'pointer', textTransform: 'none' }}
+        >
+          Este computador
+        </Badge>
+      </Tooltip>
+    );
+  }
   if (mode === 'remote') {
     const label = offline ? 'Servidor fora do ar' : `Servidor · ${user ? user.name : 'entrar'}`;
     return (

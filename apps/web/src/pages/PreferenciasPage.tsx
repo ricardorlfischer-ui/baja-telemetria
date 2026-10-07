@@ -1,16 +1,19 @@
 /* Página /config — Preferências: tema, servidor da equipe (endereço, testar /api/info,
  * conectar/desconectar), conta (sair), os logs neste navegador (espaço, proteção contra limpeza,
  * reabrir a última sessão), backup da biblioteca local (JSON com o texto das sessões) e sobre
- * (versões). Tudo fica neste navegador (state/prefs). */
+ * (versões). Tudo fica neste navegador (state/prefs).
+ * No modo "este computador" (servidor deste PC, sem contas, ARQUITETURA 5.4) a seção do
+ * servidor vira "Onde ficam os logs" (a pasta no disco, como fazer backup), sem a proteção do
+ * armazenamento do navegador (os logs estão no disco) e o Backup é o da pasta do computador. */
 import { useEffect, useRef, useState } from 'react';
 import {
-  Alert, Badge, Button, Checkbox, Group, Modal, Paper, Progress, SegmentedControl, Stack, Switch, Text, TextInput,
+  Alert, Anchor, Badge, Button, Checkbox, Group, List, Modal, Paper, Progress, SegmentedControl, Stack, Switch, Text, TextInput,
   useMantineColorScheme,
 } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
 import {
-  IconCloud, IconCloudOff, IconDatabase, IconDeviceDesktop, IconDownload, IconLogin, IconLogout, IconMoon, IconPlugConnected,
-  IconSun, IconUpload, IconUsers,
+  IconCloud, IconCloudOff, IconCopy, IconDatabase, IconDeviceDesktop, IconDownload, IconExternalLink, IconFolder, IconLogin,
+  IconLogout, IconMoon, IconPlugConnected, IconSun, IconUpload, IconUsers,
 } from '@tabler/icons-react';
 import { useLocation, useNavigate } from 'react-router';
 import { SUMMARY_VERSION } from '@baja/core';
@@ -19,13 +22,16 @@ import { routeByPath } from '../routes';
 import { RemoteLibrary, useLibrary, type ServerInfo } from '../library';
 import { DEFAULT_SERVER_URL, normalizeServerUrl, serverUrlInUse, usePrefs, type ThemePref } from '../state/prefs';
 import { useProfiles } from '../state/profiles';
-import { fmtDate, msgOf } from './config/parts';
+import { copyText, fmtDate, msgOf } from './config/parts';
 import { ROLE_LABEL } from './config/team';
 import { exportBackup, importBackup, parseBackup, type Backup, type BackupCounts, type ImportOptions } from './config/backup';
 import webPkg from '../../package.json';
 import './config/config.css';
 
 const APP_VERSION: string = (webPkg as { version?: string }).version ?? '?';
+
+/** Guia do modo este computador (o app aberto pelo atalho não serve os docs: link do repositório). */
+const NO_MEU_PC_URL = 'https://github.com/ricardorlfischer-ui/baja-telemetria/blob/main/docs/NO-MEU-PC.md';
 
 export default function PreferenciasPage() {
   const r = routeByPath('/config')!;
@@ -38,16 +44,17 @@ export default function PreferenciasPage() {
     const t = setTimeout(() => document.getElementById(section)?.scrollIntoView({ block: 'start' }), 80);
     return () => clearTimeout(t);
   }, [section, loc.key]);
+  const { pc } = useLibrary();
   return (
     <>
-      <PageHeader title={r.label} subtitle={r.question} />
+      <PageHeader title={r.label} subtitle={pc ? 'Tema, onde ficam os logs deste computador, o que abre ao abrir o app e o backup.' : r.question} />
       <Section>
         <div className="cfg-groups">
           <ThemeCard />
           <AboutCard />
         </div>
       </Section>
-      <ServerSection />
+      {pc ? <PcFolderSection /> : <ServerSection />}
       <LocalLogsSection />
       <BackupSection />
     </>
@@ -77,16 +84,19 @@ function ThemeCard() {
 
 /* ---------------------------------------------------------------- sobre */
 function AboutCard() {
-  const { info, mode } = useLibrary();
+  const { info, mode, pc } = useLibrary();
   return (
     <Paper withBorder radius="md" p="lg">
       <Stack gap="xs">
         <Text fw={650} size="lg">Sobre</Text>
         <Text>Telemetria da Mauá Racing Baja — app <b>{APP_VERSION}</b> · contas do resumo versão <b>{SUMMARY_VERSION}</b></Text>
-        <Text>{mode === 'remote' && info ? <>Servidor: <b>{info.name} {info.version}</b></> : 'Sem servidor da equipe (modo local)'}</Text>
+        <Text>{pc && info ? <>Este computador: <b>{info.name} {info.version}</b> (sem contas)</>
+          : mode === 'remote' && info ? <>Servidor: <b>{info.name} {info.version}</b></> : 'Sem servidor da equipe (modo local)'}</Text>
         <Text size="sm" c="dimmed">
           Lê o CSV do FT Manager (FT450) e o log CAN do BUSMASTER e faz todas as contas no navegador, as mesmas do app
-          antigo (validadas com o modelo físico). Funciona sem internet na pista; o servidor é só a biblioteca da equipe.
+          antigo (validadas com o modelo físico). Funciona sem internet na pista; {pc
+            ? 'o servidor deste computador só guarda os logs na pasta do disco.'
+            : 'o servidor é só a biblioteca da equipe.'}
         </Text>
       </Stack>
     </Paper>
@@ -220,29 +230,91 @@ function ServerSection() {
   );
 }
 
+/* ---------------------------------------------------------------- este computador: a pasta */
+function PcFolderSection() {
+  const { dataDir } = useLibrary();
+  const nav = useNavigate();
+  const dir = dataDir ?? '';
+  const copy = async () => {
+    const ok = await copyText(dir);
+    notifications.show(ok
+      ? { color: 'green', title: 'Caminho copiado', message: dir, autoClose: 2500 }
+      : { color: 'red', title: 'Não deu para copiar', message: 'Selecione o caminho e copie com Ctrl+C.' });
+  };
+  return (
+    <Section id="pasta" title="Onde ficam os logs"
+      description="O app está no modo deste computador: as sessões, os perfis de carro e pista e as anotações ficam numa pasta do disco, não no navegador. Não precisa de conta nem de internet.">
+      <div className="cfg-groups">
+        <Paper withBorder radius="md" p="lg">
+          <Stack gap="md">
+            <Group justify="space-between" wrap="wrap" gap="xs">
+              <Text fw={650} size="lg">Pasta dos dados</Text>
+              <Badge size="lg" tt="none" variant="light" leftSection={<IconDeviceDesktop size={14} />}>este computador</Badge>
+            </Group>
+            <Group gap="xs" wrap="nowrap" align="center">
+              <IconFolder size={20} style={{ flex: 'none' }} />
+              <Text ff="monospace" style={{ overflowWrap: 'anywhere', flex: 1, minWidth: 0 }} data-testid="pc-data-dir">{dir || 'não informada pelo servidor'}</Text>
+              <Button size="sm" variant="default" leftSection={<IconCopy size={16} />} disabled={!dir} onClick={() => void copy()}>Copiar</Button>
+            </Group>
+            <Text size="sm" c="dimmed">
+              Ali ficam o banco (sessões, carros, pistas, anotações), os logs enviados e o <code>servidor.log</code>. Apagar a pasta apaga tudo.
+            </Text>
+          </Stack>
+        </Paper>
+        <Paper withBorder radius="md" p="lg">
+          <Stack gap="sm">
+            <Text fw={650} size="lg">Backup</Text>
+            <List size="md" spacing="xs">
+              <List.Item><b>Copiar a pasta</b> (pen drive, outro disco, nuvem) <b>com o app fechado</b>: feche a janela do app e pare o servidor antes (<code>npm run local:parar</code>; fechar a janela não para), senão o banco pode sair pela metade.</List.Item>
+              <List.Item>Ou <b>Exportar backup</b> logo abaixo, com o app aberto: um arquivo JSON com as sessões e os perfis, que também entra no app pelo navegador.</List.Item>
+            </List>
+            <Group gap="xs" wrap="wrap">
+              <Button size="md" variant="default" leftSection={<IconDownload size={18} />}
+                onClick={() => document.getElementById('backup')?.scrollIntoView({ block: 'start', behavior: 'smooth' })}>Ir para o Backup</Button>
+              <Button size="md" variant="subtle" component="a" href={NO_MEU_PC_URL} target="_blank" rel="noreferrer"
+                leftSection={<IconExternalLink size={18} />}>Guia: docs/NO-MEU-PC.md</Button>
+            </Group>
+            <Text size="sm" c="dimmed">
+              Para a equipe usar junto (cada um com a sua conta), o caminho é o servidor da equipe: veja <code>docs/IMPLANTACAO.md</code>
+              {' '}(a página <Anchor component="button" type="button" fz="sm" onClick={() => nav('/equipe')}>Equipe</Anchor> explica).
+            </Text>
+          </Stack>
+        </Paper>
+      </div>
+    </Section>
+  );
+}
+
 /* ---------------------------------------------------------------- logs neste navegador */
 function LocalLogsSection() {
-  const { mode, version } = useLibrary();
+  const { mode, version, pc } = useLibrary();
   const reopenLast = usePrefs(s => s.reopenLast);
   const setPrefs = usePrefs(s => s.set);
   return (
-    <Section id="armazenamento" title="Logs neste navegador"
-      description={mode === 'remote'
-        ? 'Você está no servidor da equipe: as sessões ficam nele. Aqui fica só a biblioteca local deste navegador (o que foi guardado no modo local).'
-        : 'Onde ficam as sessões da biblioteca local, quanto espaço usam e se o navegador pode apagá-las sozinho.'}>
+    <Section id="armazenamento" title={pc ? 'Continuar de onde parou' : 'Logs neste navegador'}
+      description={pc
+        ? 'Abrir o atalho de novo (ou recarregar a janela) traz de volta a última sessão aberta.'
+        : mode === 'remote'
+          ? 'Você está no servidor da equipe: as sessões ficam nele. Aqui fica só a biblioteca local deste navegador (o que foi guardado no modo local).'
+          : 'Onde ficam as sessões da biblioteca local, quanto espaço usam e se o navegador pode apagá-las sozinho.'}>
       <div className="cfg-groups">
-        <Paper withBorder radius="md" p="lg">
-          <Stack gap="sm">
-            <Text fw={650} size="lg">Armazenamento</Text>
-            <LocalStorageInfo version={version} />
-          </Stack>
-        </Paper>
+        {/* este computador: os logs estão no disco, a proteção do armazenamento do navegador não se aplica */}
+        {!pc && (
+          <Paper withBorder radius="md" p="lg">
+            <Stack gap="sm">
+              <Text fw={650} size="lg">Armazenamento</Text>
+              <LocalStorageInfo version={version} />
+            </Stack>
+          </Paper>
+        )}
         <Paper withBorder radius="md" p="lg">
           <Stack gap="sm">
             <Text fw={650} size="lg">Ao abrir o app</Text>
             <Switch size="md" checked={reopenLast} onChange={e => setPrefs({ reopenLast: e.currentTarget.checked })}
               label="Reabrir a última sessão ao abrir o app"
-              description="Recarregou a página ou voltou outro dia: a última sessão aberta da biblioteca abre sozinha. Fechar a sessão (menu da sessão → Fechar sessão) faz ela não abrir. No servidor da equipe, só depois de entrar." />
+              description={pc
+                ? 'Abriu o app pelo atalho, recarregou a página ou voltou outro dia: a última sessão aberta abre sozinha. Fechar a sessão (menu da sessão → Fechar sessão) faz ela não abrir.'
+                : 'Recarregou a página ou voltou outro dia: a última sessão aberta da biblioteca abre sozinha. Fechar a sessão (menu da sessão → Fechar sessão) faz ela não abrir. No servidor da equipe, só depois de entrar.'} />
           </Stack>
         </Paper>
       </div>
@@ -252,7 +324,9 @@ function LocalLogsSection() {
 
 /* ---------------------------------------------------------------- backup local */
 function BackupSection() {
-  const { lib, mode, bump } = useLibrary();
+  const { lib, mode, bump, pc } = useLibrary();
+  /* este computador: o backup é da pasta deste PC (biblioteca do servidor); senão, a local */
+  const target = pc && lib ? lib : undefined;
   const fileRef = useRef<HTMLInputElement>(null);
   const [prog, setProg] = useState<{ what: string; done: number; total: number } | null>(null);
   const [pending, setPending] = useState<{ backup: Backup; counts: BackupCounts; name: string } | null>(null);
@@ -261,7 +335,7 @@ function BackupSection() {
   const doExport = async () => {
     setProg({ what: 'Lendo as sessões', done: 0, total: 0 });
     try {
-      const b = await exportBackup(APP_VERSION, (done, total) => setProg({ what: 'Lendo as sessões', done, total }));
+      const b = await exportBackup(APP_VERSION, (done, total) => setProg({ what: 'Lendo as sessões', done, total }), target);
       const stamp = new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-');
       downloadText(`baja-backup-${stamp}.json`, JSON.stringify(b), 'application/json');
       notifications.show({ color: 'green', title: 'Backup pronto', message: `${b.sessions.length} sessão(ões), ${b.cars.length} carro(s), ${b.tracks.length} pista(s).`, autoClose: 5000 });
@@ -287,8 +361,8 @@ function BackupSection() {
     setPending(null);
     setProg({ what: 'Gravando', done: 0, total: 0 });
     try {
-      const r = await importBackup(backup, opts, (done, total) => setProg({ what: 'Gravando as sessões', done, total }));
-      if (mode === 'local' && lib) await useProfiles.getState().load(lib);
+      const r = await importBackup(backup, opts, (done, total) => setProg({ what: 'Gravando as sessões', done, total }), target);
+      if ((mode === 'local' || pc) && lib) await useProfiles.getState().load(lib);
       bump();
       notifications.show({
         color: 'green', title: 'Backup importado',
@@ -301,11 +375,13 @@ function BackupSection() {
   };
 
   return (
-    <Section id="backup" title="Backup deste navegador"
-      description="Um arquivo JSON com a biblioteca local: sessões (com o log inteiro), anotações, perfis de carro e pista, a configuração em uso, fórmulas e layouts da página Canais. Use para levar tudo para outro computador ou antes de limpar o navegador.">
+    <Section id="backup" title={pc ? 'Backup' : 'Backup deste navegador'}
+      description={pc
+        ? 'Um arquivo JSON com as sessões deste computador (com o log inteiro), anotações, perfis de carro e pista, a configuração em uso, fórmulas e layouts da página Canais. Importar aqui um backup feito no navegador (endereço fixo) traz aqueles logs para a pasta deste computador.'
+        : 'Um arquivo JSON com a biblioteca local: sessões (com o log inteiro), anotações, perfis de carro e pista, a configuração em uso, fórmulas e layouts da página Canais. Use para levar tudo para outro computador ou antes de limpar o navegador.'}>
       <Paper withBorder radius="md" p="lg">
         <Stack gap="md">
-          {mode === 'remote' && (
+          {mode === 'remote' && !pc && (
             <Alert color="blue" variant="light">
               Você está no servidor da equipe: o backup é da biblioteca <b>local</b> deste navegador (o que foi guardado no modo local),
               não do servidor. O backup do servidor é a pasta de dados dele (docs/IMPLANTACAO.md, seção 6).

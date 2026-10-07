@@ -15,7 +15,7 @@ Contrato completo: `docs/ARQUITETURA.md` seção 4. Resumo do que já existe:
 | `state/` | `session.ts` (store da sessão, play, trecho, hooks), `heavy.ts` (contas pesadas com log grande, qualidade dos dados), `profiles.ts` (perfis de carro/pista, configuração em uso, fórmulas), `hotkeys.ts`, `SessionSync.tsx` (biblioteca → perfis; disponibilidade dos sensores → chips; `?exemplo` na URL), `librarySave.ts` (guardar log com resumo), `reopen.ts` (lembrar/reabrir a última sessão da biblioteca), `useSaveOpenSession.ts` ("Guardar na biblioteca" a sessão aberta sem salvar) |
 | `explain/` | `ExplainHost` (monta o contexto de explicação) e `ExplainDrawer` (o card) |
 | `state/prefs.ts` | preferências (tema, servidor, layouts da página Canais, menu recolhido, última sessão e "reabrir ao abrir o app"); `lsGet/lsSet` com try/catch |
-| `library/` | biblioteca local (IndexedDB) e remota (API 5.3); `useLibrary()`; `storage.ts` (espaço usado/disponível, `persist()`, erro de falta de espaço com mensagem clara); `detect.ts` (no build estático `VITE_STATIC=1` não procura `/api` na mesma origem) |
+| `library/` | biblioteca local (IndexedDB) e remota (API 5.3); `useLibrary()`; `storage.ts` (espaço usado/disponível, `persist()`, erro de falta de espaço com mensagem clara); `detect.ts` (no build estático `VITE_STATIC=1` não procura `/api` na mesma origem; `/api/info` com `localMode` na mesma origem = modo "este computador", ganha até de um servidor salvo) |
 | `styles/global.css` | CSS global (tokens `--bt-*`, cartões, chips, tooltips) |
 
 ## Regras das páginas
@@ -141,7 +141,14 @@ o card `sensor.<id>`. Id fora do catálogo mostra um aviso com o id: é o sinal 
 
 ## Biblioteca
 
-- `usePrefs()` para tema/servidor/layouts. `useLibrary()` → `{ lib, mode, user, remote, info, offline, redetect, logout, bump, version }`.
+- `usePrefs()` para tema/servidor/layouts. `useLibrary()` → `{ lib, mode, user, remote, info, offline, pc, dataDir, redetect, logout, bump, version }`.
   `lib` implementa `Library` (ARQUITETURA 4.4); `remote` tem login, conta e equipe (só no modo servidor).
+- Modo **este computador** (`pc` em `useLibrary()`, o atalho da área de trabalho: servidor com `LOCAL_MODE` na mesma
+  origem, ARQUITETURA 5.4, docs/NO-MEU-PC.md): `mode` é `'remote'`, mas sem contas — `RemoteLibrary.localMode` não manda
+  token e um 401 não chama `onUnauthorized`; `user` é o `info.user` de `/api/info`, já conectado (`logout`/`setUser(null)`
+  não fazem nada); `dataDir` é a pasta dos logs no disco. A interface esconde login/cadastro/senha/sair (`#/login` volta
+  para `#/`), a Equipe vira uma explicação, o selo vira "Este computador", Preferências mostra "Onde ficam os logs" (sem a
+  proteção do armazenamento do navegador) e Sessões o aviso "Biblioteca deste computador — os logs ficam em …". Reabrir a
+  última sessão vale igual (chave `remote:`). Testes em `test/pc-mode.test.tsx`.
 - Guardar um log: `addLogToLibrary(lib, fileOuTexto, meta?, ctx?)` (state/librarySave.ts) — no modo local calcula `kind` e o
   resumo (`sessionSummary` do core, quando existir) e marca os perfis ativos como carro/pista; depois chame `bump()`.

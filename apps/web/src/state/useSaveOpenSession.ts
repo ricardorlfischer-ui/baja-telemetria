@@ -18,7 +18,7 @@ export interface SaveOpenSession {
 }
 
 export function useSaveOpenSession(): SaveOpenSession {
-  const { lib, mode, user, offline, bump } = useLibrary();
+  const { lib, mode, user, offline, bump, pc } = useLibrary();
   const pending = useSessionStore(s =>
     s.status === 'ready' && !!s.S && !s.S.demo && !!s.source && !s.source.libraryId && s.unsavedText !== null);
   const saving = useSessionStore(s => s.savingToLibrary);
@@ -36,7 +36,9 @@ export function useSaveOpenSession(): SaveOpenSession {
           color: 'green', title: 'Sessão guardada na biblioteca',
           message: mode === 'local'
             ? `“${r.meta.name}” ficou neste navegador${getPrefs().reopenLast ? ' e abre sozinha quando você voltar ao app' : ''}.`
-            : `“${r.meta.name}” está no servidor da equipe.`,
+            : pc
+              ? `“${r.meta.name}” ficou na pasta deste computador${getPrefs().reopenLast ? ' e abre sozinha quando você voltar ao app' : ''}.`
+              : `“${r.meta.name}” está no servidor da equipe.`,
           autoClose: 6000,
         });
     } catch (e) {

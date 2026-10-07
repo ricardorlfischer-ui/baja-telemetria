@@ -38,7 +38,7 @@ function readSel(): string[] {
 export default function CompararPage() {
   const r = routeByPath('/comparar')!;
   const nav = useNavigate();
-  const { lib, version, loading: libLoading, mode, user, info } = useLibrary();
+  const { lib, version, loading: libLoading, mode, user, info, pc } = useLibrary();
   /* servidor sem ninguém conectado: a biblioteca da equipe pede login (a lista daria 401) */
   const loggedOut = mode === 'remote' && !user;
   const cars = useProfiles(s => s.cars), tracks = useProfiles(s => s.tracks);
@@ -150,7 +150,7 @@ export default function CompararPage() {
         {header}
         {listErr && <Alert color="red" mb="lg" title="Não consegui ler a biblioteca">{listErr}</Alert>}
         <EmptyState icon={IconGitCompare} title={list.length ? 'Só há 1 sessão na biblioteca' : 'Nenhuma sessão na biblioteca'}
-          description={`Para comparar, guarde pelo menos 2 logs na biblioteca ${mode === 'remote' ? 'da equipe' : 'deste navegador'} (página Sessões: abrir ou arrastar um log já guarda). Compare testes na mesma pista: antes e depois de uma mudança de mola, clicks, CVT, pneu ou piloto.`}
+          description={`Para comparar, guarde pelo menos 2 logs na biblioteca ${pc ? 'deste computador' : mode === 'remote' ? 'da equipe' : 'deste navegador'} (página Sessões: abrir ou arrastar um log já guarda). Compare testes na mesma pista: antes e depois de uma mudança de mola, clicks, CVT, pneu ou piloto.`}
           action={<Button size="md" leftSection={<IconFolderOpen size={18} />} onClick={() => nav('/')}>Ir para Sessões</Button>} />
       </>
     );

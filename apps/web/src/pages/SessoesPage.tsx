@@ -2,7 +2,8 @@
  * Enviar vários logs de uma vez (com data, pista, carro, piloto, etiquetas e notas), a lista
  * com busca e filtros, os números principais de cada sessão (resumo do core, com o card de
  * explicação de cada um) e as ações: abrir, editar dados, baixar o log original, apagar.
- * No modo local tudo fica no IndexedDB deste navegador; no servidor, na biblioteca da equipe. */
+ * No modo local tudo fica no IndexedDB deste navegador; no servidor, na biblioteca da equipe;
+ * no modo "este computador" (servidor deste PC, sem contas), na pasta de dados do disco. */
 import './sessoes/sessoes.css';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -10,7 +11,7 @@ import {
 } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
 import {
-  IconCloud, IconCloudOff, IconDatabase, IconFileSearch, IconFilterOff, IconFlask, IconFolderOpen, IconLogin,
+  IconCloud, IconCloudOff, IconDatabase, IconDeviceDesktop, IconFileSearch, IconFilterOff, IconFlask, IconFolderOpen, IconLogin,
   IconSearch, IconTrash, IconUpload,
 } from '@tabler/icons-react';
 import { useNavigate } from 'react-router';
@@ -33,7 +34,7 @@ const sortKey = (m: SessionMeta) => m.date || m.createdAt;
 export default function SessoesPage() {
   const r = routeByPath('/')!;
   const nav = useNavigate();
-  const { lib, mode, user, remote, info, offline, loading: libLoading, version, bump } = useLibrary();
+  const { lib, mode, user, remote, info, offline, loading: libLoading, version, bump, pc, dataDir } = useLibrary();
   const openFile = useSessionStore(s => s.openFile);
   const openDemo = useSessionStore(s => s.openDemo);
   const openFromLibrary = useSessionStore(s => s.openFromLibrary);
@@ -190,7 +191,7 @@ export default function SessoesPage() {
   return (
     <>
       <Box mb="xl">
-        <BrandHero compact subtitle="Os logs do carro em gráficos e números para projetar o carro do ano que vem. Envie, filtre e abra as sessões da equipe aqui.">
+        <BrandHero compact subtitle={`Os logs do carro em gráficos e números para projetar o carro do ano que vem. Envie, filtre e abra as sessões ${pc ? 'deste computador' : 'da equipe'} aqui.`}>
           <Button size="md" leftSection={<IconFlask size={18} />} disabled={sessionLoading} onClick={() => { void demo(); }}>
             Dados de exemplo
           </Button>
@@ -200,12 +201,12 @@ export default function SessoesPage() {
           </Button>
         </BrandHero>
       </Box>
-      <PageHeader title={r.label} subtitle={r.question} />
+      <PageHeader title={r.label} subtitle={pc ? 'Todos os logs deste computador num lugar só: envie, filtre por pista, carro e piloto, e abra para analisar.' : r.question} />
       <input ref={fileRef} type="file" accept=".csv,.txt,.log" hidden
         onChange={e => { void openNoSave(e.target.files?.[0]); e.target.value = ''; }} />
 
-      <ModeBanner mode={mode} loading={libLoading} offline={offline} serverName={info?.name} userName={user?.name}
-        role={user?.role} onLogin={() => nav('/login', { state: { from: '/' } })} onPrefs={() => nav('/config')}
+      <ModeBanner mode={mode} pc={pc} dataDir={dataDir} loading={libLoading} offline={offline} serverName={info?.name} userName={user?.name}
+        role={user?.role} onLogin={() => nav('/login', { state: { from: '/' } })} onPrefs={() => nav('/config', pc ? { state: { section: 'pasta' } } : undefined)}
         hasSessions={!!list && list.length > 0} version={version} />
 
       <Section title="Enviar logs" description="Cada arquivo vira uma sessão da biblioteca, com o resumo dos números (voltas, velocidade, suspensão, CVT) já calculado.">
@@ -222,7 +223,7 @@ export default function SessoesPage() {
       </Section>
 
       <Section
-        title={local ? 'Sessões neste navegador' : 'Sessões da equipe'}
+        title={local ? 'Sessões neste navegador' : pc ? 'Sessões deste computador' : 'Sessões da equipe'}
         description={list && all.length ? `${filtering ? `${shown.length} de ${all.length}` : all.length} ${all.length === 1 ? 'sessão' : 'sessões'} · mais recentes primeiro. Clique num número para ver de quais sensores ele saiu.` : undefined}
       >
         {list === null ? (
@@ -244,7 +245,7 @@ export default function SessoesPage() {
             </Alert>
           )
         ) : all.length === 0 ? (
-          <EmptyLibrary local={local} onDemo={() => { void demo(); }} onOpenFile={() => fileRef.current?.click()} />
+          <EmptyLibrary local={local} pc={pc} onDemo={() => { void demo(); }} onOpenFile={() => fileRef.current?.click()} />
         ) : (
           <Stack gap="lg">
             <Paper withBorder radius="md" p="md">
@@ -313,7 +314,7 @@ export default function SessoesPage() {
         {deleting && (
           <Stack gap="md">
             <Text>
-              “<b>{deleting.name}</b>” será apagada {local ? 'deste navegador' : 'do servidor da equipe'}: o log, o resumo e as anotações.
+              “<b>{deleting.name}</b>” será apagada {local ? 'deste navegador' : pc ? 'deste computador' : 'do servidor da equipe'}: o log, o resumo e as anotações.
               Não dá para desfazer.
             </Text>
             <Text size="sm" c="dimmed">Se quiser guardar uma cópia, baixe o log original antes.</Text>
@@ -332,11 +333,27 @@ export default function SessoesPage() {
 }
 
 /* ---------------------------------------------------------------- modo da biblioteca */
-function ModeBanner({ mode, loading, offline, serverName, userName, role, onLogin, onPrefs, hasSessions, version }: {
-  mode: 'local' | 'remote' | null; loading: boolean; offline: boolean; serverName?: string; userName?: string; role?: string;
+function ModeBanner({ mode, pc, dataDir, loading, offline, serverName, userName, role, onLogin, onPrefs, hasSessions, version }: {
+  mode: 'local' | 'remote' | null; pc: boolean; dataDir: string | null; loading: boolean; offline: boolean; serverName?: string; userName?: string; role?: string;
   onLogin: () => void; onPrefs: () => void; hasSessions: boolean; version: number;
 }) {
   if (loading || !mode) return null;
+  if (pc) {
+    /* este computador: os logs ficam numa pasta do disco (nada de "somem se limpar os dados do site") */
+    return (
+      <Alert variant="light" color="blue" radius="md" icon={<IconDeviceDesktop size={22} />} mb="xl">
+        <Group justify="space-between" gap="sm" wrap="wrap">
+          <Stack gap={4} style={{ flex: '1 1 240px', minWidth: 0 }}>
+            <Text size="md" style={{ overflowWrap: 'anywhere' }}>
+              <b>Biblioteca deste computador</b> — os logs ficam {dataDir ? <>em <b>{dataDir}</b></> : 'na pasta de dados do app'}.
+            </Text>
+            <Text size="sm" c="dimmed">Ficam no disco, não no navegador: abrir o atalho de novo traz tudo de volta, sem conta e sem internet.</Text>
+          </Stack>
+          <Button variant="default" onClick={onPrefs}>Onde ficam e backup</Button>
+        </Group>
+      </Alert>
+    );
+  }
   if (mode === 'local') {
     /* onde ficam os logs, espaço, proteção contra limpeza e o caminho do backup */
     return (
@@ -378,11 +395,11 @@ function ModeBanner({ mode, loading, offline, serverName, userName, role, onLogi
 }
 
 /* ---------------------------------------------------------------- biblioteca vazia */
-function EmptyLibrary({ local, onDemo, onOpenFile }: { local: boolean; onDemo: () => void; onOpenFile: () => void }) {
+function EmptyLibrary({ local, pc, onDemo, onOpenFile }: { local: boolean; pc: boolean; onDemo: () => void; onOpenFile: () => void }) {
   const items = [
     {
       icon: IconUpload, title: 'Guarde os logs dos testes',
-      text: `Arraste acima o CSV do FT Manager ou o log do BUSMASTER. Cada teste vira uma sessão com data, pista, carro e piloto, ${local ? 'guardada neste navegador' : 'compartilhada com a equipe'}.`,
+      text: `Arraste acima o CSV do FT Manager ou o log do BUSMASTER. Cada teste vira uma sessão com data, pista, carro e piloto, ${local ? 'guardada neste navegador' : pc ? 'guardada na pasta deste computador' : 'compartilhada com a equipe'}.`,
     },
     {
       icon: IconFlask, title: 'Veja como fica com o exemplo',
@@ -399,7 +416,7 @@ function EmptyLibrary({ local, onDemo, onOpenFile }: { local: boolean; onDemo: (
     <Paper withBorder radius="md" p="xl">
       <Stack gap="lg">
         <div>
-          <Title order={3}>Nenhuma sessão {local ? 'neste navegador' : 'na biblioteca da equipe'} ainda</Title>
+          <Title order={3}>Nenhuma sessão {local ? 'neste navegador' : pc ? 'neste computador' : 'na biblioteca da equipe'} ainda</Title>
           <Text c="dimmed" mt={4}>
             Com os logs guardados aqui dá para comparar testes, setups e pilotos ao longo da temporada e levar os números para o
             projeto do carro do ano que vem.

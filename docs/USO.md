@@ -1,9 +1,15 @@
 # Guia da equipe — como usar a Telemetria da Mauá Racing Baja
 
 Este guia é para quem vai **usar** o app: pilotos, pessoal de suspensão, trem de força,
-CVT, dinâmica e quem apresenta o projeto. Para instalar o servidor, veja
-[`IMPLANTACAO.md`](IMPLANTACAO.md). O detalhe técnico de cada página está em
+CVT, dinâmica e quem apresenta o projeto. O detalhe técnico de cada página está em
 [`ARQUITETURA.md`](ARQUITETURA.md) (seção 4).
+
+**O jeito principal de usar é o atalho "Telemetria · Mauá Racing Baja"** na área de
+trabalho: um clique e o app abre numa janela própria, com os logs guardados numa pasta
+deste computador, sem conta, sem login e sem internet. Como criar o atalho:
+[`NO-MEU-PC.md`](NO-MEU-PC.md). Os outros jeitos — o endereço fixo no navegador (sem
+servidor) e o servidor da equipe ([`IMPLANTACAO.md`](IMPLANTACAO.md)) — continuam
+valendo como alternativas ([seção 2](#2-primeiros-passos)).
 
 As capturas de tela são da **sessão de exemplo** (log gerado por um modelo físico do carro)
 e dos **logs reais de 05/10**, no tema escuro padrão.
@@ -55,12 +61,42 @@ funciona sem internet na pista. O servidor da equipe serve para guardar e compar
 
 ## 2. Primeiros passos
 
-1. Abra o endereço do app que a equipe usa: o endereço fixo do GitHub Pages
+### O atalho no computador (jeito principal)
+
+Dê dois cliques no atalho **Telemetria · Mauá Racing Baja** da área de trabalho (para
+criar o atalho e o que fazer se algo der errado: [`NO-MEU-PC.md`](NO-MEU-PC.md)). Ele
+liga o app neste computador (endereço `http://localhost:8090`) e abre uma janela própria.
+
+- **Sem login.** Não há conta, senha, tela **Entrar** nem botão **Sair**: o app é só deste
+  computador. O selo do cabeçalho mostra **Este computador**; parando o mouse em cima,
+  aparece a pasta onde ficam os logs.
+- **Onde ficam os logs.** Numa pasta do disco (por padrão, a pasta `data` dentro da pasta
+  do app): sessões, logs enviados, perfis de carro e pista e anotações. Não dependem do
+  navegador — limpar os dados do navegador não apaga nada. **Preferências → Onde ficam os
+  logs** mostra o caminho (botão **Copiar**) e como fazer backup.
+- **Continua de onde parou.** Abrindo o atalho de novo (ou recarregando a janela), a
+  última sessão aberta reabre sozinha. **Fechar sessão** (menu da sessão no cabeçalho)
+  faz ela não reabrir; para nunca reabrir, desligue **Preferências → Ao abrir o app →
+  Reabrir a última sessão ao abrir o app**.
+- **Backup.** Copie a pasta dos logs inteira (pen drive, outro disco, nuvem) **com o app
+  fechado**, ou use **Preferências → Backup → Exportar backup** (um arquivo JSON). Um
+  backup feito no navegador (endereço fixo) entra aqui por **Preferências → Importar
+  backup…**: os logs vão para a pasta deste computador.
+- **Equipe** fica apagada no menu: neste modo não há equipe. Para a equipe usar junto,
+  cada um com a sua conta, o caminho é o servidor da equipe ([`IMPLANTACAO.md`](IMPLANTACAO.md)).
+
+O resto do app (páginas, gráficos, cards de explicação, envio de logs) é igual nos três
+jeitos.
+
+### Os outros jeitos (alternativas)
+
+1. Abra o endereço do app: o endereço fixo do GitHub Pages
    (`https://ricardorlfischer-ui.github.io/baja-telemetria/`, sem servidor — veja
    [Usar pelo endereço fixo](#usar-pelo-endereço-fixo-github-pages)) ou o do servidor da
-   equipe (ex.: `https://telemetria.suaequipe.com.br`, ou `http://localhost:8080` no PC).
-2. **Biblioteca local ou servidor.** O selo no canto direito do cabeçalho diz onde as
-   sessões ficam:
+   equipe (ex.: `https://telemetria.suaequipe.com.br`, ou `http://localhost:8080` no PC;
+   instalação em [`IMPLANTACAO.md`](IMPLANTACAO.md)).
+2. **Onde ficam as sessões.** O selo no canto direito do cabeçalho diz:
+   - **Este computador** — o atalho acima (pasta do disco, sem login).
    - **Local** — só neste navegador, neste computador (somem se os dados do site forem
      apagados; veja [Usar pelo endereço fixo](#usar-pelo-endereço-fixo-github-pages)).
      Funciona sem conta e sem internet.
@@ -69,14 +105,17 @@ funciona sem internet na pista. O servidor da equipe serve para guardar e compar
      de convite que um admin mandou, ou a aba **Criar conta com convite** e o código.
    Para ligar o servidor: **Preferências → Servidor da equipe**, cole o endereço,
    **Testar conexão** e **Conectar**.
-3. Para conhecer o app, abra a **sessão de exemplo**: botão **Dados de exemplo** na página
+
+### Os primeiros minutos (em qualquer jeito)
+
+1. Para conhecer o app, abra a **sessão de exemplo**: botão **Dados de exemplo** na página
    **Sessões** (ou em qualquer página quando nada está aberto). Os números dela são
    conhecidos (vêm de um modelo físico) e todas as páginas funcionam.
-4. Abra um log de verdade: arraste o arquivo para **Enviar logs** na página Sessões
+2. Abra um log de verdade: arraste o arquivo para **Enviar logs** na página Sessões
    ([seção 4](#4-abrir-e-enviar-logs-página-sessões)).
-5. Confira **Pista e GPS** e **Carro** ([seções 9](#9-pista-e-gps) e
+3. Confira **Pista e GPS** e **Carro** ([seções 9](#9-pista-e-gps) e
    [10](#10-dados-do-carro)): sem isso, mapa e contas saem errados.
-6. Antes de tirar conclusões, olhe **Aquisição → Qualidade**: diz se os sensores mandaram
+4. Antes de tirar conclusões, olhe **Aquisição → Qualidade**: diz se os sensores mandaram
    sinal ([seção 8](#8-exemplo-real-os-logs-de-0510) mostra por que isso importa).
 
 **Link direto para o exemplo:** acrescentar `?exemplo=1` ao endereço abre o app já com a
@@ -170,8 +209,9 @@ lá são puladas. Faça um backup de vez em quando — é a única cópia fora d
 
 A página **Sessões** é a biblioteca. Em cima: **Dados de exemplo** e **Abrir arquivo sem
 salvar** (só analisa, o arquivo não vai para a biblioteca; dá para guardar depois pelo menu
-da sessão → **Guardar na biblioteca**), e o aviso do modo (biblioteca local — com o espaço
-usado, a proteção contra limpeza e o link do backup — ou servidor da equipe).
+da sessão → **Guardar na biblioteca**), e o aviso do modo: **Biblioteca deste computador
+— os logs ficam em …** (o atalho, com o caminho da pasta), biblioteca local (com o espaço
+usado, a proteção contra limpeza e o link do backup) ou servidor da equipe.
 
 ### Enviar logs
 
@@ -413,7 +453,12 @@ inserir. A conta é conferida enquanto você digita. Exemplo: torção da diante
 - **Equipe** (servidor): **Minha conta** (**Trocar a senha**); admins veem **Usuários**
   (**Novo usuário**, papel, desativar, senha nova) e **Convites** (**Novo convite**).
   Detalhes em [`IMPLANTACAO.md`](IMPLANTACAO.md#3-primeiro-acesso-admin-convites-e-papéis).
-- **Preferências**: **Tema**; **Servidor da equipe** (**Endereço do servidor**, **Testar
+  Pelo atalho (**Este computador**) não há equipe: a página só explica isso.
+- **Preferências** pelo atalho (**Este computador**): **Tema**; **Onde ficam os logs** (o
+  caminho da pasta com **Copiar**, como fazer backup e o guia `NO-MEU-PC.md`); **Ao abrir o
+  app** (**Reabrir a última sessão ao abrir o app**); **Backup** (**Exportar backup**,
+  **Importar backup…**, da pasta deste computador).
+- **Preferências** nos outros jeitos: **Tema**; **Servidor da equipe** (**Endereço do servidor**, **Testar
   conexão**, **Conectar**, **Desconectar (usar só este navegador)**); **Conta** (**Equipe e
   trocar a senha**, **Sair**, **Entrar**); **Logs neste navegador** (espaço usado e
   disponível, **Proteger os logs**, **Reabrir a última sessão ao abrir o app**); **Backup

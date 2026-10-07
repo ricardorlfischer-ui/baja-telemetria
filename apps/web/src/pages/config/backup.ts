@@ -1,9 +1,13 @@
-/* Backup da biblioteca LOCAL (IndexedDB) num arquivo JSON: perfis de carro e pista, sessões
- * com o texto do log, anotações, a configuração em uso, fórmulas e layouts da página Canais.
+/* Backup de uma biblioteca num arquivo JSON: perfis de carro e pista, sessões com o texto do
+ * log, anotações, a configuração em uso, fórmulas e layouts da página Canais.
  * Serve para levar tudo para outro computador ou para o servidor da equipe, e para não perder
- * nada ao limpar o navegador. Só lê e grava pela LocalLibrary; nenhuma conta muda. */
+ * nada ao limpar o navegador. Padrão: a biblioteca LOCAL (IndexedDB); no modo "este computador"
+ * (ARQUITETURA 5.4) a página passa a biblioteca do servidor deste PC — assim o backup feito no
+ * navegador (GitHub Pages) entra na pasta do computador. Nenhuma conta muda. */
 import type { Formula } from '@baja/core';
-import { LocalLibrary, type CarProfile, type Comment, type SessionMeta, type TrackProfile } from '../../library';
+import { ApiError } from '../../library/remote';
+import { LocalLibrary } from '../../library/local';
+import type { CarProfile, Comment, Library, SessionMeta, TrackProfile } from '../../library/types';
 import { usePrefs, type ChannelLayout } from '../../state/prefs';
 import { useProfiles, type ConfigDraft } from '../../state/profiles';
 
@@ -27,15 +31,16 @@ export interface Backup {
 export interface BackupCounts { cars: number; tracks: number; sessions: number; comments: number; bytes: number }
 
 /** Monta o backup (lê o texto de cada sessão: pode demorar com logs grandes). */
-export async function exportBackup(appVersion: string, onProgress?: (done: number, total: number) => void): Promise<Backup> {
-  const lib = new LocalLibrary();
+export async function exportBackup(
+  appVersion: string, onProgress?: (done: number, total: number) => void, lib: Library = new LocalLibrary(),
+): Promise<Backup> {
   const [cars, tracks, metas] = await Promise.all([lib.listCars(), lib.listTracks(), lib.listSessions()]);
   const sessions: BackupSession[] = [];
   for (let k = 0; k < metas.length; k++) {
     onProgress?.(k, metas.length);
     const m = metas[k];
     const text = await lib.getSessionText(m.id);
-    const comments = await lib.listComments(m.id);
+    const comments = lib.listComments ? await lib.listComments(m.id) : [];
     sessions.push({ meta: m, text, comments });
   }
   onProgress?.(metas.length, metas.length);
@@ -67,30 +72,69 @@ export function parseBackup(text: string): { backup: Backup; counts: BackupCount
 export interface ImportOptions { profiles: boolean; sessions: boolean; config: boolean }
 export interface ImportResult { cars: number; tracks: number; sessions: number; skipped: number; comments: number }
 
-/** Grava o backup na biblioteca local. Perfis com o mesmo id são substituídos; sessões que já
- *  existem (mesmo arquivo e tamanho) são puladas para não duplicar. */
-export async function importBackup(b: Backup, o: ImportOptions, onProgress?: (done: number, total: number) => void): Promise<ImportResult> {
-  const lib = new LocalLibrary();
+/** Grava o backup na biblioteca (padrão: a local). Perfis com o mesmo id são substituídos;
+ *  sessões que já existem (mesmo arquivo e tamanho, ou o mesmo log no servidor: 409) são
+ *  puladas para não duplicar. No servidor o id dos perfis novos é dele: as sessões e o perfil
+ *  em uso passam a apontar para o id novo. */
+export async function importBackup(
+  b: Backup, o: ImportOptions, onProgress?: (done: number, total: number) => void, lib: Library = new LocalLibrary(),
+): Promise<ImportResult> {
   const res: ImportResult = { cars: 0, tracks: 0, sessions: 0, skipped: 0, comments: 0 };
+  const remote = lib.mode === 'remote';
+  /* id do backup → id nesta biblioteca */
+  const carIds = new Map<string, string>(), trackIds = new Map<string, string>();
   if (o.profiles) {
-    for (const c of b.cars) { await lib.saveCar({ id: c.id, name: c.name, params: c.params || {} }); res.cars++; }
-    for (const t of b.tracks) { await lib.saveTrack({ id: t.id, name: t.name, params: t.params || {} }); res.tracks++; }
+    const haveCars = remote ? new Set((await lib.listCars()).map(c => c.id)) : null;
+    const haveTracks = remote ? new Set((await lib.listTracks()).map(t => t.id)) : null;
+    for (const c of b.cars) {
+      const keep = !haveCars || haveCars.has(c.id);
+      const saved = await lib.saveCar({ ...(keep ? { id: c.id } : {}), name: c.name, params: c.params || {} });
+      carIds.set(c.id, saved?.id ?? c.id); res.cars++;
+    }
+    for (const t of b.tracks) {
+      const keep = !haveTracks || haveTracks.has(t.id);
+      const saved = await lib.saveTrack({ ...(keep ? { id: t.id } : {}), name: t.name, params: t.params || {} });
+      trackIds.set(t.id, saved?.id ?? t.id); res.tracks++;
+    }
   }
+  /* no servidor, um carro/pista que não veio (nem existe lá) faria o envio falhar: fica sem */
+  const known = async () => remote
+    ? {
+      cars: new Set([...(await lib.listCars()).map(c => c.id), ...carIds.values()]),
+      tracks: new Set([...(await lib.listTracks()).map(t => t.id), ...trackIds.values()]),
+    }
+    : null;
   if (o.sessions) {
     const have = await lib.listSessions();
+    const ids = await known();
+    const mapId = (id: string | undefined, m: Map<string, string>, there?: Set<string>) => {
+      if (!id) return undefined;
+      const n = m.get(id) ?? id;
+      return !there || there.has(n) ? n : undefined;
+    };
     const key = (m: Pick<SessionMeta, 'fileName' | 'size'>) => `${m.fileName}|${m.size}`;
     const seen = new Set(have.map(key));
     for (let k = 0; k < b.sessions.length; k++) {
       onProgress?.(k, b.sessions.length);
       const s = b.sessions[k], m = s.meta;
       if (seen.has(key(m))) { res.skipped++; continue; }
-      const added = await lib.addSession({ name: m.fileName || m.name, text: s.text }, {
-        name: m.name, kind: m.kind, tags: m.tags || [], date: m.date, trackId: m.trackId, carId: m.carId,
-        driver: m.driver, notes: m.notes, summary: m.summary,
-      });
+      let added: SessionMeta;
+      try {
+        added = await lib.addSession({ name: m.fileName || m.name, text: s.text }, {
+          name: m.name, kind: m.kind, tags: m.tags || [], date: m.date,
+          trackId: mapId(m.trackId, trackIds, ids?.tracks), carId: mapId(m.carId, carIds, ids?.cars),
+          /* o servidor calcula o resumo dele */
+          driver: m.driver, notes: m.notes, ...(remote ? {} : { summary: m.summary }),
+        });
+      } catch (e) {
+        /* o mesmo log já está no servidor (409): pula, como no local */
+        if (e instanceof ApiError && e.status === 409) { res.skipped++; continue; }
+        throw e;
+      }
       seen.add(key(added));
       res.sessions++;
       for (const c of Array.isArray(s.comments) ? s.comments : []) {
+        if (!lib.addComment) break;
         try { await lib.addComment(added.id, { t: c.t ?? null, text: c.text }); res.comments++; } catch { /* anotação vazia */ }
       }
     }

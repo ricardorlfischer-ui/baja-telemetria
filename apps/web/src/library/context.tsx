@@ -1,5 +1,10 @@
 /* Contexto da biblioteca ativa: useLibrary() dá a biblioteca (local ou remota), o usuário
- * conectado (remoto), as informações do servidor e ações para trocar/atualizar. */
+ * conectado (remoto), as informações do servidor e ações para trocar/atualizar.
+ *
+ * Modo "este computador" (`pc`, servidor com LOCAL_MODE na mesma origem, ARQUITETURA 5.4):
+ * a biblioteca é a do servidor (mode 'remote'), mas sem contas: o usuário é o de
+ * /api/info (info.user), já "logado" desde a detecção, sem token, sem tela de login e sem
+ * "você saiu" (logout e setUser(null) não fazem nada). `dataDir` = pasta dos logs no disco. */
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { notifications } from '@mantine/notifications';
 import { detectLibrary } from './detect';
@@ -19,6 +24,10 @@ export interface LibraryState {
   user: User | null;
   /** cliente remoto (para login/equipe), null no modo local */
   remote: RemoteLibrary | null;
+  /** modo "este computador": servidor deste PC (LOCAL_MODE), sem contas */
+  pc: boolean;
+  /** pasta dos dados no disco (só no modo este computador) */
+  dataDir: string | null;
   setUser: (u: User | null) => void;
   /** detecta de novo (depois de mudar o servidor nas preferências) */
   redetect: () => Promise<void>;
@@ -53,10 +62,16 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
     setLoading(true);
     try {
       const d = await detectLibrary();
-      if (d.lib instanceof RemoteLibrary) d.lib.onUnauthorized = lostAuth;
+      const pc = d.lib instanceof RemoteLibrary && d.lib.localMode;
+      if (d.lib instanceof RemoteLibrary && !pc) d.lib.onUnauthorized = lostAuth;
       setLib(d.lib); setInfo(d.info); setOffline(!!d.offline);
       setUser(null);
-      if (d.lib instanceof RemoteLibrary && d.info && d.lib.loggedIn) {
+      if (pc) {
+        /* este computador: o usuário vem no /api/info; sem ele (servidor de outra versão), /auth/me */
+        let u = d.info?.user ?? null;
+        if (!u) { try { u = await (d.lib as RemoteLibrary).me(); } catch { /* fica o genérico */ } }
+        setUser(u ?? { id: 'local', name: 'Este computador', email: '', role: 'admin' });
+      } else if (d.lib instanceof RemoteLibrary && d.info && d.lib.loggedIn) {
         try { setUser(await d.lib.me()); } catch { /* token vencido: fica deslogado */ }
       }
     } catch {
@@ -68,11 +83,12 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => { void redetect(); }, [redetect]);
 
-  /* 401 do servidor: limpa o usuário e avisa */
+  /* 401 do servidor: limpa o usuário e avisa (no modo este computador não há 401 de conta) */
   useEffect(() => {
-    if (lib instanceof RemoteLibrary) lib.onUnauthorized = lostAuth;
+    if (lib instanceof RemoteLibrary && !lib.localMode) lib.onUnauthorized = lostAuth;
   }, [lib, lostAuth]);
 
+  const pc = lib instanceof RemoteLibrary && lib.localMode;
   const value = useMemo<LibraryState>(() => ({
     lib,
     mode: lib ? lib.mode : null,
@@ -81,12 +97,15 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
     offline,
     user,
     remote: lib instanceof RemoteLibrary ? lib : null,
-    setUser,
+    pc,
+    dataDir: pc ? info?.dataDir ?? null : null,
+    /* este computador: o usuário não sai */
+    setUser: (u: User | null) => { if (!pc || u) setUser(u); },
     redetect,
-    logout: () => { if (lib instanceof RemoteLibrary) lib.logout(); setUser(null); },
+    logout: () => { if (pc) return; if (lib instanceof RemoteLibrary) lib.logout(); setUser(null); },
     version,
     bump: () => setVersion(v => v + 1),
-  }), [lib, loading, info, offline, user, redetect, version]);
+  }), [lib, pc, loading, info, offline, user, redetect, version]);
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

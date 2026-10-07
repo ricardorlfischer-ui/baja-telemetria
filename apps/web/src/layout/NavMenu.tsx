@@ -1,18 +1,23 @@
 /* Barra lateral: grupos e páginas do routes.tsx. Páginas que precisam de sessão ficam
- * desabilitadas (com dica) quando não há sessão aberta; Equipe só com o servidor. */
+ * desabilitadas (com dica) quando não há sessão aberta; Equipe só com o servidor da equipe
+ * (no modo "este computador" não há equipe: fica desabilitada com a explicação na dica). */
 import { NavLink, ScrollArea, Stack, Text, Tooltip } from '@mantine/core';
 import { Link, useLocation } from 'react-router';
 import { NAV_GROUPS, ROUTES, type AppRoute } from '../routes';
 import { useHasSession } from '../state/session';
 import { useLibrary } from '../library';
 
+/** Por que não há Equipe no modo este computador (dica do menu e a página /equipe). */
+export const PC_NO_TEAM = 'Neste modo o app é só deste computador; para a equipe usar junto, ver docs/IMPLANTACAO.md';
+
 export function NavMenu({ onNavigate }: { onNavigate?: () => void }) {
   const { pathname } = useLocation();
   const hasSession = useHasSession();
-  const { mode } = useLibrary();
+  const { mode, pc } = useLibrary();
 
   const blocked = (r: AppRoute): string | null => {
     if (r.needsSession && !hasSession) return 'Abra uma sessão primeiro (página Sessões ou o exemplo)';
+    if (r.serverOnly && pc) return PC_NO_TEAM;
     if (r.serverOnly && mode !== 'remote') return 'Só com o servidor da equipe (configure em Preferências)';
     return null;
   };

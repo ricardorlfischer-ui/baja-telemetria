@@ -1,13 +1,14 @@
 /* Página /login — tela própria, por cima da casca do app (sem menu nem cabeçalho):
  * primeiro acesso (servidor sem usuários → criar o administrador), entrar, ou criar conta com
  * um código de convite (#/login?convite=CÓDIGO, opcionalmente &servidor=ENDEREÇO).
- * Depois de entrar, volta para onde estava (state.from, ?volta= ou a página anterior). */
+ * Depois de entrar, volta para onde estava (state.from, ?volta= ou a página anterior).
+ * No modo "este computador" (sem contas, ARQUITETURA 5.4) não existe: volta para #/. */
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import {
   Alert, Anchor, Button, Center, Group, Loader, Paper, PasswordInput, SegmentedControl, Stack, Text, TextInput, Title,
 } from '@mantine/core';
 import { IconArrowLeft, IconCloud, IconLogin, IconServer, IconShieldLock, IconUserPlus } from '@tabler/icons-react';
-import { useLocation, useNavigate, useSearchParams } from 'react-router';
+import { Navigate, useLocation, useNavigate, useSearchParams } from 'react-router';
 import { RemoteLibrary, useLibrary, type AuthResult } from '../library';
 import { normalizeServerUrl, usePrefs } from '../state/prefs';
 import { msgOf } from './config/parts';
@@ -18,6 +19,12 @@ import './config/config.css';
 type Tab = 'login' | 'register';
 
 export default function LoginPage() {
+  const { pc } = useLibrary();
+  if (pc) return <Navigate to="/" replace />;
+  return <LoginScreen />;
+}
+
+function LoginScreen() {
   const nav = useNavigate();
   const loc = useLocation();
   const [params] = useSearchParams();

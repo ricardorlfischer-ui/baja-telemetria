@@ -1,7 +1,7 @@
 /* Página /equipe — só com o servidor da equipe (docs/ARQUITETURA.md 5.3): usuários (papel,
  * ativo, apagar, criar com senha temporária), convites (criar com papel e validade, copiar
  * código/link, revogar) e minha conta (trocar a senha). No modo local, explica como ligar um
- * servidor. As regras (último administrador, quem pode o quê) são do servidor; aqui só
+ * servidor; no modo "este computador" (sem contas), diz que não há equipe nesse modo. As regras (último administrador, quem pode o quê) são do servidor; aqui só
  * mostramos e passamos adiante as mensagens dele. */
 import { useCallback, useEffect, useState } from 'react';
 import {
@@ -10,11 +10,12 @@ import {
 } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
 import {
-  IconCloudOff, IconCopy, IconKey, IconLink, IconLogin, IconMailPlus, IconServer, IconSettings, IconTrash, IconUserPlus,
+  IconCloudOff, IconCopy, IconDeviceDesktop, IconKey, IconLink, IconLogin, IconMailPlus, IconServer, IconSettings, IconTrash, IconUserPlus,
 } from '@tabler/icons-react';
 import { useNavigate } from 'react-router';
 import { DataTable, EmptyState, PageHeader, Section } from '../components';
 import { routeByPath } from '../routes';
+import { PC_NO_TEAM } from '../layout/NavMenu';
 import { useLibrary, type Role, type User } from '../library';
 import { copyText, fmtDate, msgOf } from './config/parts';
 import {
@@ -33,10 +34,17 @@ const fail = (title: string) => (e: unknown) => notifications.show({ color: 'red
 export default function EquipePage() {
   const r = routeByPath('/equipe')!;
   const nav = useNavigate();
-  const { mode, loading, offline, user, remote, info } = useLibrary();
+  const { mode, loading, offline, user, remote, info, pc } = useLibrary();
 
   let body;
   if (loading) body = <Center py={80}><Loader /></Center>;
+  else if (pc) {
+    body = (
+      <EmptyState icon={IconDeviceDesktop} title="Sem equipe neste modo"
+        description={<>{PC_NO_TEAM}. Os logs, carros e pistas daqui continuam na pasta deste computador (Preferências → Onde ficam os logs).</>}
+        action={<Button leftSection={<IconSettings size={17} />} onClick={() => nav('/config', { state: { section: 'pasta' } })}>Abrir Preferências</Button>} />
+    );
+  }
   else if (mode !== 'remote' || !remote) body = <NoServer onPrefs={() => nav('/config')} />;
   else if (offline) {
     body = (
@@ -73,7 +81,7 @@ export default function EquipePage() {
 
   return (
     <>
-      <PageHeader title={r.label} subtitle={r.question} />
+      <PageHeader title={r.label} subtitle={pc ? 'A equipe (contas, convites, papéis) só existe no servidor da equipe.' : r.question} />
       {body}
     </>
   );
