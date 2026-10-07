@@ -2,4 +2,6 @@
 *.png binary
 *.jpg binary
 *.zip binary
+*.ico binary
 packages/core/test/fixtures/** -text
+*.cmd text eol=crlf

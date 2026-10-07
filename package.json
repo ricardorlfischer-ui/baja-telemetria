@@ -14,6 +14,9 @@
     "dev:server": "npm run dev -w @baja/server",
     "build": "npm run build -w @baja/web && npm run build -w @baja/server",
     "start": "npm run start -w @baja/server",
+    "local": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/windows/abrir-telemetria.ps1",
+    "local:parar": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/windows/parar-telemetria.ps1",
+    "local:atalho": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/windows/criar-atalho.ps1",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "test": "npm run test --workspaces --if-present"
   },
