@@ -1,7 +1,7 @@
 /* Peças do cabeçalho (docs/ARQUITETURA.md 4.2): modo da biblioteca e tema.
  * O seletor de sessão e o de trecho ficam em SessionChip.tsx e RangeControl.tsx. */
 import { ActionIcon, Badge, Tooltip, useComputedColorScheme, useMantineColorScheme } from '@mantine/core';
-import { IconCloud, IconCloudOff, IconDatabase, IconDeviceDesktop, IconMoon, IconSun } from '@tabler/icons-react';
+import { IconCloud, IconCloudOff, IconDatabase, IconDeviceDesktop, IconMoon, IconPlugConnectedX, IconSun } from '@tabler/icons-react';
 import { useLocation, useNavigate } from 'react-router';
 import { useLibrary } from '../library';
 
@@ -11,6 +11,17 @@ export function LibraryBadge() {
   const nav = useNavigate();
   const { pathname } = useLocation();
   if (loading) return <Badge variant="light" color="gray" size="lg">…</Badge>;
+  if (pc && offline) {
+    /* o servidor do PC parou: o aviso no topo da página diz o que fazer */
+    return (
+      <Tooltip multiline maw={360} label="O servidor da telemetria deste computador não está respondendo. Clique de novo no atalho da telemetria: o app volta sozinho.">
+        <Badge variant="light" color="red" size="lg" radius="sm" className="bt-lib-badge"
+          leftSection={<IconPlugConnectedX size={14} />} style={{ textTransform: 'none' }}>
+          Servidor parado
+        </Badge>
+      </Tooltip>
+    );
+  }
   if (pc) {
     /* este computador (atalho da área de trabalho): sem conta; a dica diz onde estão os logs */
     return (

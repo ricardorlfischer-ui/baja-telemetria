@@ -141,7 +141,7 @@ o card `sensor.<id>`. Id fora do catálogo mostra um aviso com o id: é o sinal 
 
 ## Biblioteca
 
-- `usePrefs()` para tema/servidor/layouts. `useLibrary()` → `{ lib, mode, user, remote, info, offline, pc, dataDir, redetect, logout, bump, version }`.
+- `usePrefs()` para tema/servidor/layouts. `useLibrary()` → `{ lib, mode, user, remote, info, offline, pc, dataDir, redetect, recheck, logout, bump, version }`.
   `lib` implementa `Library` (ARQUITETURA 4.4); `remote` tem login, conta e equipe (só no modo servidor).
 - Modo **este computador** (`pc` em `useLibrary()`, o atalho da área de trabalho: servidor com `LOCAL_MODE` na mesma
   origem, ARQUITETURA 5.4, docs/NO-MEU-PC.md): `mode` é `'remote'`, mas sem contas — `RemoteLibrary.localMode` não manda
@@ -149,6 +149,11 @@ o card `sensor.<id>`. Id fora do catálogo mostra um aviso com o id: é o sinal 
   não fazem nada); `dataDir` é a pasta dos logs no disco. A interface esconde login/cadastro/senha/sair (`#/login` volta
   para `#/`), a Equipe vira uma explicação, o selo vira "Este computador", Preferências mostra "Onde ficam os logs" (sem a
   proteção do armazenamento do navegador) e Sessões o aviso "Biblioteca deste computador — os logs ficam em …". Reabrir a
-  última sessão vale igual (chave `remote:`). Testes em `test/pc-mode.test.tsx`.
+  última sessão vale igual (chave `remote:`). **Servidor do PC parou** com o app aberto: um pedido que não chega
+  (`RemoteLibrary.onConnection(false)`; a mensagem de erro manda clicar no atalho) liga `offline`, o selo vira "Servidor
+  parado" e `layout/PcServerLost.tsx` mostra o aviso fixo no topo de todas as páginas; enquanto isso pergunta `/api/info` a
+  cada 3 s e, quando volta, desliga `offline`, faz `bump()` e avisa (com a janela visível confere também a cada 15 s;
+  `recheck()` pergunta na hora). O `PageErrorBoundary` reconhece o código de página que não baixou (chunk ou o CSS dele) e
+  pede para recarregar em vez de culpar o log. Testes em `test/pc-mode.test.tsx`.
 - Guardar um log: `addLogToLibrary(lib, fileOuTexto, meta?, ctx?)` (state/librarySave.ts) — no modo local calcula `kind` e o
   resumo (`sessionSummary` do core, quando existir) e marca os perfis ativos como carro/pista; depois chame `bump()`.

@@ -213,7 +213,8 @@ export default function SessoesPage() {
         {lib ? (
           <UploadPanel lib={lib} remote={remote} existing={all} drivers={drivers} tags={tags}
             canUpload={canUpload && !offline}
-            disabledReason={offline ? 'O servidor da equipe não respondeu. Confira o endereço em Preferências ou use “Abrir arquivo sem salvar”.'
+            disabledReason={offline && pc ? 'O servidor da telemetria deste computador parou: clique de novo no atalho da telemetria para enviar logs (ou use “Abrir arquivo sem salvar” para só analisar).'
+              : offline ? 'O servidor da equipe não respondeu. Confira o endereço em Preferências ou use “Abrir arquivo sem salvar”.'
               : loggedOut ? 'Entre no servidor da equipe para enviar logs (ou use “Abrir arquivo sem salvar” para só analisar).'
                 : 'Seu papel no servidor é “leitor”: você vê e abre as sessões, mas não envia. Peça a um administrador para mudar.'}
             onSaved={() => bump()} onOpen={m => { void open(m); }} onOpenId={openId} />

@@ -96,4 +96,16 @@ describe('PageErrorBoundary', () => {
     expect(host.textContent).toContain('página ok');
     spy.mockRestore();
   });
+
+  it('código da página que não baixou (CSS do chunk, servidor fora do ar): pede para recarregar, não culpa o log', async () => {
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    function Page(): never { throw new Error('Unable to preload CSS for http://localhost:8090/assets/shared-abc.css'); }
+    await act(async () => {
+      root.render(<MantineProvider><PageErrorBoundary route="/c"><Page /></PageErrorBoundary></MantineProvider>);
+    });
+    expect(host.textContent).toContain('Não consegui carregar esta página');
+    expect(host.textContent).toContain('Recarregar');
+    expect(host.textContent).not.toContain('não conseguiu mostrar este log');
+    spy.mockRestore();
+  });
 });

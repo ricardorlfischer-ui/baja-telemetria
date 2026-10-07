@@ -25,6 +25,7 @@ import { DEFAULT_PREFS, usePrefs } from '../src/state/prefs';
 import { useSessionStore } from '../src/state/session';
 import { LibrarySync } from '../src/state/SessionSync';
 import { LibraryBadge } from '../src/layout/HeaderParts';
+import { PcServerLost } from '../src/layout/PcServerLost';
 import { NavMenu } from '../src/layout/NavMenu';
 import LoginPage from '../src/pages/LoginPage';
 import EquipePage from '../src/pages/EquipePage';
@@ -191,6 +192,55 @@ describe('detecção do modo este computador', () => {
     act(() => { lib!.logout(); lib!.setUser(null); });
     expect(lib!.user).toEqual(PC_USER);
     expect(calls.every(c => c.auth === undefined)).toBe(true);
+  });
+});
+
+/* ---------------------------------------------------------------- servidor do PC parou */
+describe('o servidor deste computador parou com o app aberto', () => {
+  it('pedido sem resposta: mensagem do atalho, aviso fixo e selo "Servidor parado"; quando volta, some e recarrega as listas', async () => {
+    const srv = fakeServer();
+    let down = false;
+    vi.stubGlobal('fetch', vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+      if (down) throw new TypeError('Failed to fetch');
+      return srv.fetch(input, init);
+    }));
+    await mount(<><LibraryBadge /><PcServerLost /></>);
+    await until(() => !!lib?.pc && !lib.loading);
+    expect(text()).toContain('Este computador');
+    expect(text()).not.toContain('O servidor da telemetria parou');
+
+    down = true;
+    await expect(lib!.lib!.listSessions()).rejects.toThrow(/atalho da telemetria/);
+    await until(() => text().includes('O servidor da telemetria parou'));
+    expect(lib!.offline).toBe(true);
+    expect(text()).toContain('Servidor parado');
+    expect(text()).toContain(DATA_DIR);
+    expect(text()).toContain('Tentar agora');
+
+    const v = lib!.version;
+    down = false;
+    act(() => { lib!.recheck(); });
+    await until(() => !lib!.offline);
+    expect(text()).not.toContain('O servidor da telemetria parou');
+    expect(text()).toContain('Este computador');
+    expect(lib!.version).toBeGreaterThan(v);
+  });
+
+  it('Sessões: com o servidor parado, enviar logs explica o atalho (não "servidor da equipe")', async () => {
+    const srv = fakeServer();
+    let down = false;
+    vi.stubGlobal('fetch', vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+      if (down) throw new TypeError('Failed to fetch');
+      return srv.fetch(input, init);
+    }));
+    await mount(<SessoesPage />);
+    await until(() => !!lib?.pc && !lib.loading && text().includes(META.name));
+    down = true;
+    await expect(lib!.lib!.listCars()).rejects.toThrow();
+    await until(() => !!lib?.offline);
+    await flush();
+    expect(text()).toContain('clique de novo no atalho da telemetria para enviar logs');
+    expect(text()).not.toContain('servidor da equipe');
   });
 });
 

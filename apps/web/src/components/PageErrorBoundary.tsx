@@ -6,8 +6,20 @@ import { Component, type ErrorInfo, type ReactNode } from 'react';
 import { Alert, Button, Code, Group, Stack, Text } from '@mantine/core';
 import { IconAlertOctagon, IconRefresh } from '@tabler/icons-react';
 import { useSessionStore } from '../state/session';
+import { useLibraryMaybe } from '../library/context';
 
-interface Props { children: ReactNode; route: string; ctx: unknown }
+/** O código da página (chunk do lazy, ou o CSS dele) não baixou: servidor fora do ar, sem
+ *  conexão, ou o app foi montado de novo (os arquivos com hash antigo não existem mais). */
+const CHUNK_ERROR = /dynamically imported module|Importing a module script failed|Loading chunk|error loading dynamically|Unable to preload CSS|Failed to fetch/i;
+export const isChunkError = (e: Error): boolean => CHUNK_ERROR.test(e.message);
+
+interface Props {
+  children: ReactNode; route: string; ctx: unknown;
+  /** modo este computador e o servidor do PC parou (library/context.tsx) */
+  pc: boolean; offline: boolean;
+  /** o código da página não baixou: confere se o servidor do PC parou */
+  onChunkError: () => void;
+}
 interface State { error: Error | null; route: string; ctx: unknown }
 
 class Boundary extends Component<Props, State> {
@@ -24,19 +36,27 @@ class Boundary extends Component<Props, State> {
 
   override componentDidCatch(error: unknown, info: ErrorInfo): void {
     console.error('Erro ao desenhar a página', error, info.componentStack);
+    if (error instanceof Error && isChunkError(error)) this.props.onChunkError();
   }
 
   override render() {
     const e = this.state.error;
     if (!e) return this.props.children;
     /* o código da página não baixou (sem internet, ou o app foi atualizado no servidor) */
-    if (/dynamically imported module|Importing a module script failed|Loading chunk|error loading dynamically/i.test(e.message)) {
+    if (isChunkError(e)) {
+      const { pc, offline } = this.props;
       return (
         <Alert color="yellow" variant="light" icon={<IconAlertOctagon size={22} />} title="Não consegui carregar esta página" mt="md">
           <Stack gap="sm">
             <Text>
-              O código desta página não chegou (sem conexão, ou o app foi atualizado desde que esta aba abriu).
-              Recarregue a página (F5); a sessão aberta precisa ser aberta de novo.
+              {pc && offline
+                ? <>O código desta página vem do servidor da telemetria deste computador, que parou. Clique de novo no atalho
+                  da telemetria e, quando o aviso vermelho sumir, em <b>Recarregar</b>.</>
+                : pc
+                  ? <>O código desta página não chegou (o app foi montado de novo, por exemplo depois de uma atualização, desde
+                    que esta janela abriu). Recarregue (F5): a sessão da biblioteca que estava aberta abre de novo sozinha.</>
+                  : <>O código desta página não chegou (sem conexão, ou o app foi atualizado desde que esta aba abriu).
+                    Recarregue a página (F5); a sessão aberta precisa ser aberta de novo.</>}
             </Text>
             <Code block>{e.message}</Code>
             <Group>
@@ -72,5 +92,10 @@ class Boundary extends Component<Props, State> {
 /** Envolve o conteúdo da página (no AppLayout, em volta do Outlet). */
 export function PageErrorBoundary({ children, route }: { children: ReactNode; route: string }) {
   const ctx = useSessionStore(s => s.ctx);
-  return <Boundary route={route} ctx={ctx}>{children}</Boundary>;
+  const libState = useLibraryMaybe();
+  return (
+    <Boundary route={route} ctx={ctx} pc={!!libState?.pc} offline={!!libState?.offline} onChunkError={() => libState?.recheck()}>
+      {children}
+    </Boundary>
+  );
 }

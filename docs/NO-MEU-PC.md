@@ -168,6 +168,17 @@ rode no terminal `npm run local` (mostra tudo ali mesmo) ou abra com `-Rebuild`.
 **"O servidor não respondeu"** ou **"fechou logo depois de abrir"** — o fim do
 `data\servidor.log` aparece na mensagem e diz o motivo.
 
+**Aviso vermelho "O servidor da telemetria parou"** (selo **Servidor parado** no canto) — o
+servidor que roda escondido foi parado (`npm run local:parar`), fechou ou o PC dormiu, com a
+janela do app aberta. Clique no atalho de novo: o aviso some sozinho em alguns segundos e as
+listas voltam, sem recarregar. Nada se perde (os dados estão na pasta `data`); enquanto o aviso
+está lá, a sessão aberta continua na tela, mas nada novo é guardado. Uma página que ainda não
+tinha sido aberta pede **Recarregar** depois que o servidor volta. Recarregar (F5) com o
+servidor parado mostra a página de erro do próprio navegador: abra pelo atalho.
+
+**"Não consegui carregar esta página"** depois de atualizar — a janela é de antes da montagem
+nova: recarregue (F5). A sessão da biblioteca que estava aberta abre de novo sozinha.
+
 **O app parou de responder** — clique no atalho de novo: se o servidor da telemetria está
 na porta mas não responde (travou), o atalho fecha ele e abre outro (leva uns 15 s). Ou
 pare (`npm run local:parar`, que também para um servidor travado) e abra de novo.

@@ -44,6 +44,10 @@ const STATUS_MSG: Record<number, string> = {
 
 export interface AuthResult { token: string; user: User }
 
+/** Pedido que não chegou ao servidor deste computador (modo local): ele foi parado ou fechou. */
+export const PC_OFFLINE_MSG = 'O servidor da telemetria deste computador não está respondendo (foi parado ou fechou). '
+  + 'Clique de novo no atalho da telemetria: o app volta sozinho, com os logs que estão na pasta.';
+
 /** Cliente da API. baseUrl '' = mesma origem (app servido pelo próprio servidor). */
 export class RemoteLibrary implements Library {
   readonly mode = 'remote' as const;
@@ -54,6 +58,9 @@ export class RemoteLibrary implements Library {
   /** modo "este computador" (servidor com LOCAL_MODE, ARQUITETURA 5.4): sem contas. Não manda
    *  token nenhum (o servidor ignoraria) e um 401 não derruba nada nem chama onUnauthorized. */
   localMode = false;
+  /** avisado a cada pedido: chegou ao servidor (true, com qualquer status) ou não chegou (false:
+   *  servidor desligado, sem rede). O modo este computador usa para mostrar que o servidor parou. */
+  onConnection: ((ok: boolean) => void) | null = null;
 
   constructor(baseUrl = '') {
     this.baseUrl = baseUrl.replace(/\/+$/, '');
@@ -72,8 +79,10 @@ export class RemoteLibrary implements Library {
     try {
       res = await fetch(this.url(path), { method, headers, body: payload });
     } catch {
-      throw new ApiError(`Não consegui falar com o servidor${this.baseUrl ? ` (${this.baseUrl})` : ''}: sem internet ou servidor desligado`, 0);
+      this.onConnection?.(false);
+      throw this.unreachable();
     }
+    this.onConnection?.(true);
     if (!res.ok) {
       let j: Record<string, unknown> = {};
       try { j = await res.json() as Record<string, unknown>; } catch { /* sem corpo JSON */ }
@@ -93,6 +102,12 @@ export class RemoteLibrary implements Library {
     if (getToken() !== tok) return;
     setToken(null);
     this.onUnauthorized?.(message);
+  }
+
+  /** O pedido não chegou ao servidor (no modo este computador: o servidor do PC parou). */
+  private unreachable(): ApiError {
+    if (this.localMode) return new ApiError(PC_OFFLINE_MSG, 0);
+    return new ApiError(`Não consegui falar com o servidor${this.baseUrl ? ` (${this.baseUrl})` : ''}: sem internet ou servidor desligado`, 0);
   }
 
   /** Erro em português: a mensagem do servidor ({ error }) ou a do status. */
@@ -174,8 +189,9 @@ export class RemoteLibrary implements Library {
       xhr.upload.onprogress = e => { if (e.lengthComputable && e.total > 0) onProgress('uploading', e.loaded / e.total); };
       /* terminou de enviar: o servidor lê e analisa o log (num log grande leva um tempo) */
       xhr.upload.onload = () => onProgress('server', 1);
-      xhr.onerror = () => reject(new ApiError(`Não consegui falar com o servidor${this.baseUrl ? ` (${this.baseUrl})` : ''}: sem internet ou servidor desligado`, 0));
+      xhr.onerror = () => { this.onConnection?.(false); reject(this.unreachable()); };
       xhr.onload = () => {
+        this.onConnection?.(true);
         let j: Record<string, unknown> = {};
         try { j = JSON.parse(xhr.responseText || '{}') as Record<string, unknown>; } catch { /* sem JSON */ }
         if (xhr.status >= 200 && xhr.status < 300) { resolve(j as unknown as SessionMeta); return; }
