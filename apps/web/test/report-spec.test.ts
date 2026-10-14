@@ -3,7 +3,7 @@
  * antigos e confere, para todos os gráficos dos relatórios do exemplo e de logs reais, que o
  * desenho sai igual: mesmas cores resolvidas no tema (séries, barras, marcadores, linhas,
  * legenda, nos dois temas), mesmos eixos e mesmos textos de tooltip. */
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -14,6 +14,14 @@ import {
 import { reportSpec } from '../src/components/reportSpec';
 import { seriesColor, type XYSpec } from '../src/components/XYPlot';
 import { CHART_DARK, CHART_LIGHT, resolveColor, type ChartTheme } from '../src/theme';
+
+/* o exemplo do app é um teste de 1 h (lento aqui): estes testes usam o exemplo curto do app
+ * antigo (2 + 2 voltas, carro de 260 kg) */
+vi.mock('@baja/core', async orig => {
+  const m = await orig<typeof import('@baja/core')>();
+  return { ...m, demoCSV: () => m.demoCSV(m.DEMO_SIM_V1), DEMO_CAR: m.DEMO_CAR_V1 };
+});
+
 
 const FIX = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../packages/core/test/fixtures');
 

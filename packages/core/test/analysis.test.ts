@@ -8,7 +8,8 @@ import { same } from './compare';
 import { parseLog, parseCSV, finishChannel } from '../src/parsers';
 import { DEFAULT_CFG, guessGpsChannels, computeTrack, computeLaps, autoLine, smooth } from '../src/gps';
 import { idxAt, niceTicks } from '../src/util';
-import { demoCSV, DEMO_CAR } from '../src/demo';
+/* comparação com o app antigo: o exemplo com o carro dele (DEMO_SIM_V1 / DEMO_CAR_V1) */
+import { demoCSV as demoCSVSim, DEMO_SIM_V1, DEMO_CAR_V1 as DEMO_CAR } from '../src/demo';
 import {
   DEFAULT_SUSP, CORNERS, findShocks, deriv, median, quant, interpAt, stoppedMask, suspPrep, velStats, hist, fft, welch, psd,
   findPeak, freeDecay, localPeaks, highpass, dropTests, psdMask, rideRates, gpsDynamics, lapProfile, bestLap, deltaToBest,
@@ -17,6 +18,7 @@ import {
 import { DEFAULT_CAR, vehPrep, bodyAngles, roughness } from '../src/vehicle';
 import type { AnalysisConfig, Channel, Session } from '../src/types';
 import type { TrackOk } from '../src/gps';
+const demoCSV = () => demoCSVSim(DEMO_SIM_V1);
 
 const { BT } = loadLegacy();
 

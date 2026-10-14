@@ -12,7 +12,7 @@
 import { createContext, useContext, type ReactNode } from 'react';
 import { Group, Tooltip, UnstyledButton } from '@mantine/core';
 import {
-  IconAntenna, IconArrowsVertical, IconBolt, IconClock, IconDeviceSdCard, IconEngine, IconGauge,
+  IconAntenna, IconArrowsVertical, IconBatteryAutomotive, IconBolt, IconClock, IconDeviceSdCard, IconEngine, IconGauge,
   IconHandStop, IconRuler, IconSteeringWheel, IconTemperature, IconCompass, type Icon,
 } from '@tabler/icons-react';
 import { SENSORS, type SensorId } from '@baja/core';
@@ -25,7 +25,7 @@ interface SensorLabel { short: string; name: string; icon: Icon; planned?: boole
 const ICONS: Record<SensorId, Icon> = {
   gps: IconAntenna,
   shock_fl: IconArrowsVertical, shock_fr: IconArrowsVertical, shock_rl: IconArrowsVertical, shock_rr: IconArrowsVertical,
-  wheel: IconGauge, cvt_temp: IconTemperature, logger: IconClock, car_data: IconRuler,
+  wheel: IconGauge, cvt_temp: IconTemperature, battery: IconBatteryAutomotive, logger: IconClock, car_data: IconRuler,
   engine_rpm: IconEngine, imu: IconCompass, brake_pressure: IconHandStop, steering: IconSteeringWheel, throttle: IconBolt,
 };
 

@@ -4,14 +4,15 @@
 import { describe, it, expect } from 'vitest';
 import { readFixture } from './legacy';
 import { parseLog, parseCSV } from '../src/parsers';
-import { demoCSV, DEMO_CAR } from '../src/demo';
+import { demoCSV as demoCSVSim, DEMO_SIM_V1, DEMO_CAR_V1 as DEMO_CAR } from '../src/demo';
 import { computeSession } from '../src/pipeline';
 import { SENSORS, SENSOR_IDS, sensorAvailability, sensorMatrix } from '../src/sensors';
 import { EXPLAIN, EXPLAIN_AREAS, getExplain, explainSensorIds } from '../src/explain';
 import type { SensorId } from '../src/types';
+const demoCSV = () => demoCSVSim(DEMO_SIM_V1);   /* o exemplo com o carro do app antigo */
 
 /* lista do tipo SensorId (types.ts), repetida aqui para o teste pegar um id esquecido */
-const ALL_IDS: SensorId[] = ['gps', 'shock_fl', 'shock_fr', 'shock_rl', 'shock_rr', 'wheel', 'cvt_temp', 'logger', 'car_data',
+const ALL_IDS: SensorId[] = ['gps', 'shock_fl', 'shock_fr', 'shock_rl', 'shock_rr', 'wheel', 'cvt_temp', 'battery', 'logger', 'car_data',
   'engine_rpm', 'imu', 'brake_pressure', 'steering', 'throttle'];
 const PLANNED: SensorId[] = ['engine_rpm', 'imu', 'brake_pressure', 'steering', 'throttle'];
 
@@ -102,7 +103,8 @@ describe('sensorAvailability', () => {
   it('exemplo: todos os sensores instalados presentes, sugeridos planejados', () => {
     const S = parseCSV(demoCSV(), 'exemplo_baja.csv'); S.demo = true;
     const av = sensorAvailability(computeSession(S, { car: DEMO_CAR }, { autoLine: true }));
-    for (const id of ALL_IDS) expect(av[id], id).toBe(PLANNED.includes(id) ? 'planned' : 'present');
+    /* o exemplo não grava a tensão da bateria (o modelo físico não tem parte elétrica) */
+    for (const id of ALL_IDS) expect(av[id], id).toBe(PLANNED.includes(id) ? 'planned' : id === 'battery' ? 'absent' : 'present');
   });
   it('exemplo sem roda e sem a traseira direita', () => {
     const S = parseCSV(demoCSV(), 'exemplo_baja.csv');

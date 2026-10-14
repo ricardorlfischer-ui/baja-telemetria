@@ -12,13 +12,14 @@ import type { SessionContext } from './pipeline';
 import { guessGpsChannels, detectFmt, toCode, spanOf } from './gps';
 import { findShocks, CORNERS } from './analysis';
 import { findWheelCh, findCvtCh } from './vehicle';
+import { findBatteryCh } from './battery';
 
 /** Papel de um canal do log. */
 export type ChannelRole =
   | 'gps_x' | 'gps_y' | 'gps_status'
   | 'gps_lat' | 'gps_lon' | 'gps_sats' | 'gps_fix' | 'gps_pic_x' | 'gps_pic_y'
   | `shock_pos_${CornerId}` | `shock_vel_${CornerId}`
-  | 'wheel' | 'cvt_temp'
+  | 'wheel' | 'cvt_temp' | 'battery'
   | 'engine_rpm' | 'throttle' | 'brake_pressure' | 'steering' | 'imu';
 
 export const CHANNEL_ROLES: ChannelRole[] = [
@@ -26,7 +27,7 @@ export const CHANNEL_ROLES: ChannelRole[] = [
   'gps_lat', 'gps_lon', 'gps_sats', 'gps_fix', 'gps_pic_x', 'gps_pic_y',
   'shock_pos_FL', 'shock_pos_FR', 'shock_pos_RL', 'shock_pos_RR',
   'shock_vel_FL', 'shock_vel_FR', 'shock_vel_RL', 'shock_vel_RR',
-  'wheel', 'cvt_temp', 'engine_rpm', 'throttle', 'brake_pressure', 'steering', 'imu',
+  'wheel', 'cvt_temp', 'battery', 'engine_rpm', 'throttle', 'brake_pressure', 'steering', 'imu',
 ];
 
 /** Nome do papel para a interface. */
@@ -38,7 +39,7 @@ export const ROLE_LABEL: Record<ChannelRole, string> = {
   shock_pos_RL: 'Amortecedor tras. esq. · posição', shock_pos_RR: 'Amortecedor tras. dir. · posição',
   shock_vel_FL: 'Amortecedor diant. esq. · velocidade', shock_vel_FR: 'Amortecedor diant. dir. · velocidade',
   shock_vel_RL: 'Amortecedor tras. esq. · velocidade', shock_vel_RR: 'Amortecedor tras. dir. · velocidade',
-  wheel: 'Velocidade da roda', cvt_temp: 'Temperatura da CVT',
+  wheel: 'Velocidade da roda', cvt_temp: 'Temperatura da CVT', battery: 'Tensão da bateria',
   engine_rpm: 'Rotação do motor', throttle: 'Posição do acelerador', brake_pressure: 'Pressão de freio',
   steering: 'Ângulo do volante', imu: 'IMU (aceleração / giro)',
 };
@@ -49,7 +50,7 @@ export const ROLE_SENSOR: Record<ChannelRole, SensorId> = {
   gps_lat: 'gps', gps_lon: 'gps', gps_sats: 'gps', gps_fix: 'gps', gps_pic_x: 'gps', gps_pic_y: 'gps',
   shock_pos_FL: 'shock_fl', shock_pos_FR: 'shock_fr', shock_pos_RL: 'shock_rl', shock_pos_RR: 'shock_rr',
   shock_vel_FL: 'shock_fl', shock_vel_FR: 'shock_fr', shock_vel_RL: 'shock_rl', shock_vel_RR: 'shock_rr',
-  wheel: 'wheel', cvt_temp: 'cvt_temp',
+  wheel: 'wheel', cvt_temp: 'cvt_temp', battery: 'battery',
   engine_rpm: 'engine_rpm', throttle: 'throttle', brake_pressure: 'brake_pressure', steering: 'steering', imu: 'imu',
 };
 
@@ -81,7 +82,7 @@ export type RoleMap = Partial<Record<ChannelRole, string>>;
 
 /** Papel de cada canal do log, com as mesmas regras das contas. cfg = configuração já
  *  normalizada (canais X/Y e cfg.car.wheelCh/cvtCh); sem cfg, só pelos nomes. */
-export function detectRoles(S: Session, cfg?: Pick<TrackConfig, 'chX' | 'chY' | 'chStatus'> & { car?: Pick<CarConfig, 'wheelCh' | 'cvtCh'> }): RoleMap {
+export function detectRoles(S: Session, cfg?: Pick<TrackConfig, 'chX' | 'chY' | 'chStatus'> & { car?: Pick<CarConfig, 'wheelCh' | 'cvtCh' | 'batCh'> }): RoleMap {
   const roles: RoleMap = {};
   const keys = S.channels.map(c => c.key);
   const has = (k: string | undefined): k is string => !!k && keys.includes(k);
@@ -104,6 +105,9 @@ export function detectRoles(S: Session, cfg?: Pick<TrackConfig, 'chX' | 'chY' | 
   const w = pick(cfg?.car?.wheelCh, findWheelCh), c = pick(cfg?.car?.cvtCh, findCvtCh);
   if (w) roles.wheel = w.key;
   if (c) roles.cvt_temp = c.key;
+  /* bateria (novo): o canal escolhido em Carro, senão pelo nome (= batteryReport) */
+  const b = pick(cfg?.car?.batCh, findBatteryCh);
+  if (b) roles.battery = b.key;
   const used = new Set(Object.values(roles));
   for (const [role, re] of PLANNED_RE) {
     const cand = S.channels.filter(ch => ch.src === 'log' && !used.has(ch.key) && re.test(ch.key));

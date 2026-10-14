@@ -5,12 +5,13 @@
 import { describe, it, expect } from 'vitest';
 import { loadLegacy, legacyDemo, legacyAnalysis, readFixture } from './legacy';
 import { parseLog, parseCSV } from '../src/parsers';
-import { demoCSV, DEMO_CAR } from '../src/demo';
+import { demoCSV as demoCSVSim, DEMO_SIM_V1, DEMO_CAR_V1 as DEMO_CAR } from '../src/demo';
 import { computeSession, type SessionContext } from '../src/pipeline';
 import { SENSOR_IDS } from '../src/sensors';
 import { EXPLAIN_AREAS } from '../src/explain';
 import { designReport } from '../src/reports/design';
 import { sessionSummary, summaryMetric, SUMMARY_VERSION, SUMMARY_SESSION_SCOPE, SUMMARY_BETTER, type SessionSummary } from '../src/summary';
+const demoCSV = () => demoCSVSim(DEMO_SIM_V1);   /* o exemplo com o carro do app antigo */
 
 const L = loadLegacy({ ui: true });
 const { BT } = L;

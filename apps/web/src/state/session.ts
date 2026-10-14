@@ -13,7 +13,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { create } from 'zustand';
 import { notifications } from '@mantine/notifications';
 import {
-  clamp, computeSession, demoCSV, idxAt, parseCSV, parseLog, rangeOf, sensorAvailability,
+  clamp, computeSession, demoCSV, DEMO_FILE, DEMO_NAME, idxAt, mergeLogs, parseCSV, parseLog, rangeOf, sensorAvailability,
   type AnalysisConfig, type AnalysisConfigInput, type Channel, type Lap, type Pt, type RangeMode, type SensorId,
   type SensorState, type Session, type SessionContext,
 } from '@baja/core';
@@ -81,6 +81,8 @@ export interface SessionState {
   /* ações */
   openText: (text: string, name: string, source?: Partial<SessionSource>) => Promise<boolean>;
   openFile: (file: File, opts?: { saveTo?: Library | null }) => Promise<boolean>;
+  /** vários arquivos: junta os CSV da FT num log só (mergeLogs) e abre sem guardar; um = openFile */
+  openFiles: (files: File[]) => Promise<boolean>;
   openDemo: () => Promise<boolean>;
   /** silent: sem aviso de erro (reabrir a última sessão ao carregar o app) */
   openFromLibrary: (meta: SessionMeta, lib?: Library | null, opts?: { silent?: boolean }) => Promise<boolean>;
@@ -334,15 +336,28 @@ export const useSessionStore = create<SessionState>((set, get) => {
       } catch (e) { return fail(e, file.name, myGen); }
     },
 
+    openFiles: async files => {
+      if (files.length < 2) return files[0] ? get().openFile(files[0]) : false;
+      const myGen = await begin(`Juntando ${files.length} logs…`);
+      if (myGen !== gen) return false;
+      try {
+        const inputs = await Promise.all(files.map(async f => ({ name: f.name, text: await f.text() })));
+        if (myGen !== gen) return false;
+        const r = mergeLogs(inputs);
+        const S = parseLog(r.text, r.fileName);
+        return await finish(S, { type: 'file', name: r.name }, myGen, r.text);
+      } catch (e) { return fail(e, `${files.length} logs`, myGen); }
+    },
+
     openDemo: async () => {
-      const myGen = await begin('Gerando a sessão de exemplo…');
+      const myGen = await begin('Abrindo a sessão…');
       if (myGen !== gen) return false;
       try {
         /* como o botão do antigo: parseCSV(demoCSV()), demo = true, carro DEMO_CAR, linha automática */
-        const S = parseCSV(demoCSV(), 'exemplo_baja.csv');
+        const S = parseCSV(demoCSV(), DEMO_FILE);
         S.demo = true;
-        const ok = await finish(S, { type: 'demo', name: 'Sessão de exemplo' }, myGen);
-        if (ok) notifications.show({ title: 'Sessão de exemplo carregada', message: 'Aperte ▶ (ou espaço) para reproduzir', autoClose: 4000 });
+        const ok = await finish(S, { type: 'demo', name: DEMO_NAME }, myGen);
+        if (ok) notifications.show({ title: `${DEMO_NAME} aberta`, message: 'Aperte ▶ (ou espaço) para reproduzir', autoClose: 4000 });
         return ok;
       } catch (e) { return fail(e, 'exemplo', myGen); }
     },

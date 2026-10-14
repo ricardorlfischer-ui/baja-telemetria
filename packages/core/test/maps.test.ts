@@ -11,8 +11,9 @@ import { channelMaps, sensorsOfChannel, miniMapTransform, MINI_MAP_BINS } from '
 import { computeSession, rangeOf, type SessionContext } from '../src/pipeline';
 import { detectRoles } from '../src/quality';
 import { parseCSV } from '../src/parsers';
-import { demoCSV, DEMO_CAR } from '../src/demo';
+import { demoCSV as demoCSVSim, DEMO_SIM_V1, DEMO_CAR_V1 as DEMO_CAR } from '../src/demo';
 import type { TrackOk } from '../src/gps';
+const demoCSV = () => demoCSVSim(DEMO_SIM_V1);   /* o exemplo com o carro do app antigo */
 
 const CASES = makeCases();
 const ROUGH_NAME = 'Rugosidade (vel. amortecedores, RMS 1 s)';   /* nome do app.js (a réplica perdeu a vírgula) */

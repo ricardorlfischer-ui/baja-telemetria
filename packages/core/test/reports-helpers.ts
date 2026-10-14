@@ -6,13 +6,14 @@ import { expect } from 'vitest';
 import { loadLegacy, legacyCompute, legacyAnalysis, readFixture, DEMO_CAR as LEGACY_DEMO_CAR, type LegacyState, type FakeEl } from './legacy';
 import { same } from './compare';
 import { parseLog, parseCSV } from '../src/parsers';
-import { demoCSV, DEMO_CAR } from '../src/demo';
+import { demoCSV as demoCSVSim, DEMO_SIM_V1, DEMO_CAR_V1 as DEMO_CAR } from '../src/demo';
 import { DEFAULT_CAR } from '../src/vehicle';
 import { computeSession, rangeOf, type SessionContext, type RangeMode } from '../src/pipeline';
 import { SENSORS } from '../src/sensors';
 import { EXPLAIN_AREAS } from '../src/explain';
 import { fmtRep, type RepPlot, type RepFmt } from '../src/reports/powertrain';
 import type { Session } from '../src/types';
+const demoCSV = () => demoCSVSim(DEMO_SIM_V1);   /* o exemplo com o carro do app antigo */
 
 export const L = loadLegacy({ ui: true });
 export const BT = L.BT;

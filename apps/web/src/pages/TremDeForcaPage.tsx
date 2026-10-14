@@ -282,7 +282,7 @@ function ApplyButton({ apply }: { apply: CoastRep['apply'] }) {
     updateConfig({ car });
     const what = `Crr ${apply.crr}${apply.cda !== null ? ` e CdA ${apply.cda} m²` : ' (CdA mantido)'}`;
     if (demo) {
-      notifications.show({ color: 'green', icon: <IconCheck size={18} />, title: 'Carro do exemplo atualizado', message: `${what}. No exemplo o carro fica só na memória (não muda o carro real).` });
+      notifications.show({ color: 'green', icon: <IconCheck size={18} />, title: 'Carro em uso atualizado', message: `${what}. A potência na roda e o modelo da CVT foram recalculados.` });
       return;
     }
     /* perfil de outra pessoa no servidor (PUT daria 403): muda só o carro em uso */
@@ -304,7 +304,7 @@ function ApplyButton({ apply }: { apply: CoastRep['apply'] }) {
     }
   };
   const tip = !apply ? 'Escolha um trecho com ajuste'
-    : demo ? 'Aplica no carro do exemplo (só na memória)'
+    : demo ? 'Aplica no carro em uso'
       : activeCarId ? `Aplica no carro em uso e grava no perfil “${carName ?? ''}”` : 'Aplica no carro em uso (nenhum perfil ativo)';
   return (
     <Tooltip label={tip}>

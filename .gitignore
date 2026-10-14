@@ -16,6 +16,9 @@ apps/server/data/
 samples/*
 !samples/README.md
 
+# CSV do exemplo (npm run exemplo)
+exemplos/
+
 .vite/
 .DS_Store
 Thumbs.db

@@ -4,12 +4,13 @@
 import { describe, it, expect } from 'vitest';
 import { readFixture } from './legacy';
 import { parseLog, parseCSV } from '../src/parsers';
-import { demoCSV, DEMO_CAR } from '../src/demo';
+import { demoCSV as demoCSVSim, DEMO_SIM_V1, DEMO_CAR_V1 as DEMO_CAR } from '../src/demo';
 import { computeSession, channelExtremes, getChannel } from '../src/pipeline';
 import { resonanceReport, olleyStatus } from '../src/reports/resonance';
 import { designReport } from '../src/reports/design';
 import { suspensionReport } from '../src/reports/suspension';
 import { SHOCK_STILL_MM } from '../src/quality';
+const demoCSV = () => demoCSVSim(DEMO_SIM_V1);   /* o exemplo com o carro do app antigo */
 
 const demo = () => { const S = parseCSV(demoCSV(), 'exemplo_baja.csv'); S.demo = true; return computeSession(S, { car: DEMO_CAR }, { autoLine: true }); };
 const N = demo();

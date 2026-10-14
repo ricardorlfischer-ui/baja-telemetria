@@ -22,7 +22,7 @@ export function NoSessionState({ description, title = 'Nenhuma sessão aberta' }
   const error = useSessionStore(s => s.error);
   const clearError = useSessionStore(s => s.clearError);
   const openDemo = useSessionStore(s => s.openDemo);
-  const openFile = useSessionStore(s => s.openFile);
+  const openFiles = useSessionStore(s => s.openFiles);
   const fileRef = useRef<HTMLInputElement>(null);
   const nav = useNavigate();
   if (status === 'loading') {
@@ -53,15 +53,15 @@ export function NoSessionState({ description, title = 'Nenhuma sessão aberta' }
         <Group gap="sm">
           <Button size="md" leftSection={<IconFlask size={18} />} onClick={() => { void openDemo(); }}>Dados de exemplo</Button>
           <Button size="md" variant="white" color="dark" leftSection={<IconFileSearch size={18} />} onClick={() => fileRef.current?.click()}
-            title="Abre um CSV do FT Manager ou um log do BUSMASTER só para analisar (não guarda na biblioteca)">
+            title="Abre um CSV do FT Manager ou um log do BUSMASTER só para analisar (não guarda na biblioteca). Vários logs da FT de uma vez são juntados numa sessão.">
             Abrir arquivo…
           </Button>
           <Button size="md" variant="white" color="dark" leftSection={<IconFolderOpen size={18} />} onClick={() => nav('/')}>Sessões da biblioteca</Button>
         </Group>
       </BrandHero>
       <input
-        ref={fileRef} type="file" accept=".csv,.txt,.log" hidden
-        onChange={e => { const f = e.currentTarget.files?.[0]; e.currentTarget.value = ''; if (f) void openFile(f); }}
+        ref={fileRef} type="file" accept=".csv,.txt,.log" multiple hidden
+        onChange={e => { const fs = Array.from(e.currentTarget.files ?? []); e.currentTarget.value = ''; if (fs.length) void openFiles(fs); }}
       />
     </>
   );

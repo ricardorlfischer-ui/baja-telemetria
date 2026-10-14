@@ -96,6 +96,12 @@ export interface CarConfig {
   cda: number;
   rho: number;
   power: number;           /* kW no motor */
+  /* bateria (novo, battery.ts; fora do DEFAULT_CAR do antigo: sem valor = DEFAULT_BATTERY) */
+  batCh?: string;          /* canal da tensão da bateria ('' = automático) */
+  batModel?: string;
+  batWh?: number;          /* Wh nominais */
+  batOffset?: number;      /* V somados à leitura da FT450 (ela mede a menos) */
+  batReserve?: number;     /* % de carga que fica de reserva */
 }
 
 /** Canal calculado pelo usuário (formulas.ts). */
@@ -111,4 +117,4 @@ export type AnalysisConfig = TrackConfig & { susp: SuspConfig; car: CarConfig; f
 /** Sensores e entradas do carro (catálogo em sensors.ts). */
 export type SensorId =
   | 'gps' | 'shock_fl' | 'shock_fr' | 'shock_rl' | 'shock_rr' | 'wheel' | 'cvt_temp' | 'logger' | 'car_data'
-  | 'engine_rpm' | 'imu' | 'brake_pressure' | 'steering' | 'throttle';
+  | 'battery' | 'engine_rpm' | 'imu' | 'brake_pressure' | 'steering' | 'throttle';

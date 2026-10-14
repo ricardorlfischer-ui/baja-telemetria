@@ -5,11 +5,19 @@
  *    invisível;
  *  - useRange devolvia um array novo a cada mudança da janela dos gráficos mesmo no trecho
  *    "Sessão": escolher uma volta (que move a janela) recalculava os relatórios das páginas. */
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { useSessionStore, useRange } from '../src/state/session';
 import { hashPath, useSessionHotkeys } from '../src/state/hotkeys';
+
+/* o exemplo do app é um teste de 1 h (lento aqui): estes testes usam o exemplo curto do app
+ * antigo (2 + 2 voltas, carro de 260 kg) */
+vi.mock('@baja/core', async orig => {
+  const m = await orig<typeof import('@baja/core')>();
+  return { ...m, demoCSV: () => m.demoCSV(m.DEMO_SIM_V1), DEMO_CAR: m.DEMO_CAR_V1 };
+});
+
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 const st = () => useSessionStore.getState();

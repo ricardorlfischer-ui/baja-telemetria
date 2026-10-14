@@ -35,7 +35,7 @@ export default function SessoesPage() {
   const r = routeByPath('/')!;
   const nav = useNavigate();
   const { lib, mode, user, remote, info, offline, loading: libLoading, version, bump, pc, dataDir } = useLibrary();
-  const openFile = useSessionStore(s => s.openFile);
+  const openFiles = useSessionStore(s => s.openFiles);
   const openDemo = useSessionStore(s => s.openDemo);
   const openFromLibrary = useSessionStore(s => s.openFromLibrary);
   const sessionLoading = useSessionStore(s => s.status === 'loading');
@@ -182,9 +182,10 @@ export default function SessoesPage() {
   };
 
   const demo = async () => { if (await openDemo()) nav('/sessao'); };
-  const openNoSave = async (f: File | undefined) => {
-    if (!f) return;
-    if (await openFile(f)) nav('/sessao');
+  /* vários arquivos: junta os logs da FT e abre (sem guardar) */
+  const openNoSave = async (files: File[]) => {
+    if (!files.length) return;
+    if (await openFiles(files)) nav('/sessao');
   };
 
   /* ------------------------------------------------------------ tela */
@@ -196,14 +197,14 @@ export default function SessoesPage() {
             Dados de exemplo
           </Button>
           <Button size="md" variant="white" color="dark" leftSection={<IconFileSearch size={18} />} loading={sessionLoading && !openingId}
-            onClick={() => fileRef.current?.click()} title="Só analisa: o arquivo não vai para a biblioteca">
+            onClick={() => fileRef.current?.click()} title="Só analisa: o arquivo não vai para a biblioteca. Vários logs da FT de uma vez são juntados numa sessão.">
             Abrir arquivo sem salvar
           </Button>
         </BrandHero>
       </Box>
       <PageHeader title={r.label} subtitle={pc ? 'Todos os logs deste computador num lugar só: envie, filtre por pista, carro e piloto, e abra para analisar.' : r.question} />
-      <input ref={fileRef} type="file" accept=".csv,.txt,.log" hidden
-        onChange={e => { void openNoSave(e.target.files?.[0]); e.target.value = ''; }} />
+      <input ref={fileRef} type="file" accept=".csv,.txt,.log" multiple hidden
+        onChange={e => { void openNoSave(Array.from(e.target.files ?? [])); e.target.value = ''; }} />
 
       <ModeBanner mode={mode} pc={pc} dataDir={dataDir} loading={libLoading} offline={offline} serverName={info?.name} userName={user?.name}
         role={user?.role} onLogin={() => nav('/login', { state: { from: '/' } })} onPrefs={() => nav('/config', pc ? { state: { section: 'pasta' } } : undefined)}
@@ -404,7 +405,7 @@ function EmptyLibrary({ local, pc, onDemo, onOpenFile }: { local: boolean; pc: b
     },
     {
       icon: IconFlask, title: 'Veja como fica com o exemplo',
-      text: 'Uma sessão simulada com GPS, amortecedores, roda e CVT mostra todas as páginas funcionando: mapa, voltas, suspensão, CVT e a ficha do carro.',
+      text: 'Um teste de 1 hora com GPS, amortecedores, roda e CVT mostra todas as páginas funcionando: mapa, voltas, suspensão, CVT e a ficha do carro.',
       action: <Button variant="light" leftSection={<IconFlask size={16} />} onClick={onDemo}>Dados de exemplo</Button>,
     },
     {

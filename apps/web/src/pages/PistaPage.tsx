@@ -63,6 +63,17 @@ export default function PistaPage() {
 
   const chOpts = useMemo(() => (S ? S.channels.map(c => ({ value: c.key, label: c.name })) : []), [S]);
 
+  /* X e Y só valem juntos: com um eixo só, normalizeConfig adivinha os dois de novo e a
+   * escolha some. A escolha de um eixo fica aqui até o outro ser escolhido também. */
+  const [pend, setPend] = useState<{ chX?: string; chY?: string }>({});
+  useEffect(() => setPend({}), [S]);
+  const pickXY = (ax: 'chX' | 'chY', v: string) => {
+    const nxt = { chX: pend.chX ?? cfg.chX, chY: pend.chY ?? cfg.chY, [ax]: v };
+    if (nxt.chX && nxt.chY) { setPend({}); set(nxt); }
+    else setPend(p => ({ ...p, [ax]: v }));
+  };
+  const shownX = pend.chX ?? cfg.chX, shownY = pend.chY ?? cfg.chY;
+
   /* ---------------------------------------------------------------- mini-mapa */
   const mapRef = useRef<TrackMapHandle>(null);
   const [lineMode, setLineMode] = useState(false);
@@ -144,17 +155,19 @@ export default function PistaPage() {
             usedIn={['quality.gpsCalibration', 'channel.gps_xy']}
             actions={(
               <Button variant="default" size="sm" leftSection={<IconArrowsExchange size={16} />} disabled={bm || locked || !S}
-                onClick={() => set({ chX: cfg.chY, chY: cfg.chX })}>
+                onClick={() => { if (shownX && shownY) { setPend({}); set({ chX: shownY, chY: shownX }); } else setPend({ chX: shownY, chY: shownX }); }}>
                 Trocar X ↔ Y
               </Button>
             )}
             note={bm
               ? 'Log do BUSMASTER: a posição vem direto da latitude/longitude do módulo GPS (0x028); os canais e o formato não se aplicam.'
               : <>{info.source || (S ? '' : 'Abra um log para escolher os canais entre os dele; sem log, o app procura X/Y pelo nome (Back_pressure / O2_General na FT).')}</>}>
-            <ChannelSelect label="X · Leste (entrada 7)" value={cfg.chX || ''} options={chOpts} firstLabel="— escolha —"
-              disabled={bm || locked} onChange={v => set({ chX: v })} />
-            <ChannelSelect label="Y · Norte (entrada 8)" value={cfg.chY || ''} options={chOpts} firstLabel="— escolha —"
-              disabled={bm || locked} onChange={v => set({ chY: v })} />
+            <ChannelSelect label="X · Leste (entrada 7)" value={shownX || ''} options={chOpts} firstLabel="— escolha —"
+              disabled={bm || locked} onChange={v => pickXY('chX', v)}
+              description={!bm && !shownX && shownY ? 'Escolha também o X para desenhar a trajetória.' : undefined} />
+            <ChannelSelect label="Y · Norte (entrada 8)" value={shownY || ''} options={chOpts} firstLabel="— escolha —"
+              disabled={bm || locked} onChange={v => pickXY('chY', v)}
+              description={!bm && shownX && !shownY ? 'Escolha também o Y para desenhar a trajetória.' : undefined} />
             <ChannelSelect label="Status do GPS (opcional)" value={cfg.chStatus || ''} options={chOpts} firstLabel="— nenhum —"
               disabled={bm || locked} onChange={v => set({ chStatus: v })} />
             <Select label="Valor gravado" size="md" allowDeselect={false} disabled={bm || locked}
@@ -189,7 +202,7 @@ export default function PistaPage() {
         <div className="cfg-map-layout">
           <ChartCard title="Mini-mapa da pista" explain="chart.miniMap" sensors={['gps']} flush
             subtitle={ctx ? (trackOk ? 'Arraste para mover, roda = zoom, duplo clique = enquadrar, clique na pista = ir àquele ponto.' : undefined) : 'Sem sessão: só a área coberta pelos códigos 0–255.'}
-            footer={lineMode ? 'Clique em dois pontos, um de cada lado da pista, cruzando o traçado.' : line ? `Linha de largada: (${line[0].x}, ${line[0].y}) → (${line[1].x}, ${line[1].y}) m${ctx?.S.demo ? ' — do exemplo (só na memória)' : ''}.` : 'Sem linha de largada: sem voltas.'}
+            footer={lineMode ? 'Clique em dois pontos, um de cada lado da pista, cruzando o traçado.' : line ? `Linha de largada: (${line[0].x}, ${line[0].y}) → (${line[1].x}, ${line[1].y}) m.` : 'Sem linha de largada: sem voltas.'}
           >
             <Group gap="xs" wrap="wrap" px="md" pb="sm">
               <Text fw={600} mr={4}>Linha de largada:</Text>

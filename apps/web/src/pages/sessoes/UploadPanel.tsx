@@ -1,20 +1,22 @@
 /* Área de enviar logs: arrastar vários arquivos de uma vez, formulário rápido (pista, carro,
  * piloto, etiquetas, notas para todos; data por arquivo, tirada do nome da FT ou do cabeçalho
- * do BUSMASTER) e a fila com o progresso de cada arquivo. Cada arquivo vira uma sessão. */
+ * do BUSMASTER) e a fila com o progresso de cada arquivo. Cada arquivo vira uma sessão ou,
+ * com "Juntar numa sessão só", os CSV da FT viram um log só (mergeLogs do core). */
 import { useRef, useState } from 'react';
 import {
-  ActionIcon, Badge, Button, Group, Paper, Progress, Stack, Text, TextInput, ThemeIcon, Title, Tooltip,
+  ActionIcon, Badge, Button, Group, Paper, Progress, Stack, Switch, Text, TextInput, ThemeIcon, Title, Tooltip,
 } from '@mantine/core';
 import { Dropzone } from '@mantine/dropzone';
 import { notifications } from '@mantine/notifications';
 import {
-  IconAlertTriangle, IconCalendar, IconCheck, IconClock, IconCopy, IconFileText, IconPlayerPlay, IconRefresh,
+  IconAlertTriangle, IconArrowMerge, IconCalendar, IconCheck, IconClock, IconCopy, IconFileText, IconPlayerPlay, IconRefresh,
   IconUpload, IconX,
 } from '@tabler/icons-react';
 import type { Library, RemoteLibrary, SessionMeta } from '../../library';
 import { useProfiles } from '../../state/profiles';
 import { MetaFields } from './MetaFields';
-import { guessDate } from '@baja/core';
+import { guessDate, looksBinary, mergeLogs, mergeOrder } from '@baja/core';
+import { lsGet, lsSet } from '../../state/prefs';
 import { draftOf, fmtSize, joinDate, msgOf, splitDate, type MetaDraft } from './meta';
 import { DuplicateError, saveLocal, uploadRemote, type UploadMeta, type UploadPhase } from './upload';
 
@@ -30,9 +32,13 @@ interface QueueItem {
   error?: string;
   existingId?: string | null;
   meta?: SessionMeta;
+  /** log juntado: nomes curtos dos arquivos que entraram, na ordem, e o nome da sessão */
+  mergedFrom?: string[];
+  mergedName?: string;
 }
 
 const OK_EXT = /\.(csv|txt|log)$/i;
+const K_MERGE = 'baja:envio:juntar';
 
 const PHASE_TEXT: Record<UploadPhase, string> = {
   pending: 'na fila',
@@ -69,6 +75,8 @@ export function UploadPanel({ lib, remote, existing, drivers, tags, canUpload, d
   const [queue, setQueue] = useState<QueueItem[]>([]);
   const [shared, setShared] = useState<MetaDraft>(() => ({ ...draftOf(null), carId: activeCarId, trackId: activeTrackId }));
   const [running, setRunning] = useState(false);
+  /* juntar os logs da fila numa sessão só (lembra a escolha) */
+  const [merge, setMerge] = useState(() => lsGet(K_MERGE) !== '0');
   const openRef = useRef<() => void>(null);
   const keyN = useRef(0);
   const local = lib.mode === 'local';
@@ -81,26 +89,42 @@ export function UploadPanel({ lib, remote, existing, drivers, tags, canUpload, d
     const ok = files.filter(f => OK_EXT.test(f.name));
     const bad = files.filter(f => !OK_EXT.test(f.name));
     if (bad.length) {
+      const ftml = bad.some(f => /\.ftml$/i.test(f.name));
       notifications.show({
         color: 'yellow', title: 'Arquivo não aceito',
-        message: `${bad.map(f => f.name).join(', ')}: use o CSV do FT Manager (.csv) ou o log do BUSMASTER (.txt / .log).`,
+        message: `${bad.map(f => f.name).join(', ')}: use o CSV do FT Manager (.csv) ou o log do BUSMASTER (.txt / .log).` +
+          (ftml ? ' O .ftml é o formato próprio do FT Manager: abra-o no FT Manager e exporte em CSV.' : ''),
       });
     }
     if (!ok.length) return;
-    if (!queue.length) setShared(s => ({ ...s, carId: s.carId ?? activeCarId, trackId: s.trackId ?? activeTrackId }));
-    const items: QueueItem[] = await Promise.all(ok.map(async f => {
+    const read = await Promise.all(ok.map(async f => {
       let head = '';
       try { head = await f.slice(0, 2000).text(); } catch { /* sem cabeçalho */ }
+      return { f, head };
+    }));
+    /* binário com nome de .csv (o .ftml renomeado): avisa já, em vez de errar no envio */
+    const bin = read.filter(x => looksBinary(x.head));
+    if (bin.length) {
+      notifications.show({
+        color: 'yellow', title: 'Arquivo binário, não CSV', autoClose: 12_000,
+        message: `${bin.map(x => x.f.name).join(', ')}: parece o .ftml do FT Manager com outro nome. Abra no FT Manager e exporte em CSV (com todos os canais: RPM, GPS, tensão da bateria...).`,
+      });
+    }
+    const good = read.filter(x => !looksBinary(x.head));
+    if (!good.length) return;
+    if (!queue.length) setShared(s => ({ ...s, carId: s.carId ?? activeCarId, trackId: s.trackId ?? activeTrackId }));
+    const items: QueueItem[] = good.map(({ f, head }) => {
       const g = guessDate(f.name, head);
       const { day, time } = splitDate(g);
       return { key: `q${++keyN.current}`, file: f, day, time, guessed: !!g, phase: 'pending' as UploadPhase, progress: 0 };
-    }));
+    });
     setQueue(q => [...q.filter(x => x.phase !== 'done' && x.phase !== 'skipped'), ...items]);
   };
 
   const metaFor = (it: QueueItem, allowDuplicate = false): UploadMeta => {
     const date = joinDate(it.day, it.time);
     return {
+      ...(it.mergedName ? { name: it.mergedName } : {}),
       ...(date ? { date } : {}),
       ...(shared.trackId ? { trackId: shared.trackId } : {}),
       ...(shared.carId ? { carId: shared.carId } : {}),
@@ -129,9 +153,43 @@ export function UploadPanel({ lib, remote, existing, drivers, tags, canUpload, d
     }
   };
 
+  /* junta os arquivos pendentes num log só e põe ele no lugar deles na fila; null = erro */
+  const mergeQueue = async (items: QueueItem[]): Promise<QueueItem | null> => {
+    try {
+      const inputs = await Promise.all(items.map(async it => ({ name: it.file.name, text: await it.file.text(), it })));
+      const r = mergeLogs(inputs);
+      const first = mergeOrder(inputs)[0].it;
+      const file = new File([r.text], r.fileName, { type: 'text/csv' });
+      const m: QueueItem = {
+        key: `q${++keyN.current}`, file, day: first.day, time: first.time, guessed: first.guessed,
+        phase: 'pending', progress: 0, mergedFrom: r.parts.map(p => p.label), mergedName: r.name,
+      };
+      const gone = new Set(items.map(x => x.key));
+      setQueue(q => [...q.filter(x => !gone.has(x.key)), m]);
+      return m;
+    } catch (e) {
+      notifications.show({ color: 'red', title: 'Não deu para juntar os logs', message: msgOf(e), autoClose: 12_000 });
+      return null;
+    }
+  };
+
   const sendAll = async () => {
     setRunning(true);
     const known = [...existing];
+    const waiting = queue.filter(x => (x.phase === 'pending' || x.phase === 'error') && !x.mergedFrom);
+    if (merge && waiting.length >= 2) {
+      const m = await mergeQueue(waiting);
+      if (!m) { setRunning(false); return; }
+      const saved = await sendOne(m, false, known);
+      setRunning(false);
+      if (saved) {
+        notifications.show({
+          color: 'green', title: `${m.mergedFrom!.length} logs juntados numa sessão`,
+          message: `“${saved.name}” ${local ? 'guardada neste navegador.' : pc ? 'guardada na pasta deste computador.' : 'guardada no servidor da equipe.'}`,
+        });
+      }
+      return;
+    }
     let ok = 0;
     for (const it of queue) {
       if (it.phase !== 'pending' && it.phase !== 'error') continue;
@@ -149,6 +207,8 @@ export function UploadPanel({ lib, remote, existing, drivers, tags, canUpload, d
   };
 
   const pending = queue.filter(x => x.phase === 'pending' || x.phase === 'error').length;
+  const mergeable = queue.filter(x => (x.phase === 'pending' || x.phase === 'error') && !x.mergedFrom).length;
+  const willMerge = merge && mergeable >= 2;
 
   return (
     <Stack gap="md">
@@ -169,7 +229,7 @@ export function UploadPanel({ lib, remote, existing, drivers, tags, canUpload, d
             <Title order={3}>{canUpload ? 'Arraste os logs aqui ou clique para escolher' : 'Envio de logs indisponível'}</Title>
             <Text c="dimmed" size="md">
               {canUpload
-                ? 'CSV do FT Manager (FT450) ou log CAN do BUSMASTER (.txt / .log). Pode mandar vários de uma vez: cada arquivo vira uma sessão.'
+                ? 'CSV do FT Manager (FT450) ou log CAN do BUSMASTER (.txt / .log). Pode mandar vários de uma vez: cada arquivo vira uma sessão, ou junte todos os logs do dia numa sessão só.'
                 : disabledReason}
             </Text>
             {canUpload && (
@@ -197,6 +257,23 @@ export function UploadPanel({ lib, remote, existing, drivers, tags, canUpload, d
             <MetaFields value={shared} onChange={p => setShared(s => ({ ...s, ...p }))} drivers={drivers} tags={tags}
               withDate={false} disabled={running} />
 
+            {mergeable >= 2 && (
+              <Paper withBorder radius="md" p="md" style={{ background: 'var(--mantine-color-body)' }}>
+                <Group gap="md" wrap="nowrap" align="flex-start">
+                  <ThemeIcon size={40} radius="md" variant="light"><IconArrowMerge size={22} /></ThemeIcon>
+                  <Stack gap={4} style={{ minWidth: 0, flex: 1 }}>
+                    <Switch size="md" checked={merge} disabled={running} label={`Juntar os ${mergeable} logs numa sessão só`}
+                      onChange={e => { const v = e.currentTarget.checked; setMerge(v); lsSet(K_MERGE, v ? '1' : '0'); }} />
+                    <Text size="sm" c="dimmed">
+                      {merge
+                        ? 'Os logs entram um atrás do outro, na ordem do nome (Log 1, Log 2, …), e todas as contas (mapa, voltas, bateria, resumo) saem de uma vez. O tempo com o carro desligado entre um log e outro não conta. Só CSV da FT450.'
+                        : 'Cada arquivo vira uma sessão separada.'}
+                    </Text>
+                  </Stack>
+                </Group>
+              </Paper>
+            )}
+
             <Stack gap="sm">
               {queue.map(it => (
                 <QueueRow key={it.key} it={it} running={running}
@@ -216,7 +293,7 @@ export function UploadPanel({ lib, remote, existing, drivers, tags, canUpload, d
                 <Button variant="default" disabled={running} onClick={() => openRef.current?.()}>Adicionar arquivos</Button>
                 <Button size="md" leftSection={<IconUpload size={18} />} loading={running} disabled={!pending}
                   onClick={() => { void sendAll(); }}>
-                  {pending ? (pending === 1 ? 'Guardar 1 arquivo' : `Guardar ${pending} arquivos`) : 'Tudo guardado'}
+                  {willMerge ? `Juntar e guardar ${mergeable} logs` : pending ? (pending === 1 ? 'Guardar 1 arquivo' : `Guardar ${pending} arquivos`) : 'Tudo guardado'}
                 </Button>
               </Group>
             </Group>
@@ -264,6 +341,9 @@ function QueueRow({ it, running, local, onDate, onRemove, onRetry, onSkip, onOpe
             )}
           </Group>
         </Group>
+        {it.mergedFrom && (
+          <Text size="sm" c="dimmed">Juntou {it.mergedFrom.length} logs, nesta ordem: {it.mergedFrom.join(', ')}.</Text>
+        )}
         {it.guessed && editable && (
           <Text size="sm" c="dimmed">Data tirada {/BUSMASTER|\.log$|\.txt$/i.test(it.file.name) ? 'do arquivo' : 'do nome do arquivo'}: confira.</Text>
         )}

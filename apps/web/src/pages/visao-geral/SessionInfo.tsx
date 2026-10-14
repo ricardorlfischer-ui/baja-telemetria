@@ -8,7 +8,7 @@ import {
 import { notifications } from '@mantine/notifications';
 import { IconDeviceFloppy, IconMessagePlus, IconNote, IconPlayerTrackNext, IconTrash } from '@tabler/icons-react';
 import { useNavigate } from 'react-router';
-import { computeSession, fmtTime, type SessionContext } from '@baja/core';
+import { computeSession, DEMO_DATE, DEMO_TRACK, fmtTime, type SessionContext } from '@baja/core';
 import type { Comment, SessionMeta } from '../../library';
 import { useLibrary } from '../../library';
 import { useCursorTime, useSessionStore, type SessionSource } from '../../state/session';
@@ -16,7 +16,7 @@ import { useSaveOpenSession } from '../../state/useSaveOpenSession';
 import { useProfiles } from '../../state/profiles';
 import { trySummary } from '../../state/librarySave';
 import { MetaFields } from '../sessoes/MetaFields';
-import { configFor, draftOf, fmtIso, msgOf, patchOf, type MetaDraft } from '../sessoes/meta';
+import { configFor, draftOf, fmtDate, fmtIso, msgOf, patchOf, type MetaDraft } from '../sessoes/meta';
 
 /* ---------------------------------------------------------------- dados da sessão */
 export function SessionData({ source, ctx }: { source: SessionSource; ctx: SessionContext }) {
@@ -49,15 +49,24 @@ export function SessionData({ source, ctx }: { source: SessionSource; ctx: Sessi
   const drivers = useMemo(() => [...new Set(all.map(m => m.driver).filter((d): d is string => !!d))], [all]);
   const tags = useMemo(() => [...new Set(all.flatMap(m => m.tags || []))], [all]);
 
+  /* exemplo: mostra os dados do teste como uma sessão qualquer (não fica na biblioteca) */
+  if (!id && source.type === 'demo') {
+    return (
+      <Paper withBorder radius="md" p="lg">
+        <Stack gap={4}>
+          <Text fw={600} size="md">{source.name}</Text>
+          <Text c="dimmed">{fmtDate(DEMO_DATE)} · {DEMO_TRACK} · log da FT450 · {fmtTime(ctx.S.t[ctx.S.t.length - 1] - ctx.S.t[0])}</Text>
+        </Stack>
+      </Paper>
+    );
+  }
   if (!id) {
     return (
       <Paper withBorder radius="md" p="lg">
         <Stack gap="sm">
-          <Text fw={600} size="md">{source.type === 'demo' ? 'Sessão de exemplo' : 'Esta sessão não está na biblioteca'}</Text>
+          <Text fw={600} size="md">Esta sessão não está na biblioteca</Text>
           <Text c="dimmed">
-            {source.type === 'demo'
-              ? 'Os dados de exemplo são simulados e não ficam guardados: não há data, piloto nem anotações para editar.'
-              : saver.canSave
+            {saver.canSave
                 ? `“${source.name}” foi aberta sem salvar. Guarde na biblioteca para editar data, pista, carro, piloto, etiquetas e anotações.`
                 : `“${source.name}” foi aberta sem salvar. Para guardar com data, pista, carro, piloto, etiquetas e anotações, envie o arquivo na página Sessões.`}
           </Text>

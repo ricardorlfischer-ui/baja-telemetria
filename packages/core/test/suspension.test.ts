@@ -7,11 +7,12 @@ import { describe, it, expect } from 'vitest';
 import { loadLegacy, legacyCompute, legacyAnalysis, readFixture, DEMO_CAR as LEGACY_DEMO_CAR, type LegacyState } from './legacy';
 import { same } from './compare';
 import { parseLog, parseCSV } from '../src/parsers';
-import { demoCSV, DEMO_CAR } from '../src/demo';
+import { demoCSV as demoCSVSim, DEMO_SIM_V1, DEMO_CAR_V1 as DEMO_CAR } from '../src/demo';
 import { computeSession, rangeOf, type SessionContext, type AnalysisConfigInput } from '../src/pipeline';
 import { suspensionReport, type SuspPlot, type SuspensionReport } from '../src/reports/suspension';
 import { SENSORS } from '../src/sensors';
 import { EXPLAIN_AREAS } from '../src/explain';
+const demoCSV = () => demoCSVSim(DEMO_SIM_V1);   /* o exemplo com o carro do app antigo */
 
 const L = loadLegacy({ ui: true });
 const { BT } = L;

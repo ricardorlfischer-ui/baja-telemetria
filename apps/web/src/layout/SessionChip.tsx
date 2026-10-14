@@ -40,7 +40,7 @@ export function SessionChip() {
     );
   }
   const dur = S.t.length ? S.t[S.t.length - 1] - S.t[0] : 0;
-  const kind = S.demo ? 'Exemplo' : S.kind === 'BUSMASTER' ? 'CAN' : 'FT';
+  const kind = S.kind === 'BUSMASTER' ? 'CAN' : 'FT';
   const name = source?.name || S.name;
   return (
     <Menu position="bottom-start" width={260} withinPortal>
@@ -48,7 +48,7 @@ export function SessionChip() {
         <Tooltip label={`${name} · ${S.info}`} multiline maw={360} openDelay={400}>
           <Button variant="default" size="sm" className="bt-session-chip" rightSection={<IconChevronDown size={14} />}
             leftSection={busy ? <Loader size={14} /> : (
-              <Badge size="xs" variant="light" color={S.demo ? 'grape' : 'brand'} style={{ flexShrink: 0, overflow: 'visible' }}
+              <Badge size="xs" variant="light" color="brand" style={{ flexShrink: 0, overflow: 'visible' }}
                 styles={{ label: { overflow: 'visible' } }}>{kind}</Badge>
             )}>
             <Text span size="sm" fw={600} truncate maw={200}>{name}</Text>

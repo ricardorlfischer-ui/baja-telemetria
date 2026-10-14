@@ -22,6 +22,14 @@ import { DEFAULT_PREFS, usePrefs } from '../src/state/prefs';
 import { libKeyOf, planReopen, reopenLastSession, type ReopenInput } from '../src/state/reopen';
 import { useSessionStore } from '../src/state/session';
 
+/* o exemplo do app é um teste de 1 h (lento aqui): estes testes usam o exemplo curto do app
+ * antigo (2 + 2 voltas, carro de 260 kg) */
+vi.mock('@baja/core', async orig => {
+  const m = await orig<typeof import('@baja/core')>();
+  return { ...m, demoCSV: () => m.demoCSV(m.DEMO_SIM_V1), DEMO_CAR: m.DEMO_CAR_V1 };
+});
+
+
 const FIX = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../packages/core/test/fixtures');
 const LOG_NAME = 'ft_log3_shocks_compact.csv';
 const LOG = readFileSync(path.join(FIX, LOG_NAME), 'utf8');

@@ -3,7 +3,7 @@
  * A barra lateral, o roteador e os títulos saem daqui. Página nova = uma linha aqui. */
 import { lazy, type ComponentType, type LazyExoticComponent } from 'react';
 import {
-  IconActivity, IconCar, IconCarSuspension, IconChartDots, IconChartLine, IconCpu,
+  IconActivity, IconBatteryAutomotive, IconCar, IconCarSuspension, IconChartDots, IconChartLine, IconCpu,
   IconFileDescription, IconFolder, IconGitCompare, IconGauge, IconLayoutDashboard, IconLogin, IconMap2,
   IconRoute, IconSettings, IconTemperature, IconTool, IconUsers, IconWaveSine, IconFlag, type Icon,
 } from '@tabler/icons-react';
@@ -87,6 +87,11 @@ export const ROUTES: AppRoute[] = [
     path: '/cvt', label: 'CVT', icon: IconTemperature, group: 'Engenharia', needsSession: true,
     question: 'Quanto a CVT esquenta e se ela aguenta o enduro inteiro com a ventilação atual.',
     component: lazy(() => import('./pages/CvtPage')),
+  },
+  {
+    path: '/bateria', label: 'Bateria', icon: IconBatteryAutomotive, group: 'Engenharia', needsSession: true,
+    question: 'Quanto a bateria ainda dura pela queda da tensão, quanto o carro gasta e se ela aguenta o enduro.',
+    component: lazy(() => import('./pages/BateriaPage')),
   },
   {
     path: '/dinamica', label: 'Dinâmica', icon: IconActivity, group: 'Engenharia', needsSession: true,

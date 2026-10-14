@@ -25,7 +25,7 @@ export interface Sensor {
 
 /** Ordem de apresentação (instalados primeiro, depois os sugeridos). */
 export const SENSOR_IDS: SensorId[] = [
-  'gps', 'shock_fl', 'shock_fr', 'shock_rl', 'shock_rr', 'wheel', 'cvt_temp', 'logger', 'car_data',
+  'gps', 'shock_fl', 'shock_fr', 'shock_rl', 'shock_rr', 'wheel', 'cvt_temp', 'battery', 'logger', 'car_data',
   'engine_rpm', 'imu', 'brake_pressure', 'steering', 'throttle',
 ];
 
@@ -43,12 +43,12 @@ const shock = (id: SensorId, nome: string, canto: string, ch: string, vel: strin
 export const SENSORS: Record<SensorId, Sensor> = {
   gps: {
     id: 'gps', name: 'GPS (posição na pista)', short: 'GPS',
-    where: 'Módulo GPS no barramento CAN de 1 Mbps do carro (quadros padrão 0x028 = posição, 0x023 = fix/satélites). Um PIC18F27Q83 (pic_gps_expander) no mesmo barramento lê a posição e emula um input expander FuelTech (produto 0x47E0) para a FT450 gravar.',
-    signal: 'Módulo GPS → CAN 0x028 (longitude e latitude, int32 em 1e-7 grau) e 0x023 (fix 3D + flag fixOK) → PIC: distância ao centro da pista do track_config.h, em Leste (X) e Norte (Y), vira um código 0–255 por eixo (código = floor(128 + d / resolução), travado em 0 e 255) → expander FTCAN, entradas 7 (X) e 8 (Y), como 0–5000 mV virtuais → a FT450 aplica a calibração do FT Manager (recomendado 0,00 V = 0 e 5,00 V = 5: log em volts, código = V × 51) → no CSV, X = Back_pressure (DataID 0x0177) e Y = O2_General (DataID 0x0027). Status opcional (entrada GPS_INPUT_STATUS: 0 sem GPS, 85 sem fix, 170 pegando o centro, 255 ok). No log do BUSMASTER o app lê a latitude/longitude direto do 0x028 (só com fix 3D).',
+    where: 'Módulo GPS no barramento CAN de 1 Mbps do carro (quadros padrão 0x028 = posição, 0x023 = fix/satélites). Um PIC18F27Q83 (pic_gps_expander) no mesmo barramento lê a posição e emula um input expander FuelTech (produto 0x47E0) para a FT450 gravar. No carro atual o módulo (AiM) está girado 90°: a seta/logo dele aponta para o lado, perpendicular à frente do carro. Isso não muda nenhum número: só a latitude/longitude entram, e rumo, velocidade, acelerações e raio de curva saem da trajetória (para onde o carro andou), não de como o módulo está virado. O que importa na montagem é a antena com céu aberto.',
+    signal: 'Módulo GPS → CAN 0x028 (longitude e latitude, int32 em 1e-7 grau) e 0x023 (fix 3D + flag fixOK) → PIC: distância ao centro da pista do track_config.h, em Leste (X) e Norte (Y), vira um código 0–255 por eixo (código = floor(128 + d / resolução), travado em 0 e 255) → expander FTCAN, entradas 7 (X) e 8 (Y), como 0–5000 mV virtuais → a FT450 aplica a calibração do FT Manager (recomendado 0,00 V = 0 e 5,00 V = 5: log em volts, código = V × 51) → no CSV, X = Back_pressure (DataID 0x0177) e Y = O2_General (DataID 0x0027); o FT Manager em português chama os mesmos canais de Contra_pressão e Sonda_Geral. Status opcional (entrada GPS_INPUT_STATUS: 0 sem GPS, 85 sem fix, 170 pegando o centro, 255 ok). No log do BUSMASTER o app lê a latitude/longitude direto do 0x028 (só com fix 3D).',
     rate: '4 Hz (atualização da posição pelo módulo); a FT repete o último valor a 25 Hz no log',
     resolution: 'vão / 255 por passo: 200 m + 2 × 10 m de margem → ≈ 0,863 m (centro fixo, TRACK_CENTER_FIXED = 1); com centro automático o vão dobra (2 × 200 + 2 × 10 m → ≈ 1,65 m). Fora da área o código trava em 0/255 (borda).',
     purpose: 'trajetória e mapa colorido por canal, velocidade e distância (quando não há roda), voltas, delta para a melhor volta, aceleração lateral e raio de curva (g-g), detecção de carro parado (estático dos amortecedores, teste de queda), referência para calibrar a circunferência do pneu e medir o escorregamento da roda de tração, espectro da pista por distância',
-    channels: ['Back_pressure', 'O2_General'],
+    channels: ['Back_pressure', 'O2_General', 'Contra_pressão', 'Sonda_Geral'],
     unlocks: ['tempo por volta e onde se ganha/perde tempo (traçado, curvas lentas)', 'aceleração lateral máx. e raio de curva → bitola, entre-eixos, altura do CG contra capotamento', 'calibração da roda e escorregamento → pneu e engate da CVT'],
   },
   shock_fl: shock('shock_fl', 'dianteiro esquerdo', 'FL', 'Shock_-_Front_Left', 'Shock_velocity_FL'),
@@ -73,6 +73,16 @@ export const SENSORS: Record<SensorId, Sensor> = {
     purpose: 'modelo térmico de 1ª ordem dT/dt = θ₁·P − (θ₂ + θ₃·v)·(T − T_amb): constante de tempo, temperatura de regime, projeção para o enduro e quanto de troca de calor falta',
     channels: ['CVT_temp'],
     unlocks: ['dimensionar dutos/entrada de ar da CVT para o enduro', 'saber se a correia passa do limite antes do fim da prova'],
+  },
+  battery: {
+    id: 'battery', name: 'Tensão da bateria', short: 'Bateria',
+    where: 'Bateria do carro: Aliant YLP07, LiFePO4 de 4 células (12,8 V nominal, 24 Wh). O carro não tem carga ligada na bateria: FT450, bomba, bobina, GPS e PIC descarregam a bateria o tempo todo em que o carro está ligado.',
+    signal: 'Não precisa de sensor extra: a FT450 mede a tensão da própria alimentação → canal “Tensão da bateria” (Battery voltage, V) no CSV do FT Manager (marque o canal ao exportar). A FT450 lê ~0,5 V a menos que o multímetro; o app soma a correção (em “Dados do carro”) antes de qualquer conta.',
+    rate: '25 Hz no log; a tensão da bateria muda em minutos',
+    resolution: 'a do canal no FT Manager (o app mostra o menor passo achado no log); na parte plana da curva do LiFePO4, 0,01 V ≈ 1 % de carga',
+    purpose: 'quanto a bateria ainda dura com o consumo do carro, carga pela tensão, consumo elétrico médio (W, A) e se aguenta o enduro; quedas de tensão que derrubam a FT (buracos no log)',
+    channels: ['Battery_voltage', 'Tensão_da_bateria'],
+    unlocks: ['capacidade (Wh) da bateria do carro novo para o enduro, com margem', 'consumo elétrico do carro para dimensionar chicote e fusíveis', 'quando carregar ou trocar a bateria entre testes e provas'],
   },
   logger: {
     id: 'logger', name: 'Datalogger (FT450)', short: 'Logger',
@@ -100,7 +110,7 @@ export const SENSORS: Record<SensorId, Sensor> = {
   },
   imu: {
     id: 'imu', name: 'IMU (acelerômetro + giroscópio de 3 eixos)', short: 'IMU', planned: true,
-    where: 'Presa rígida no chassi, perto do centro de gravidade.',
+    where: 'Presa rígida no chassi, perto do centro de gravidade. Aqui a orientação importa: girada 90° (como o módulo GPS está hoje), a longitudinal e a lateral trocam de eixo e uma delas troca de sinal; anote como ela foi montada para o app desvirar os eixos.',
     signal: 'CAN (ou saídas analógicas na FT) → acelerações ax, ay, az (g) e velocidades angulares (°/s).',
     rate: '≥ 100 Hz',
     purpose: 'acelerações lateral, longitudinal e vertical medidas direto (g-g sem depender dos passos de 0,86 m do GPS), guinada, rolagem e arfagem reais para conferir as dos potenciômetros, cargas de pouso',
@@ -139,7 +149,7 @@ export type SensorState = 'present' | 'absent' | 'planned';
 const SENSOR_ROLES: Partial<Record<SensorId, ChannelRole[]>> = {
   shock_fl: ['shock_pos_FL', 'shock_vel_FL'], shock_fr: ['shock_pos_FR', 'shock_vel_FR'],
   shock_rl: ['shock_pos_RL', 'shock_vel_RL'], shock_rr: ['shock_pos_RR', 'shock_vel_RR'],
-  wheel: ['wheel'], cvt_temp: ['cvt_temp'],
+  wheel: ['wheel'], cvt_temp: ['cvt_temp'], battery: ['battery'],
   engine_rpm: ['engine_rpm'], imu: ['imu'], brake_pressure: ['brake_pressure'], steering: ['steering'], throttle: ['throttle'],
 };
 
@@ -242,6 +252,13 @@ const MATRIX: [SensorId, [string, string][]][] = [
     ['cvt.reachLimit', 'em que minuto da prova a CVT passaria do limite'],
     ['cvt.coolingNeed', 'meta de troca de calor para o duto de ar do carro novo'],
     ['cvt.thermalModel', 'entrada de ar/dutos da CVT para o enduro não passar do limite'],
+  ]],
+  ['battery', [
+    ['battery.life', 'capacidade (Wh) da bateria do carro novo, com margem'],
+    ['battery.endurance', 'se a bateria aguenta o enduro inteiro saindo cheia'],
+    ['battery.drain', 'consumo elétrico do carro: chicote, fusíveis e o que vale desligar'],
+    ['battery.soc', 'carga mínima para sair para um teste ou prova'],
+    ['battery.voltageTrend', 'tensão de alimentação da FT: chicote e conectores sem queda'],
   ]],
   ['logger', [
     ['quality.sampleRate', 'taxa de gravação de cada canal (o que dá para enxergar)'],

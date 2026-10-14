@@ -16,7 +16,7 @@ import { L, BT, runLegacy, selectify, strip, tilesOf, tableOf, normLegacyPlot, n
 import { legacyCompute, readFixture, LEGACY_DIR, type LegacyState } from './legacy';
 import { same } from './compare';
 import { parseCSV, parseLog } from '../src/parsers';
-import { demoCSV, DEMO_CAR } from '../src/demo';
+import { demoCSV as demoCSVSim, DEMO_SIM_V1, DEMO_CAR_V1 as DEMO_CAR } from '../src/demo';
 import { DEFAULT_CAR } from '../src/vehicle';
 import { computeSession, rangeOf, processedCsv, trackConfigInfo, type SessionContext } from '../src/pipeline';
 import { designReport, designRecTexts } from '../src/reports/design';
@@ -31,6 +31,7 @@ import { sessionSummary } from '../src/summary';
 import { dataQuality } from '../src/quality';
 import { sensorAvailability, SENSORS } from '../src/sensors';
 import { getExplain } from '../src/explain';
+const demoCSV = () => demoCSVSim(DEMO_SIM_V1);   /* o exemplo com o carro do app antigo */
 
 /* ------------------------------------------------------------------ CSV sintéticos */
 const clone = <T,>(x: T): T => JSON.parse(JSON.stringify(x));

@@ -17,6 +17,7 @@
     "local": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/windows/abrir-telemetria.ps1",
     "local:parar": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/windows/parar-telemetria.ps1",
     "local:atalho": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/windows/criar-atalho.ps1",
+    "exemplo": "tsx scripts/gerar-exemplo.ts",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "test": "npm run test --workspaces --if-present"
   },

@@ -4,7 +4,8 @@ import { describe, it, expect } from 'vitest';
 import { loadLegacy, readFixture } from './legacy';
 import { same } from './compare';
 import { parseLog, parseCSV, parseBusmaster, prettyName, finishChannel } from '../src/parsers';
-import { demoCSV } from '../src/demo';
+import { demoCSV as demoCSVSim, DEMO_SIM_V1 } from '../src/demo';
+const demoCSV = () => demoCSVSim(DEMO_SIM_V1);   /* o exemplo com o carro do app antigo */
 
 const { BT } = loadLegacy();
 

@@ -6,9 +6,11 @@ import path from 'node:path';
 import { loadLegacy, legacyCompute, legacyAnalysis, readFixture, LEGACY_DIR, DEMO_CAR as LEGACY_DEMO_CAR, type LegacyState } from './legacy';
 import { same } from './compare';
 import { parseLog, parseCSV } from '../src/parsers';
-import { demoCSV, DEMO_CAR } from '../src/demo';
+/* comparação com o app antigo: o exemplo com o carro dele (DEMO_SIM_V1 / DEMO_CAR_V1) */
+import { demoCSV as demoCSVSim, DEMO_SIM_V1, DEMO_CAR_V1 as DEMO_CAR } from '../src/demo';
 import { computeSession, normalizeConfig, rangeOf, getChannel, type SessionContext, type AnalysisConfigInput } from '../src/pipeline';
 import type { Session } from '../src/types';
+const demoCSV = () => demoCSVSim(DEMO_SIM_V1);
 
 const L = loadLegacy({ ui: true });
 const { BT } = L;

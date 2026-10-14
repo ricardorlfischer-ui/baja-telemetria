@@ -11,6 +11,8 @@ import { configFor } from './meta';
 export type UploadPhase = 'pending' | 'reading' | 'analyzing' | 'saving' | 'uploading' | 'server' | 'done' | 'duplicate' | 'error' | 'skipped';
 
 export interface UploadMeta {
+  /** nome da sessão (log juntado); sem ele, o nome do arquivo */
+  name?: string;
   date?: string;
   trackId?: string;
   carId?: string;
@@ -59,6 +61,7 @@ export async function saveLocal(
   onPhase('saving', 0.85);
   await yieldFrame();
   const m: Parameters<Library['addSession']>[1] = {};
+  if (meta.name) m.name = meta.name;
   if (meta.date) m.date = meta.date;
   if (meta.trackId) m.trackId = meta.trackId;
   if (meta.carId) m.carId = meta.carId;
@@ -80,6 +83,7 @@ export async function uploadRemote(
   onPhase: (p: UploadPhase, progress?: number) => void,
 ): Promise<SessionMeta> {
   const m: Parameters<RemoteLibrary['addSession']>[1] = {};
+  if (meta.name) m.name = meta.name;
   if (meta.date) m.date = meta.date;
   if (meta.trackId) m.trackId = meta.trackId;
   if (meta.carId) m.carId = meta.carId;

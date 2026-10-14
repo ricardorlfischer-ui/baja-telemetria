@@ -24,7 +24,7 @@ export interface ExplainEntry {
   related?: string[];            /* outros ids */
 }
 
-export const EXPLAIN_AREAS = ['track', 'laps', 'susp', 'freq', 'power', 'cvt', 'dyn', 'quality', 'design', 'chart', 'channel', 'sensor'] as const;
+export const EXPLAIN_AREAS = ['track', 'laps', 'susp', 'freq', 'power', 'cvt', 'battery', 'dyn', 'quality', 'design', 'chart', 'channel', 'sensor'] as const;
 export type ExplainArea = typeof EXPLAIN_AREAS[number];
 
 const SHOCKS_REQ = (why: string): ExplainSensor[] => (['shock_fl', 'shock_fr', 'shock_rl', 'shock_rr'] as SensorId[]).map(id => ({ id, need: 'required', why }));
@@ -176,7 +176,7 @@ const ENTRIES: ExplainEntry[] = [
     title: 'Posição na pista (GPS → PIC → FT)',
     what: 'A trajetória do carro em metros (X = Leste, Y = Norte) em torno do centro da pista, reconstruída dos códigos 0–255 que o PIC manda pelo expander para as entradas 7 e 8 da FT (ou da latitude/longitude, no log do BUSMASTER).',
     sensors: [
-      { id: 'gps', need: 'required', why: 'a posição: X = Back_pressure (entrada 7), Y = O2_General (entrada 8)' },
+      { id: 'gps', need: 'required', why: 'a posição: X = Back_pressure (entrada 7), Y = O2_General (entrada 8); no FT Manager em português, Contra_pressão e Sonda_Geral' },
       { id: 'logger', need: 'required', why: 'a FT grava o código a 25 Hz, repetindo o valor entre as atualizações de 4 Hz do GPS' },
     ],
     how: 'código = V × 51 (log em volts). metros = (código − 127,5) × resolução, com resolução = (tamanho + 2·margem)/255 com centro fixo ou (2·tamanho + 2·margem)/255 com centro automático — os mesmos números do track_config.h. Os degraus de 0,86 m são reconstruídos (quando o código muda um passo, o carro está na fronteira entre os passos; entre mudanças, reta no tempo, no máximo 3 s) e suavizados (média móvel, padrão 0,5 s). Velocidade e rumo por diferença central de ±0,5 s; distância somando os deslocamentos. Com o centro conhecido, volta para lat/lon (WGS84) para o fundo de satélite.',
@@ -216,7 +216,7 @@ const ENTRIES: ExplainEntry[] = [
     id: 'quality.gpsCalibration',
     title: 'Calibração das entradas 7 e 8 na FT',
     what: 'Se a FT está gravando a posição do GPS no formato certo. O PIC manda o código 0–255 como 0–5000 mV virtuais e a FT aplica a calibração da entrada do FT Manager antes de gravar.',
-    sensors: [{ id: 'gps', need: 'required', why: 'canais Back_pressure (X) e O2_General (Y)' }],
+    sensors: [{ id: 'gps', need: 'required', why: 'canais Back_pressure (X) e O2_General (Y), ou Contra_pressão e Sonda_Geral no FT Manager em português' }],
     how: 'O app detecta o formato pelo conteúdo: 0–5,2 = volts (código = V × 51), inteiros 0–255 = código, até 5200 = mV (código = mV × 0,051), senão metros. Valor travado em exatamente 1,000 no mínimo indica a calibração “1 V = 1”.',
     design: 'Recomendado: entrada linear 0–5 V com 0,00 V = 0 e 5,00 V = 5 (o log fica em volts e o app converte). Evite “1 V = 1”: o PIC trava o valor no ponto mínimo da calibração (input_value() em ft_expander.c) e tudo abaixo de 1 V (código < 51, ~66 m a Oeste/Sul do centro com 220 m de vão) vira 1,000. Metros direto não cabe: a FT guarda 3 casas em 16 bits (máx. ±32,767).',
     test: 'Com o carro parado no centro da pista, os dois canais devem ler ~2,5 V (código ~128).',
@@ -1541,6 +1541,81 @@ const MORE: ExplainEntry[] = [
     limits: 'Vale para o carro e o acerto do dia: trocou mola, piloto, pneu ou geometria, crie outro perfil. Valores chutados aparecem nos números como se fossem medidos.',
     test: 'Balança por roda com o piloto (massa e massa suspensa); suba a roda 10 mm com um macaco e meça quanto o amortecedor comprime (MR); meça o curso do amortecedor de batente a batente.',
     related: ['quality.carData', 'susp.naturalFreq', 'power.wheelPower', 'cvt.thermalModel'],
+  },
+
+  /* ---------------------------------------------------------------- bateria (battery.ts) */
+  {
+    id: 'battery.life',
+    title: 'Quanto a bateria ainda dura',
+    what: 'Tempo até a bateria chegar na reserva (padrão 10 % de carga) se o carro continuar gastando como neste trecho, e quanto uma carga cheia duraria.',
+    sensors: [
+      sn('battery', 'required', 'a tensão da bateria gravada pela FT450 (+ correção de ~0,5 V)'),
+      sn('logger', 'required', 'o tempo de log: o ritmo de descarga é carga ÷ tempo'),
+      sn('car_data', 'required', 'a bateria: Wh, reserva e a correção da leitura da FT (Dados do carro)'),
+    ],
+    how: 'Tensão real = gravada + correção. Reta por mínimos quadrados da tensão × tempo no trecho; as pontas da reta viram carga (%) pela curva típica do LiFePO4 4S (13,6 V = 100 %, 13,0 V = 50 %, 12,0 V = 10 %, 10,0 V = 0 %, reta entre os pontos). Ritmo = (carga no começo − carga no fim) ÷ horas de log. Dura ainda = (carga agora − reserva) ÷ ritmo; cheia = (100 − reserva) ÷ ritmo. Sem queda maior que um passo de resolução do canal, o app dá só um limite inferior (“mais de”).',
+    design: 'Diz se a bateria atual aguenta um dia de testes e a prova, e dá o número para escolher a bateria do carro novo: Wh necessários = consumo (W) × duração (h) ÷ (1 − reserva), mais folga para frio e envelhecimento. Bateria menor = menos massa; maior = sem risco de a FT apagar no fim do enduro.',
+    limits: 'A curva do LiFePO4 é muito plana entre 20 e 90 % (≈ 0,1 V a cada 10 %): poucos centésimos de volt mudam muito o resultado, e um log curto dá só a ordem de grandeza. A tensão com carga fica um pouco abaixo da tensão em repouso da curva (resistência interna), então a carga absoluta sai um pouco baixa; o ritmo, não. O tempo entre um log e outro (carro desligado) não entra. Bateria recém-tirada do carregador cai rápido nos primeiros minutos (carga de superfície) e exagera o consumo.',
+    test: 'Carregue a bateria, deixe descansar 1 h, meça com multímetro (confirma a correção da FT) e grave um teste longo (≥ 20 min) sem desligar. Para o consumo exato, um amperímetro alicate de DC no cabo da bateria com o carro ligado.',
+    related: ['battery.soc', 'battery.drain', 'battery.endurance', 'battery.voltageTrend', 'sensor.battery'],
+  },
+  {
+    id: 'battery.soc',
+    title: 'Carga da bateria pela tensão',
+    what: 'Quanto de carga (%) a bateria tem, estimado pela tensão real, na curva tensão × carga típica de uma LiFePO4 de 12,8 V. O gráfico mostra a curva e onde o trecho começou e terminou.',
+    sensors: [
+      sn('battery', 'required', 'a tensão da bateria'),
+      sn('car_data', 'required', 'a correção da leitura da FT450 (padrão +0,5 V)'),
+    ],
+    how: 'Carga = interpolação linear na tabela [10,0 V 0 %; 12,0 V 10 %; 12,5 V 20 %; 12,8 V 30 %; 12,9 V 40 %; 13,0 V 50 %; 13,1 V 60 %; 13,2 V 70 %; 13,3 V 80 %; 13,4 V 90 %; 13,6 V 100 %], com a tensão real = gravada + correção, nas pontas da reta de tendência (não numa amostra solta).',
+    design: 'Define a carga mínima para sair para um teste ou para a prova e quando carregar. Abaixo de ~12 V (10 %) a bomba de combustível e a bobina começam a falhar: é a reserva de projeto.',
+    limits: 'Curva típica de fabricante, não a da YLP07 medida; a tensão com o carro ligado é um pouco menor que em repouso. Entre 20 e 90 % a curva é quase plana: a carga pela tensão tem incerteza de ±10 % ou mais.',
+    test: 'Levante a curva da própria bateria: descarregue com uma carga conhecida (lâmpada de 12 V) medindo tensão e tempo, e compare com a tabela.',
+    related: ['battery.life', 'sensor.battery'],
+  },
+  {
+    id: 'battery.drain',
+    title: 'Consumo elétrico médio',
+    what: 'Potência média (W) e corrente média (A) que o carro tirou da bateria no trecho, pela carga que caiu.',
+    sensors: [
+      sn('battery', 'required', 'a queda da tensão (vira carga pela curva do LiFePO4)'),
+      sn('logger', 'required', 'o tempo do trecho'),
+      sn('car_data', 'required', 'os Wh da bateria'),
+    ],
+    how: 'Energia gasta (Wh) = (carga no começo − carga no fim) ÷ 100 × Wh da bateria. Potência = energia ÷ horas de log. Corrente ≈ potência ÷ 12,8 V (tensão nominal).',
+    design: 'Mostra quanto o sistema elétrico pesa (FT450, bomba, bobina, GPS e PIC): base para o chicote, os fusíveis e para decidir o que pode ser desligado ou trocado por algo que gaste menos no carro novo.',
+    limits: 'É uma média tirada da queda de tensão: herda toda a incerteza da curva plana do LiFePO4. Picos (partida, bomba ligando) não aparecem.',
+    test: 'Amperímetro alicate de DC no cabo da bateria: carro ligado parado e andando. Se a corrente medida bater com a estimada, a curva e a correção estão boas.',
+    related: ['battery.life', 'battery.soc'],
+  },
+  {
+    id: 'battery.endurance',
+    title: 'A bateria aguenta o enduro?',
+    what: 'Quanto de carga sobra no fim do enduro (duração em Dados do carro) saindo com a bateria cheia e gastando como neste trecho — ou em que minuto ela chega na reserva.',
+    sensors: [
+      sn('battery', 'required', 'o ritmo de descarga'),
+      sn('logger', 'required', 'o tempo do trecho'),
+      sn('car_data', 'required', 'duração do enduro, Wh e reserva'),
+    ],
+    how: 'Carga no fim = 100 − ritmo (%/h) × duração do enduro (h). Abaixo da reserva: minuto = (100 − reserva) ÷ ritmo × 60.',
+    design: 'Decisão direta de projeto: se não sobra carga com folga, a bateria do carro novo precisa de mais Wh (ou o carro de menos consumo); se sobra muito, dá para levar uma bateria menor e mais leve.',
+    limits: 'Supõe o mesmo consumo do trecho durante a prova inteira e bateria nova e cheia; frio e bateria velha reduzem a capacidade.',
+    test: 'Grave um teste longo, no ritmo de prova, saindo com a bateria cheia e descansada.',
+    related: ['battery.life', 'battery.drain', 'cvt.enduranceProjection'],
+  },
+  {
+    id: 'battery.voltageTrend',
+    title: 'Tensão da bateria no tempo',
+    what: 'A tensão real da bateria (gravada + correção da FT450) ao longo do trecho e a reta de tendência usada nas contas.',
+    sensors: [
+      sn('battery', 'required', 'a tensão gravada pela FT450'),
+      sn('logger', 'required', 'o tempo'),
+    ],
+    how: 'Cada amostra válida (5–20 V) + correção; reta por mínimos quadrados v = a + b·t. Queda em V/h = −b × 3600. Resolução do canal = menor passo entre leituras diferentes; queda menor que um passo = sem queda medível.',
+    design: 'Além da duração: degraus e quedas bruscas (com a bomba ou a bobina ligando) apontam mau contato ou cabo fino no chicote — o que derruba a FT e abre buracos no log.',
+    limits: 'O desenho mostra até ~2000 pontos; em logs juntados, o tempo é o do carro ligado (os intervalos entre os logs não aparecem).',
+    test: 'Compare a leitura da FT com um multímetro nos bornes da bateria, com o carro ligado: a diferença é a correção (hoje ~0,5 V).',
+    related: ['battery.life', 'quality.timeGaps'],
   },
 ];
 /* força trativa: o mesmo card com o id usado pelo resumo (power.tractionForce) e pelo trem de força (power.tractiveForce) */

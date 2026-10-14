@@ -60,7 +60,7 @@ da sessão: dá para abrir um log real no navegador com
 - **Testes de equivalência obrigatórios** (`packages/core/test/*.test.ts`, Vitest): para
   cada função portada, rodar a antiga (`loadLegacy()`) e a nova nos mesmos dados e comparar
   com `same()` de `test/compare.ts` (tolerância relativa 1e-9). Dados: sessão de exemplo
-  (`BT.demoCSV()` / `legacyDemo`), `ft_log3_gps.csv`, `ft_log3_shocks_compact.csv`,
+  (`BT.demoCSV()` / `legacyDemo`; do lado novo `demoCSV(DEMO_SIM_V1)` com `DEMO_CAR_V1`), `ft_log3_gps.csv`, `ft_log3_shocks_compact.csv`,
   `busmaster_14.log` (em `test/fixtures`) e, se existir, o log completo de `samples/`.
 
 ### 3.2 Módulos
@@ -69,12 +69,14 @@ da sessão: dá para abrir um log real no navegador com
 |---|---|---|
 | `src/types.ts` | — | tipos compartilhados (abaixo) |
 | `src/util.ts` | `util.js` (só a parte pura) | `clamp`, `fmtTime`, `decimalsFor`, `fmtVal`, `idxAt`, `niceTicks`, `heat`, `HEAT_LIGHT/DARK`, `pctRange`, `range`, `esc` |
-| `src/parsers.ts` | `parsers.js` | `parseLog`, `parseCSV`, `parseBusmaster`, `prettyName`, `finishChannel` |
+| `src/parsers.ts` | `parsers.js` | `parseLog`, `parseCSV`, `parseBusmaster`, `prettyName`, `finishChannel`; novo: `looksBinary(text)` (NUL/caractere inválido em > 2 % do começo) — `parseLog` recusa arquivo binário (o `.ftml` do FT Manager renomeado para `.csv`) com mensagem pedindo para exportar em CSV |
+| `src/merge.ts` | novo | juntar vários CSV da FT numa sessão (3.9): `mergeLogs(files)`, `mergeOrder`, `logLabel` |
+| `src/battery.ts` | novo | bateria (3.10): `DEFAULT_BATTERY`, `batteryOf(car)`, `LFP_OCV`, `lfpSoc`, `lfpVolt`, `findBatteryCh`, `batteryReport(ctx, i0, i1)`, `fmtHours` |
 | `src/logdate.ts` | novo | `guessDate(fileName, text?)`: data do teste pelo nome do arquivo da FT ou pelo cabeçalho do BUSMASTER (3.3) |
-| `src/gps.ts` | `gps.js` | `DEFAULT_CFG`, `WGS84`, `mPerDeg`, `spanOf`, `FMT_LABEL`, `detectFmt`, `toCode`, `guessGpsChannels`, `smooth`, `computeTrack`, `posAt`, `computeLaps`, `autoLine` |
+| `src/gps.ts` | `gps.js` | `DEFAULT_CFG`, `WGS84`, `mPerDeg`, `spanOf`, `FMT_LABEL`, `detectFmt`, `toCode`, `guessGpsChannels` (além do antigo: sem nome óbvio e sem `Back_pressure`/`O2_General`, aceita `Contra_pressão`/`Sonda_Geral`, os nomes do FT Manager em português), `smooth`, `computeTrack`, `posAt`, `computeLaps`, `autoLine` |
 | `src/analysis.ts` | `analysis.js` | `DEFAULT_SUSP`, `CORNERS`, `findShocks`, `deriv`, `median`, `quant`, `interpAt`, `stoppedMask`, `suspPrep`, `velStats`, `hist`, `fft`, `welch`, `psd`, `findPeak`, `freeDecay`, `localPeaks`, `highpass`, `dropTests`, `psdMask`, `rideRates`, `gpsDynamics`, `lapProfile`, `bestLap`, `deltaToBest`, `compareLaps` |
 | `src/vehicle.ts` | `vehicle.js` | `DEFAULT_CAR`, `findWheelCh`, `findCvtCh`, `lstsq`, `linFit`, `vehPrep`, `launches`, `powerCurve`, `coastFit`, `findCoasts`, `cvtFit`, `bodyAngles`, `gradients`, `jumps`, `bottomOuts`, `roughness`, `roadSpectrum` |
-| `src/demo.ts` | `demo.js` | `demoCSV`, `DEMO_CAR` (de `app.js`) |
+| `src/demo.ts` | `demo.js` | `demoCSV(sim)`: o modelo do antigo com os números do carro como parâmetro. `DEMO_SIM_V1` / `DEMO_CAR_V1` = carro do antigo (260 kg, 2 + 2 voltas: CSV idêntico, usado nos testes de equivalência); `DEMO_SIM` / `DEMO_CAR` = carro da equipe (180 kg, entre-eixos 1425, bitolas 1325/1300, máx. ~47 km/h, 80 voltas em ~1 h), o exemplo do app. `DEMO_NAME`, `DEMO_DATE`, `DEMO_TRACK`, `DEMO_CENTER`: como o exemplo aparece. `npm run exemplo` grava o CSV (`scripts/gerar-exemplo.ts`) |
 | `src/pipeline.ts` | `app.js` `recompute()` + `buildDerived()` + `setSession()` | `normalizeConfig`, `computeSession`, `rangeOf`, `getChannel`, `channelExtremes` (novo) |
 | `src/reports/*.ts` | `analysisui.js` / `vehicleui.js` (`render*`) | relatórios puros de cada página (3.4) |
 | `src/quality.ts` | novo | qualidade dos dados por canal (3.5), `SHOCK_STILL_MM` |
@@ -207,7 +209,8 @@ ele saiu**, para a equipe e para mostrar aos juízes que a aquisição serve ao 
   `gps` (módulo GPS → PIC → expander, entradas 7/8 da FT; ou lat/lon no BUSMASTER),
   `shock_fl`, `shock_fr`, `shock_rl`, `shock_rr` (potenciômetros lineares; a FT também
   grava a velocidade), `wheel` (velocidade da roda), `cvt_temp` (temperatura da CVT),
-  `logger` (FT450: relógio e taxa de gravação), `car_data` (medidas do carro digitadas:
+  `battery` (tensão da bateria, medida pela própria FT450; papel `battery` pelo nome do canal
+  ou `car.batCh`), `logger` (FT450: relógio e taxa de gravação), `car_data` (medidas do carro digitadas:
   massa, geometria, relação roda/amortecedor), e os **sugeridos** (ainda não instalados,
   `planned: true`): `engine_rpm`, `imu`, `brake_pressure`, `steering`, `throttle` — com o
   que cada um destravaria (ex.: rotação + roda = relação da CVT).
@@ -228,7 +231,7 @@ ele saiu**, para a equipe e para mostrar aos juízes que a aquisição serve ao 
   de aquisição e a apresentação).
 
 ```ts
-type SensorId = 'gps' | 'shock_fl' | 'shock_fr' | 'shock_rl' | 'shock_rr' | 'wheel' | 'cvt_temp' | 'logger' | 'car_data'
+type SensorId = 'gps' | 'shock_fl' | 'shock_fr' | 'shock_rl' | 'shock_rr' | 'wheel' | 'cvt_temp' | 'battery' | 'logger' | 'car_data'
               | 'engine_rpm' | 'imu' | 'brake_pressure' | 'steering' | 'throttle';
 interface Sensor { id: SensorId; name: string; short: string; where: string; signal: string; rate: string;
   resolution?: string; purpose: string; planned?: boolean }
@@ -251,6 +254,46 @@ deriv(x) smooth(x, s) clamp(x, a, b) if(c, a, b)` e comparações `< > <= >= == 
 Canais por chave entre colchetes: `[Shock_-_Front_Left] - [Shock_-_Front_Right]`, também
 os calculados (`[gps:speed]`). `Formula = { id, name, unit, expr }`; erro de sintaxe vira
 mensagem em português com a posição. `computeSession` acrescenta os canais (grupo "Fórmulas").
+
+### 3.9 Juntar logs (`merge.ts`)
+
+A FT450 grava um arquivo por vez que o carro liga; `mergeLogs(files: { name, text }[])` junta
+os CSV da FT de um dia numa sessão só. Cada arquivo passa pelo `parseLog` de sempre (os
+números de cada trecho são os do arquivo). Ordem: `mergeOrder` (data/hora do nome quando
+diferem, senão ordem natural do nome: `Log 2` antes de `Log 10`). O primeiro trecho mantém o
+tempo dele; cada seguinte começa uma amostra depois do fim do anterior, com uma linha sem dado
+no meio (corte nos gráficos; nenhuma conta liga um trecho ao outro). O tempo desligado entre
+os arquivos não entra. Saída: `{ name: 'Log 1 a Log 8 (8 logs)', fileName (com a data/hora da
+FT do primeiro, para o guessDate), text (CSV no formato do FT Manager: TIME + união dos canais,
+canal ausente num trecho = vazio, linha de unidades se algum arquivo tinha), parts: { name,
+label, t0, t1, n, channels }[], channels, duration }`. Erro em português com o nome do arquivo:
+menos de 2 arquivos, log do BUSMASTER (a posição lat/lon não cabe no CSV) ou arquivo que não
+lê/binário. A interface manda o CSV juntado como um arquivo qualquer (biblioteca local,
+servidor, ou "Abrir arquivo sem salvar" com vários arquivos).
+
+### 3.10 Bateria (`battery.ts`)
+
+Novo (não é porte). Bateria do carro: Aliant YLP07, LiFePO4 4S, 12,8 V, 24 Wh; o carro não tem
+carga na bateria. `batteryReport(ctx, i0, i1)`:
+
+1. canal: `car.batCh` ou `findBatteryCh` (`/batt?er[iy]|vbat|^bat/i`: `Battery_voltage`, `Tensão_da_bateria`);
+2. tensão real = gravada + `offset` (a FT450 lê ~0,5 V a menos que o multímetro), só 5–20 V;
+3. reta por mínimos quadrados v = a + b·t no trecho; pontas da reta → carga pela tabela
+   `LFP_OCV` ([10,0 V 0 %] … [12,0 10] [12,5 20] [12,8 30] [12,9 40] [13,0 50] [13,1 60]
+   [13,2 70] [13,3 80] [13,4 90] [13,6 100], reta entre os pontos);
+4. ritmo (%/h) = carga que caiu ÷ horas; dura ainda = (carga no fim − reserva) ÷ ritmo;
+   cheia = (100 − reserva) ÷ ritmo; W = carga que caiu × Wh ÷ horas; A ≈ W ÷ 12,8; enduro =
+   100 − ritmo × `car.endurance`.
+
+`status`: `charging` (mediana > 13,8 V), `short` (< 60 s), `flat` (queda da reta < 1 passo de
+resolução do canal → só limite inferior, "> X h"), `ok`. `notes`: log < 20 min, queda < 5
+passos, carga < 20 %. Devolve `tiles` (`left`, `full`, `soc`, `drop`, `power`, `endurance`),
+`plot` (tensão real + reta, `battery.voltageTrend`), `curvePlot` (curva com as pontas,
+`battery.soc`), os números e `sensors` (`battery`, `logger`, `car_data`). Bateria configurável
+em `CarConfig` com campos opcionais fora do `DEFAULT_CAR` do antigo (`batCh`, `batModel`,
+`batWh`, `batOffset`, `batReserve`; `batteryOf(car)` aplica `DEFAULT_BATTERY`). Cards:
+`battery.life`, `battery.soc`, `battery.drain`, `battery.endurance`, `battery.voltageTrend` e
+`sensor.battery`.
 
 ## 4. `@baja/web`
 
@@ -280,7 +323,7 @@ GitHub Pages sem configuração).
 
 | Grupo | Página | Rota | Conteúdo |
 |---|---|---|---|
-| Dados | **Sessões** | `#/` | biblioteca: enviar logs (arrastar vários), lista com filtros (data, pista, carro, piloto, etiquetas), métricas principais por sessão, abrir, editar dados, apagar, exemplo |
+| Dados | **Sessões** | `#/` | biblioteca: enviar logs (arrastar vários; opção de juntar os CSV da FT numa sessão só, 3.9), lista com filtros (data, pista, carro, piloto, etiquetas), métricas principais por sessão, abrir, editar dados, apagar, exemplo |
 | Dados | **Aquisição** | `#/aquisicao` | canais do log e papel de cada um, qualidade dos dados, fórmulas, calibração da FT (entradas 7/8), testes para fazer com o carro |
 | Sessão | **Visão geral** | `#/sessao` | blocos (duração, distância, v máx, melhor volta, T máx CVT, curso máx, saltos), mini-mapa, voltas, pontos de atenção, dados da sessão (data, piloto, carro, pista, notas, etiquetas), anotações |
 | Sessão | **Canais** | `#/canais` | estilo RaceStudio: lista de canais com valor no cursor e mín/máx (clique = ir ao ponto), painéis empilhados (um ou vários canais por painel, arrastar canal para painel), eixo tempo ou distância, faixa de voltas no topo, sobrepor volta de referência, visão geral da sessão embaixo para navegar, mini-mapa, layouts salvos |
@@ -291,10 +334,11 @@ GitHub Pages sem configuração).
 | Engenharia | **Ressonância** | `#/ressonancia` | teste de queda, espectro andando, pista × ressonância |
 | Engenharia | **Trem de força** | `#/trem-de-forca` | calibração do pneu, potência na roda, largadas, coast-down |
 | Engenharia | **CVT** | `#/cvt` | modelo térmico, projeção do enduro |
+| Engenharia | **Bateria** | `#/bateria` | quanto a bateria ainda dura pela queda da tensão (+0,5 V de correção da FT), carga, consumo, enduro; tensão × tempo e curva do LiFePO4 (3.10) |
 | Engenharia | **Dinâmica** | `#/dinamica` | g-g, raio, tempo por faixa de velocidade |
 | Projeto | **Ficha do carro** | `#/projeto` | `designReport` agrupado + pontos de atenção, exportar CSV, imprimir/PDF |
 | Projeto | **Comparar sessões** | `#/comparar` | escolher sessões da biblioteca → tabela de métricas lado a lado (diferença para a primeira), gráficos por métrica ao longo das datas, histogramas de velocidade do amortecedor sobrepostos |
-| Configuração | **Carro** | `#/carro` | perfis do carro (ex.: "BJ26 — setup A"): massa, geometria, suspensão, roda/CVT, resistências |
+| Configuração | **Carro** | `#/carro` | perfis do carro (ex.: "BJ26 — setup A"): massa, geometria, suspensão, roda/CVT, resistências, bateria |
 | Configuração | **Pista e GPS** | `#/pista` | perfis de pista (track_config.h, canais X/Y, formato, linha de largada) |
 | Configuração | **Equipe** | `#/equipe` | só com servidor: usuários, convites, papéis |
 | Configuração | **Preferências** | `#/config` | tema, endereço do servidor da equipe, sair |

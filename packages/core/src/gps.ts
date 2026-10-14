@@ -51,12 +51,18 @@ export const toCode = (v: number, fmt: string): number => fmt === 'V' ? v * 51 :
 
 /* Canais X/Y pelo nome. Sem nome óbvio, usa a configuração atual do expander:
  * entrada 7 (X, Leste) = Back pressure, entrada 8 (Y, Norte) = O2 General
- * (visto no log do BUSMASTER: bloco 0x2FF leva DataID 0x0177 e depois 0x0027). */
+ * (visto no log do BUSMASTER: bloco 0x2FF leva DataID 0x0177 e depois 0x0027).
+ * O FT Manager em português exporta os mesmos canais como Contra_pressão e Sonda_Geral
+ * (o app antigo não conhecia esses nomes). */
 export const guessGpsChannels = (keys: string[]): { x: string; y: string; status: string } => {
   const f = (re: RegExp) => keys.find(k => re.test(k)) || '';
   let x = f(/gps.?x|^x$|leste|east/i), y = f(/gps.?y|^y$|norte|north/i);
   if (!x || !y) {
     if (keys.includes('Back_pressure') && keys.includes('O2_General')) { x = 'Back_pressure'; y = 'O2_General'; }
+    else {
+      const px = f(/^contra.?press[aã]o$/i), py = f(/^sonda.?geral$/i);
+      if (px && py) { x = px; y = py; }
+    }
   }
   return { x, y, status: f(/gps.?st|status.?gps/i) };
 };

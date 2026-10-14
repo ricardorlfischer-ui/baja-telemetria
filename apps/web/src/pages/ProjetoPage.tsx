@@ -9,7 +9,7 @@ import {
   IconPrinter, IconRoute, IconTemperature, type Icon,
 } from '@tabler/icons-react';
 import { useNavigate } from 'react-router';
-import { designCsv, designReport, SENSOR_IDS } from '@baja/core';
+import { DEMO_DATE, DEMO_TRACK, designCsv, designReport, SENSOR_IDS } from '@baja/core';
 import { ComputingState, NoSessionState, PageHeader, Section, SensorChips, downloadText } from '../components';
 import { routeByPath } from '../routes';
 import { fmtSessionDate, sessionDateText } from '../library';
@@ -74,9 +74,9 @@ export default function ProjetoPage() {
   const demo = source?.type === 'demo' || !!S.demo;
   const meta = source?.meta;
   const sessionName = source?.name || S.name;
-  const date = meta?.date ? fmtSessionDate(meta.date) : S.clock0 ? `${S.clock0} (hora do 1º quadro do log)` : meta?.createdAt ? sessionDateText(meta) : demo ? 'simulada' : 'não informada';
-  const carName = demo ? 'Carro de exemplo (simulado)' : car ? car.name : 'Configuração em uso (sem perfil salvo)';
-  const trackName = track ? track.name : demo ? 'Pista do exemplo' : 'Configuração em uso (sem perfil salvo)';
+  const date = meta?.date ? fmtSessionDate(meta.date) : S.clock0 ? `${S.clock0} (hora do 1º quadro do log)` : meta?.createdAt ? sessionDateText(meta) : demo ? fmtSessionDate(DEMO_DATE) : 'não informada';
+  const carName = demo ? 'Carro da equipe' : car ? car.name : 'Configuração em uso (sem perfil salvo)';
+  const trackName = track ? track.name : demo ? DEMO_TRACK : 'Configuração em uso (sem perfil salvo)';
   const present = availability ? SENSOR_IDS.filter(id => availability[id] === 'present') : [];
   const exportCsv = () => { const f = designCsv(rep, S.name); downloadText(f.fileName, f.text); };
   const today = new Date().toLocaleDateString('pt-BR');
@@ -107,7 +107,7 @@ export default function ProjetoPage() {
         <Paper withBorder radius="md" p="lg">
           <Stack gap="md">
             <dl className="bt-ficha-info" style={{ margin: 0 }}>
-              <div><dt>Sessão</dt><dd>{sessionName}<small>{S.kind === 'BUSMASTER' ? 'log CAN (BUSMASTER)' : 'log da FT450'}{demo ? ' · exemplo' : ''}</small></dd></div>
+              <div><dt>Sessão</dt><dd>{sessionName}<small>{S.kind === 'BUSMASTER' ? 'log CAN (BUSMASTER)' : 'log da FT450'}</small></dd></div>
               <div><dt>Data do teste</dt><dd>{date}</dd></div>
               <div><dt>Carro</dt><dd>{carName}<small>massa {cfg.car.mass} kg com piloto</small></dd></div>
               <div><dt>Pista</dt><dd>{trackName}</dd></div>

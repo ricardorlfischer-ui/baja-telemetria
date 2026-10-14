@@ -9,7 +9,7 @@ import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import { readFixture } from './legacy';
 import { parseLog, parseCSV } from '../src/parsers';
-import { demoCSV, DEMO_CAR } from '../src/demo';
+import { demoCSV as demoCSVSim, DEMO_SIM_V1, DEMO_CAR_V1 as DEMO_CAR } from '../src/demo';
 import { computeSession, rangeOf, type SessionContext } from '../src/pipeline';
 import { dataQuality, detectRoles } from '../src/quality';
 import { sessionSummary } from '../src/summary';
@@ -18,6 +18,7 @@ import { EXPLAIN, EXPLAIN_AREAS, getExplain, explainSensorIds, channelExplainId 
 import * as R from '../src/reports';
 import { sensorsOfChannel } from '../src/reports/maps';
 import type { SensorId } from '../src/types';
+const demoCSV = () => demoCSVSim(DEMO_SIM_V1);   /* o exemplo com o carro do app antigo */
 
 const SRC = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'src');
 const BIG = 'Log 3_20261005-1648_20261005-1651.csv';

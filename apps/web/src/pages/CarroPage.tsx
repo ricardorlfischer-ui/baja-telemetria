@@ -2,14 +2,14 @@
  * opções da suspensão da aba Suspensão/Ressonância do antigo) e perfis do carro.
  *
  * Os números vão para a configuração em uso (state/profiles: draft) pelo updateConfig da
- * sessão, que recalcula a sessão aberta. Com o exemplo aberto, o carro é o simulado
- * (DEMO_CAR) e as mudanças ficam só na memória, como no app antigo (A.demoCar). */
+ * sessão, que recalcula a sessão aberta. Com o exemplo aberto, o carro é o do exemplo
+ * (DEMO_CAR, o carro da equipe) e as mudanças ficam só na memória, como no app antigo (A.demoCar). */
 import { useMemo } from 'react';
-import { Alert, Button, Select, Stack, Switch, Text } from '@mantine/core';
-import { IconFlask, IconRefresh, IconRuler } from '@tabler/icons-react';
+import { Button, Select, Stack, Switch, Text, TextInput } from '@mantine/core';
+import { IconRefresh, IconRuler } from '@tabler/icons-react';
 import { useNavigate } from 'react-router';
 import {
-  DEFAULT_CAR, DEFAULT_SUSP, DEMO_CAR, findCvtCh, findWheelCh,
+  DEFAULT_CAR, DEFAULT_SUSP, DEMO_CAR, batteryOf, findBatteryCh, findCvtCh, findWheelCh,
   type CarConfig, type QualityIssue, type SensorId, type SuspConfig,
 } from '@baja/core';
 import { NoSessionState, PageHeader, Section, StatTile } from '../components';
@@ -23,7 +23,7 @@ import { ChannelSelect, FieldGroup, IssueList, NumField, useProfilePerms } from 
 const SHOCKS: SensorId[] = ['shock_fl', 'shock_fr', 'shock_rl', 'shock_rr'];
 const CORNER_OF: Record<string, string> = { shock_fl: 'FL', shock_fr: 'FR', shock_rl: 'RL', shock_rr: 'RR' };
 /* avisos do dataQuality que dizem respeito ao carro (roda, CVT, amortecedores, dados digitados) */
-const CAR_SENSORS = new Set<SensorId>(['wheel', 'cvt_temp', 'car_data', ...SHOCKS]);
+const CAR_SENSORS = new Set<SensorId>(['wheel', 'cvt_temp', 'battery', 'car_data', ...SHOCKS]);
 const isCarIssue = (q: QualityIssue) => /^(car|wheel|cvt|susp)\./.test(q.id) || (!!q.channel && q.sensors.some(s => CAR_SENSORS.has(s)));
 
 /** Valores efetivos (padrões aplicados) do que está em uso — o mesmo que normalizeConfig faz
@@ -68,6 +68,8 @@ export default function CarroPage() {
   const chOpts = useMemo(() => (S ? S.channels.map(c => ({ value: c.key, label: c.name })) : []), [S]);
   const autoWheel = useMemo(() => (S ? findWheelCh(S.channels) : null), [S]);
   const autoCvt = useMemo(() => (S ? findCvtCh(S.channels) : null), [S]);
+  const autoBat = useMemo(() => (S ? findBatteryCh(S.channels) : null), [S]);
+  const bat = batteryOf(car);
 
   const quality = useDataQuality();
   const issues = useMemo(() => (quality ? quality.issues.filter(isCarIssue) : []), [quality]);
@@ -87,13 +89,6 @@ export default function CarroPage() {
     <>
       <PageHeader title={r.label} subtitle={r.question} explain="sensor.car_data" sensors={['car_data']}
         actions={busy ? <Text c="dimmed" size="sm">Recalculando a sessão…</Text> : undefined} />
-
-      {demo && (
-        <Alert color="blue" variant="light" icon={<IconFlask size={18} />} title="Sessão de exemplo aberta" mb="lg">
-          O exemplo usa o carro simulado: as mudanças nos dados do carro valem só para o exemplo e somem ao fechar
-          (o carro de verdade e os perfis não mudam; “Salvar no perfil” grava o carro de verdade). As opções da suspensão valem também para os outros logs.
-        </Alert>
-      )}
 
       <Section title="Perfil do carro" explain="design.carProfile" sensors={['car_data']}
         description="Guarde um perfil por carro e acerto (ex.: “BJ26 — setup A”). As sessões guardadas lembram o perfil usado; escolher um perfil copia os números dele para cá e recalcula a sessão aberta.">
@@ -159,6 +154,24 @@ export default function CarroPage() {
             {n('CdA', 'cda', 'm²', { min: 0 })}
             {n('Densidade do ar', 'rho', 'kg/m³', { min: 0.5 })}
             {n('Potência do motor', 'power', 'kW', { min: 0 })}
+          </FieldGroup>
+
+          <FieldGroup title="Bateria"
+            sensors={['battery', 'car_data']}
+            usedIn={['battery.life', 'battery.soc', 'battery.drain', 'battery.endurance']}
+            note="A FT450 lê a tensão ~0,5 V abaixo do multímetro: a correção é somada à leitura antes das contas. Confira com um multímetro nos bornes, com o carro ligado. A reserva é a carga que não se conta como útil (abaixo de ~12 V a bomba e a bobina falham).">
+            <TextInput label="Modelo" size="md" disabled={locked} defaultValue={car.batModel ?? ''} placeholder={bat.model}
+              key={car.batModel ?? ''} style={{ gridColumn: '1 / -1' }}
+              onBlur={e => { const v = e.currentTarget.value.trim(); if (v !== (car.batModel ?? '')) setCar({ batModel: v }); }} />
+            <ChannelSelect label="Canal da tensão da bateria" value={car.batCh || ''} disabled={locked}
+              firstLabel={`automático${autoBat ? ` (${autoBat.name})` : S ? ' (nenhum canal achado)' : ''}`}
+              options={chOpts} onChange={v => setCar({ batCh: v })} />
+            <NumField label="Energia da bateria" unit="Wh" value={bat.wh} disabled={locked} min={1}
+              onCommit={v => setCar({ batWh: v })} />
+            <NumField label="Correção da leitura da FT" unit="V" value={bat.offset} disabled={locked} min={-3} max={3}
+              onCommit={v => setCar({ batOffset: v })} />
+            <NumField label="Reserva" unit="%" value={bat.reserve} disabled={locked} min={0} max={90}
+              onCommit={v => setCar({ batReserve: v })} />
           </FieldGroup>
         </div>
       </Section>

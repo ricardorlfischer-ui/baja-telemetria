@@ -23,8 +23,9 @@ import * as P from '../src/parsers';
 import * as G from '../src/gps';
 import * as A from '../src/analysis';
 import * as V from '../src/vehicle';
-import { demoCSV, DEMO_CAR } from '../src/demo';
+import { demoCSV as demoCSVSim, DEMO_SIM_V1, DEMO_CAR_V1 as DEMO_CAR } from '../src/demo';
 import type { AnalysisConfig, Channel, Session } from '../src/types';
+const demoCSV = () => demoCSVSim(DEMO_SIM_V1);   /* o exemplo com o carro do app antigo */
 
 const { BT } = loadLegacy();
 const NEW: Record<string, Fn> = { ...U, ...P, ...G, ...A, ...V } as any;

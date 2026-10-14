@@ -4,7 +4,7 @@
 import { describe, it, expect } from 'vitest';
 import { readFixture } from './legacy';
 import { parseLog, parseCSV, finishChannel } from '../src/parsers';
-import { demoCSV, DEMO_CAR } from '../src/demo';
+import { demoCSV as demoCSVSim, DEMO_SIM_V1, DEMO_CAR_V1 as DEMO_CAR } from '../src/demo';
 import { computeSession, type AnalysisConfigInput } from '../src/pipeline';
 import { dataQuality, detectRoles, CHANNEL_ROLES, ROLE_SENSOR, ROLE_LABEL, SHOCK_STILL_MM, type DataQuality } from '../src/quality';
 import { SENSORS, sensorAvailability } from '../src/sensors';
@@ -12,6 +12,7 @@ import { sensorsOfChannel } from '../src/reports/maps';
 import { getExplain } from '../src/explain';
 import { idxAt } from '../src/util';
 import type { Session } from '../src/types';
+const demoCSV = () => demoCSVSim(DEMO_SIM_V1);   /* o exemplo com o carro do app antigo */
 
 const demo = (): Session => { const S = parseCSV(demoCSV(), 'exemplo_baja.csv'); S.demo = true; return S; };
 const run = (S: Session, cfg: AnalysisConfigInput = {}, autoLine = true) => {

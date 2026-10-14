@@ -109,6 +109,14 @@ describe('gps: constantes e auxiliares', () => {
     for (const k of lists) expect(same(BT.guessGpsChannels(k), guessGpsChannels(k)), JSON.stringify(k)).toEqual([]);
   });
 
+  it('guessGpsChannels: nomes do FT Manager em português (o app antigo não conhecia)', () => {
+    expect(guessGpsChannels(['TIME', 'RPM', 'Sonda_Geral', 'Contra_pressão'])).toEqual({ x: 'Contra_pressão', y: 'Sonda_Geral', status: '' });
+    expect(guessGpsChannels(['Contra_pressao', 'Sonda_geral'])).toEqual({ x: 'Contra_pressao', y: 'Sonda_geral', status: '' });
+    expect(guessGpsChannels(['Contra_pressão'])).toEqual({ x: '', y: '', status: '' });
+    // os nomes em inglês continuam valendo antes
+    expect(guessGpsChannels(['Back_pressure', 'O2_General', 'Contra_pressão', 'Sonda_Geral'])).toEqual({ x: 'Back_pressure', y: 'O2_General', status: '' });
+  });
+
   it('smooth', () => {
     const tReg = Float64Array.from({ length: 400 }, (_, i) => i * 0.04);
     const tIrr = Float64Array.from({ length: 400 }, (_, i) => i * 0.04 + (i % 5) * 0.013 + (i > 200 ? 3 : 0));

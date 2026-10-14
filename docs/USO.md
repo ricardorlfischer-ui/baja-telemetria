@@ -185,7 +185,7 @@ lá são puladas. Faça um backup de vez em quando — é a única cópia fora d
   Pista e GPS, Equipe, Preferências). Páginas que precisam de uma sessão aberta ficam
   apagadas até você abrir uma; **Equipe** só funciona com servidor. O botão no canto
   esquerdo do cabeçalho recolhe o menu (no celular ele vira um menu ☰).
-- **Sessão aberta** (cabeçalho): nome, tipo (FT, CAN ou EXEMPLO) e duração. Clique para
+- **Sessão aberta** (cabeçalho): nome, tipo (FT ou CAN) e duração. Clique para
   escolher **Sessão inteira** ou uma volta, **Guardar na biblioteca** (só para um log
   aberto sem salvar), **Trocar sessão** (vai para Sessões), **Abrir o exemplo** ou **Fechar
   sessão** (também faz o app não reabrir essa sessão ao carregar). Sem sessão aberta, o botão vira **Abrir sessão**.
@@ -217,7 +217,8 @@ usado, a proteção contra limpeza e o link do backup) ou servidor da equipe.
 
 1. Arraste um ou vários arquivos para **Enviar logs** (ou clique na área para escolher).
    Aceita o **CSV do FT Manager (FT450)** e o **log CAN do BUSMASTER** (`.txt` / `.log`).
-   Cada arquivo vira uma sessão.
+   Cada arquivo vira uma sessão — ou, com **Juntar os N logs numa sessão só** ligado (aparece
+   com 2 ou mais arquivos na fila), todos os CSV da FT viram **uma sessão só** (veja abaixo).
 2. Preencha **Dados do teste** — **Piloto**, **Pista**, **Carro** (perfis), **Etiquetas**
    (ex.: `enduro`, `setup-B`, `chuva`; Enter separa) e **Notas**. Valem para todos os
    arquivos da fila.
@@ -228,6 +229,17 @@ usado, a proteção contra limpeza e o link do backup) ou servidor da equipe.
    calculado na hora — no navegador (modo local) ou no servidor.
 
 ![Fila de envio com os dados do teste](img/sessoes-envio.png)
+
+**Juntar os logs do dia.** A FT450 grava um arquivo cada vez que o carro liga (`Log 1`,
+`Log 2`, …). Com **Juntar os N logs numa sessão só** ligado, o botão vira **Juntar e guardar
+N logs**: os logs entram um atrás do outro na ordem do nome (`Log 2` antes de `Log 10`), com
+um corte no gráfico entre um e outro, e o mapa, as voltas, a bateria e o resumo saem de uma
+vez. A sessão se chama, por exemplo, “Log 1 a Log 8 (8 logs)” e a linha da fila diz quais
+logs entraram e em que ordem. O tempo com o carro desligado entre um log e outro não conta
+(o relógio é o do carro ligado). Canal que só um dos logs tem fica sem dado nos outros
+trechos. Só CSV da FT (o BUSMASTER vai como sessão separada). **Abrir arquivo sem salvar**
+também aceita vários arquivos: junta e abre, sem guardar. A escolha (juntar ou não) fica
+lembrada.
 
 Log repetido (o mesmo arquivo já está na biblioteca) é avisado: **Abrir a que já existe**,
 **Guardar mesmo assim** ou **Pular**. Deu erro? **Tentar de novo**. **Adicionar arquivos**
@@ -254,7 +266,10 @@ anotações, perfis, configuração, fórmulas, layouts) num JSON para levar a o
 **CSV do FT Manager (FT450):** no FT Manager, abra o log baixado da FT450 e **exporte como
 CSV**. A coluna de tempo e todos os canais viram gráficos; os valores `1797693…` que a FT
 grava quando não há dado são ignorados. O GPS chega pelas entradas 7 e 8 do expander
-([seção 9](#9-pista-e-gps)).
+([seção 9](#9-pista-e-gps)). Na exportação, marque **todos os canais** que interessam: RPM,
+os dois do GPS (Contra pressão = X e Sonda Geral = Y, no FT Manager em português) e
+**Tensão da bateria** (página Bateria). O arquivo `.ftml` é o formato próprio do FT Manager
+(binário): mesmo renomeado para `.csv` ele não abre — o app avisa e pede para exportar em CSV.
 
 **Log do BUSMASTER:** o app decodifica a posição do módulo GPS (quadro `0x028`), o fix
 (`0x023`), o debug do PIC (`0x7E9`) e os blocos FTCAN do expander e da FT. Útil na bancada
@@ -394,6 +409,23 @@ chega no limite), o **modelo térmico** ajustado com a fórmula, **temperatura m
 modelo** e **projeção para o enduro**. Ambiente, limite e duração do enduro vêm da página
 Carro.
 
+### Bateria
+
+Quanto a bateria (**Aliant YLP07**, LiFePO4 12,8 V, 24 Wh) ainda dura, pela queda da tensão
+que a FT450 grava (canal **Tensão da bateria** — precisa estar no CSV exportado). Em
+destaque, **quanto ainda dura** até a reserva (padrão 10 %) com o consumo do trecho; nos
+números, **carga cheia dura**, **carga agora** (pela tensão), **queda da tensão** (V/h),
+**consumo médio** (W e A) e **enduro** (quanto sobra saindo cheia, ou em que minuto acaba).
+Gráficos: a tensão real com a reta de tendência e a curva tensão × carga do LiFePO4.
+
+- A FT450 lê **~0,5 V a menos** que o multímetro: o app soma essa correção antes de tudo.
+  O valor, a energia da bateria (Wh), a reserva e o canal ficam na página **Carro → Bateria**.
+- A curva do LiFePO4 é muito plana (≈ 0,1 V a cada 10 % de carga): log curto dá só a ordem de
+  grandeza, e o app avisa. Para um número firme, grave **20 min ou mais** com o carro ligado.
+  Sem queda medível o app mostra só um limite (“mais de …”); acima de 13,8 V entende que a
+  bateria está no carregador.
+- Logs juntados contam só o tempo de carro ligado — o que gasta a bateria.
+
 ### Dinâmica
 
 Fonte das acelerações (roda + guinada do GPS, ou só GPS), números (v máx, média andando,
@@ -498,6 +530,7 @@ equipe entender o que está vendo e para provar aos juízes que a aquisição se
 | Amortecedores FL, FR, RL, RR | instalados (potenciômetros lineares; a FT grava também a velocidade) | curso, velocidade, rolagem/arfagem, saltos, frequência natural |
 | Velocidade da roda | instalado | velocidade e aceleração precisas, potência na roda, largadas, coast-down |
 | Temperatura da CVT | instalado | modelo térmico e projeção do enduro |
+| Tensão da bateria | medida pela própria FT450 (canal Tensão da bateria) | quanto a bateria dura, consumo elétrico, se aguenta o enduro |
 | Datalogger (FT450) | instalado | base de tempo; a taxa limita o que dá para medir |
 | Medidas do carro | digitadas na página Carro | transformam sinal em grandeza de projeto |
 | Rotação do motor | **sugerido** | relação da CVT em tempo real, patinação da correia |
@@ -620,6 +653,14 @@ Isso vem da ordem dos DataIDs no bloco `0x2FF` do log do BUSMASTER. **Para confe
 para o Norte: o Y tem que subir.** Se estiver trocado, use **Pista e GPS → Trocar X ↔ Y**.
 Também dá para ligar o **Satélite** no Mapa e ver se o traçado cai em cima da pista.
 
+**Módulo girado no carro:** hoje o módulo GPS (AiM) está montado de lado, com a seta/logo
+perpendicular à frente do carro. Isso **não muda nada** no app: X e Y são Leste e Norte do
+planeta, não eixos do carro, e rumo, velocidade, acelerações (g-g) e raio de curva saem da
+trajetória (para onde o carro andou). Não use **Trocar X ↔ Y** por causa disso — esse botão
+é só para canais trocados no log. Na montagem, o que importa é a antena ver o céu. A
+orientação só vai importar se um dia entrar uma **IMU** (ou os acelerômetros de um módulo
+que tenha): aí longitudinal e lateral trocam de eixo.
+
 Conversão (a mesma do `gps_pos.c`):
 
 ```
@@ -670,6 +711,9 @@ padrão** volta ao padrão.
   duração do enduro;
 - **Resistências e motor:** Crr, CdA, densidade do ar e potência do motor (B&S 10 hp ≈
   7,5 kW);
+- **Bateria:** modelo, canal da tensão da bateria, energia (padrão 24 Wh, a Aliant YLP07),
+  **correção da leitura da FT** (padrão +0,5 V: a FT450 mede a menos que o multímetro) e
+  reserva (padrão 10 %) — usados na página Bateria;
 - **Opções da análise da suspensão:** compressão quando a posição aumenta/diminui, limite
   lenta/rápida, só com o carro andando e banda da carroceria — guardadas com o perfil.
 
@@ -714,7 +758,8 @@ comparar depois.
   grandeza**; com o sensor de roda a longitudinal fica bem melhor.
 - **CVT:** o modelo é de 1ª ordem. Não vê a correia patinando em baixa nem o sol direto.
 - **Exemplo:** as análises foram conferidas com a sessão de exemplo, gerada por um modelo
-  físico com valores conhecidos:
+  físico com valores conhecidos (tabela com o carro do app antigo, 260 kg; o exemplo atual
+  usa o carro da equipe, 180 kg, e acha 1,64 Hz, +3,1 % na roda e 5,6 kW na roda):
 
   | Grandeza | Real (modelo) | App |
   |---|---|---|

@@ -3,22 +3,58 @@
 import type { CarConfig } from './types';
 import { clamp } from './util';
 
+/** Parâmetros do carro simulado no exemplo. */
+export interface DemoSim {
+  mass: number;              /* kg, carro + piloto */
+  vMax: number;              /* m/s, velocidade máxima do carro (CVT no fim, motor no governador) */
+  wb: number;                /* entre-eixos, m */
+  msF: number; msR: number;  /* massa suspensa por roda, kg */
+  mu: number;                /* massa não suspensa por roda, kg */
+  ksF: number; ksR: number;  /* mola na roda, N/m */
+  vJump: number;             /* m/s, máxima na rampa do salto até depois do pouso */
+  stints: number[];          /* voltas de cada turno (entre eles, parada no box) */
+  pits: number[];            /* s parado no box depois de cada turno, menos o último */
+  tMax: number;              /* s, limite de segurança da simulação */
+}
+
+/* Carro do app antigo (260 kg, 1600 mm, 54 km/h): com ele demoCSV() sai idêntica à do
+ * legacy/js/demo.js. Fica para os testes de equivalência. */
+export const DEMO_SIM_V1: DemoSim = { mass: 260, vMax: 15, wb: 1.6, msF: 62, msR: 62, mu: 14, ksF: 6800, ksR: 9500, vJump: Infinity,
+  stints: [2, 2], pits: [8], tMax: 1500 };
+
+/* Carro da equipe: 180 kg, entre-eixos 1425 mm, máxima ~47 km/h. Massas por roda somam os
+ * 180 kg (2·32 + 2·38 + 4·10); molas para as mesmas ~1,6 Hz na frente e ~1,9 Hz atrás. O
+ * piloto tira o pé antes do salto: na máxima, a roda girando solta no ar (escorregamento
+ * pequeno, que a análise não separa) virava um pico falso de potência na roda. */
+export const DEMO_SIM: DemoSim = { mass: 180, vMax: 47 / 3.6, wb: 1.425, msF: 32, msR: 38, mu: 10, ksF: 3500, ksR: 5800, vJump: 40 / 3.6,
+  stints: [30, 30, 20], pits: [180, 120], tMax: 4500 };
+
+/* Como o exemplo aparece no app (e o nome do CSV que sai dele: o Windows não aceita "/"). */
+export const DEMO_NAME = 'Teste Chacara 12/10';
+export const DEMO_FILE = 'Teste Chacara 12-10.csv';
+export const DEMO_DATE = '2026-10-12T14:00';
+export const DEMO_TRACK = 'Chácara';
+/* centro da pista do exemplo (a chácara): posiciona o traçado no mapa de satélite */
+export const DEMO_CENTER = { lat0: -22.7701737, lon0: -47.6524851, centerFixed: true };
+
 /* Sessão de exemplo no mesmo formato do CSV do FT Manager (25 Hz) com os canais do carro:
  * GPS X/Y em volts (Back_pressure / O2_General, 4 Hz, passos de 0,86 m como o PIC),
  * 4 potenciômetros de suspensão (posição + velocidade), temperatura da CVT e velocidade da
  * roda. Tudo sai de um modelo físico com valores conhecidos, para conferir as análises:
  *
- *   carro 260 kg, 5,5 kW na roda, tração limitada a 4,7 m/s², Crr 0,06, CdA 0,9 m²
+ *   carro (DEMO_SIM): 180 kg, 5,5 kW na roda, máxima ~47 km/h (≤ 40 km/h na rampa do
+ *              salto), tração limitada a 4,7 m/s², Crr 0,06, CdA 0,9 m²
  *   suspensão: 1/4 de carro por roda, ~1,6 Hz na frente e ~1,9 Hz atrás, ζ ~0,3,
- *              relação roda/amortecedor 1,6, bitola 1300/1250 mm, entre-eixos 1600 mm
+ *              relação roda/amortecedor 1,6, entre-eixos 1425 mm
  *   roda: sensor na roda de tração, circunferência configurada 3 % maior (marca 3 % a
  *         mais), escorrega na largada e dispara no ar
  *   CVT: C·dT/dt = 0,15·P_motor − (2,5 + 0,6·v)·(T − 28 °C), C = 2500 J/K
  *
- * Roteiro: parado (teste de queda em t ≈ 1 s), largada, 2 voltas, parada de 8 s no box,
- * nova largada, 2 voltas, coast-down em ponto morto até quase parar. A pista tem terra,
+ * Roteiro: parado (teste de queda em t ≈ 1 s), largada, turnos de voltas com parada no box
+ * entre eles (DEMO_SIM: 30 + 30 + 20 voltas, ~1 h; app antigo: 2 + 2 com 8 s de box) e
+ * coast-down em ponto morto até quase parar. A pista tem terra,
  * costelas, 2 lombadas e uma rampa de salto por volta. */
-export const demoCSV = (): string => {
+export const demoCSV = (sim: DemoSim = DEMO_SIM): string => {
   let seed = 12345;
   const rnd = () => { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
   const gauss = () => { let s = 0; for (let i = 0; i < 6; i++) s += rnd(); return (s - 3) / 0.7071; };
@@ -32,7 +68,7 @@ export const demoCSV = (): string => {
   const L = S[M];
 
   /* carro */
-  const m = 260, g = 9.81, Pw = 5500, aTrac = 4.7, aBrake = 5.5, crr = 0.06, cda = 0.9, rho = 1.15;
+  const m = sim.mass, g = 9.81, Pw = 5500, aTrac = 4.7, aBrake = 5.5, crr = 0.06, cda = 0.9, rho = 1.15;
   const Fres = (v: number) => crr * m * g + 0.5 * rho * cda * v * v;
   const aMax = (v: number) => Math.min(aTrac, (Pw / Math.max(v, 0.5) - Fres(v)) / m);
 
@@ -46,7 +82,9 @@ export const demoCSV = (): string => {
   }
   kap[0] = kap[M] = kap[1];
   const v = new Float64Array(M + 1);
-  for (let k = 0; k <= M; k++) v[k] = Math.min(15, Math.sqrt(5.2 / Math.max(Math.abs(kap[k]), 1e-4)));
+  const JUMP = 0.27 * L, RAMP = 2.5, HJ = 0.35;
+  for (let k = 0; k <= M; k++) v[k] = Math.min(sim.vMax, Math.sqrt(5.2 / Math.max(Math.abs(kap[k]), 1e-4)));
+  for (let k = 0; k <= M; k++) if (S[k] > JUMP - 3 && S[k] < JUMP + RAMP + 10) v[k] = Math.min(v[k], sim.vJump);   /* rampa, voo e pouso */
   for (let rep = 0; rep < 2; rep++) {
     for (let k = 1; k <= M; k++) { const ds = S[k] - S[k - 1]; v[k] = Math.min(v[k], Math.sqrt(v[k - 1] ** 2 + 2 * Math.max(0.05, aMax(v[k - 1])) * ds)); }
     v[0] = v[M];
@@ -59,7 +97,6 @@ export const demoCSV = (): string => {
   /* piso (m) */
   const hash = (i: number, sd: number) => { let h = Math.imul(i ^ sd, 0x27d4eb2d); h ^= h >>> 15; h = Math.imul(h, 0x85ebca6b); h ^= h >>> 13; return ((h >>> 0) / 4294967296) * 2 - 1; };
   const vnoise = (x: number, sd: number) => { const i = Math.floor(x), f = x - i, u = (1 - Math.cos(f * Math.PI)) / 2; return hash(i, sd) * (1 - u) + hash(i + 1, sd) * u; };
-  const JUMP = 0.27 * L, RAMP = 2.5, HJ = 0.35;
   const roadF = (s: number, side: number) => {
     const q = s / L;
     const rough = Math.max(0, Math.sin(q * 2 * Math.PI * 3)) ** 2;
@@ -77,9 +114,9 @@ export const demoCSV = (): string => {
   };
 
   /* 1/4 de carro por roda */
-  const WB = 1.6, MR = 1.6;
+  const WB = sim.wb, MR = 1.6;
   const corner = (front: boolean, side: number) => {
-    const ms = 62, mu = 14, ks = front ? 6800 : 9500, ct = 150, kt = 55000;
+    const ms = front ? sim.msF : sim.msR, mu = sim.mu, ks = front ? sim.ksF : sim.ksR, ct = 150, kt = 55000;
     const c = 2 * 0.33 * Math.sqrt(ks * ms);
     return { front, side, ms, mu, ks, kt, ct, cC: c * 0.7, cR: c * 1.6, zs: 0, vs: 0, zu: 0, vu: 0, zr: road(front ? 0 : -WB, side), st: front ? 70 : 75, air: false };
   };
@@ -93,19 +130,20 @@ export const demoCSV = (): string => {
     'Shock_velocity_FL,Shock_velocity_FR,Shock_velocity_RL,Shock_velocity_RR\n';
   let s = 0, sp = 0, t = 0, gx = '2.510', gy = '2.510', nx = 0, ny = 0;
   let Tcvt = 42, phase = 'grid', timer = 0, airV = 0;
-  const PIT = 2 * L + 6, END = 4 * L + 6;
+  const ENDS: number[] = [];
+  let laps = 0, stint = 0;
+  for (const n of sim.stints) { laps += n; ENDS.push(laps * L + 6); }
   while (true) {
     /* roteiro */
     let acc!: number;
-    if (phase === 'grid') { acc = -sp / dt; if (t >= 4) phase = 'run1'; }
-    else if (phase === 'run1' && s >= PIT) phase = 'pitIn';
-    else if (phase === 'run2' && s >= END) phase = 'coast';
-    if (phase === 'run1' || phase === 'run2') {
+    if (phase === 'grid') { acc = -sp / dt; if (t >= 4) phase = 'run'; }
+    else if (phase === 'run' && s >= ENDS[stint]) phase = stint < ENDS.length - 1 ? 'pitIn' : 'coast';
+    if (phase === 'run') {
       const target = at(v, s) * (0.95 + 0.04 * Math.sin(Math.floor(s / L) * 1.7));
       acc = clamp((target - sp) / dt, -aBrake, aMax(sp));
     } else if (phase === 'pitIn') {
       acc = clamp(-sp / dt, -aBrake, 0);
-      if (sp < 0.02) { sp = 0; timer += dt; if (timer > 8) { phase = 'run2'; timer = 0; } }
+      if (sp < 0.02) { sp = 0; timer += dt; if (timer > sim.pits[stint]) { phase = 'run'; stint++; timer = 0; } }
     } else if (phase === 'coast') {
       acc = sp > 2 ? -Fres(sp) / m : clamp(-sp / dt, -aBrake, 0);       /* ponto morto, depois freia */
       if (sp < 0.02) { timer += dt; if (timer > 3) break; }
@@ -138,10 +176,11 @@ export const demoCSV = (): string => {
       }
     }
 
-    /* roda de tração: escorrega na largada, dispara no ar; sensor marca 3 % a mais */
+    /* roda de tração: escorrega na largada, dispara no ar (até a máxima: o governador do
+     * motor segura a roda mesmo solta); sensor marca 3 % a mais */
     const slipV = acc > 1 ? 1.4 * Math.exp(-sp / 3) * Math.min(1, acc / aTrac) : 0;
     airV = C[2].air && C[3].air && acc >= 0 ? Math.min(3, airV + 6 * dt) : Math.max(0, airV - 12 * dt);
-    const wheel = 1.03 * (sp + slipV + airV) * 3.6 + (sp > 0.1 ? gauss() * 0.15 : 0);
+    const wheel = 1.03 * Math.min(sp + slipV + airV, sim.vMax) * 3.6 + (sp > 0.1 ? gauss() * 0.15 : 0);
 
     /* CVT */
     const Pwheel = Math.max(0, (m * acc + (sp > 0.1 ? Fres(sp) : 0)) * sp);
@@ -156,12 +195,16 @@ export const demoCSV = (): string => {
     const vel = C.map(k => ((k.vu - k.vs) * 1000 / MR).toFixed(1));
     o += `${t.toFixed(3)},${Math.max(0, wheel).toFixed(1)},${(Tcvt + gauss() * 0.15).toFixed(1)},${gy},${gx},${pos.join(',')},${vel.join(',')}\n`;
     t += dt;
-    if (t > 1500) break;
+    if (t > sim.tMax) break;
   }
   return o;
 };
 
 /* O exemplo usa os dados do carro simulado; os do carro real ficam guardados e voltam
  * ao abrir um log de verdade (e são eles que vão para o armazenamento). */
-export const DEMO_CAR: Partial<CarConfig> = { mass: 260, wb: 1600, trackF: 1300, trackR: 1250, mrF: 1.6, mrR: 1.6, strokeF: 150, strokeR: 150,
+export const DEMO_CAR: Partial<CarConfig> = { mass: 180, wb: 1425, trackF: 1325, trackR: 1300, mrF: 1.6, mrR: 1.6, strokeF: 150, strokeR: 150,
+  massF: 32, massR: 38, wheelCh: '', cvtCh: '', wheelDriven: true, tAmb: 28, tCvtMax: 100 };
+
+/* Carro do exemplo do app antigo (par de DEMO_SIM_V1, para os testes de equivalência). */
+export const DEMO_CAR_V1: Partial<CarConfig> = { mass: 260, wb: 1600, trackF: 1300, trackR: 1250, mrF: 1.6, mrR: 1.6, strokeF: 150, strokeR: 150,
   massF: 62, massR: 62, wheelCh: '', cvtCh: '', wheelDriven: true, tAmb: 28, tCvtMax: 100 };

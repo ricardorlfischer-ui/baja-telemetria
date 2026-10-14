@@ -8,13 +8,15 @@ import { describe, it, expect } from 'vitest';
 import { loadLegacy, legacyCompute, legacyAnalysis, readFixture, DEMO_CAR as LEGACY_DEMO_CAR, type LegacyState } from './legacy';
 import { same } from './compare';
 import { parseLog, parseCSV } from '../src/parsers';
-import { demoCSV, DEMO_CAR } from '../src/demo';
+/* comparação com o app antigo: o exemplo com o carro dele (DEMO_SIM_V1 / DEMO_CAR_V1) */
+import { demoCSV as demoCSVSim, DEMO_SIM_V1, DEMO_CAR_V1 as DEMO_CAR } from '../src/demo';
 import { DEFAULT_CAR } from '../src/vehicle';
 import { computeSession, rangeOf, type SessionContext } from '../src/pipeline';
 import { esc } from '../src/util';
 import { SENSOR_IDS } from '../src/sensors';
 import { EXPLAIN_AREAS, getExplain } from '../src/explain';
 import { designReport, designRecTexts, designCsv, type DesignReport } from '../src/reports/design';
+const demoCSV = () => demoCSVSim(DEMO_SIM_V1);
 
 const L = loadLegacy({ ui: true });
 const { BT } = L;

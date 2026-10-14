@@ -11,8 +11,20 @@ import { range } from './util';
 
 export const parseLog = (text: string, name: string): Session => {
   const head = text.slice(0, 4000);
+  /* novo: arquivo binário (o .ftml do FT Manager renomeado para .csv) virava canais de lixo */
+  if (looksBinary(head)) throw new Error('O arquivo é binário, não um CSV. Se é o .ftml do FT Manager (mesmo renomeado para .csv), abra-o no FT Manager e exporte em CSV (com todos os canais: RPM, GPS, tensão da bateria...).');
   if (/\*\*\*BUSMASTER/.test(head) || head.includes('<Time><Tx/Rx>')) return parseBusmaster(text, name);
   return parseCSV(text, name);
+};
+
+/** Texto que não é log de texto (novo): NUL ou caractere de substituição (byte que não é
+ *  UTF-8) em mais de 2 % do começo. O .ftml do FT Manager é binário compactado. */
+export const looksBinary = (text: string): boolean => {
+  const head = text.slice(0, 4000);
+  if (!head) return false;
+  let bad = 0;
+  for (let i = 0; i < head.length; i++) { const c = head.charCodeAt(i); if (c === 0 || c === 0xfffd) bad++; }
+  return bad > head.length * 0.02;
 };
 
 /* "Shock_-_Front_Left" -> "Shock - Front Left" */

@@ -25,6 +25,7 @@ export const CAR_PARAMS = {
     mass: NUM0, wb: NUM0, trackF: NUM0, trackR: NUM0, mrF: NUM0, mrR: NUM0, strokeF: NUM0, strokeR: NUM0,
     massF: NUM0, massR: NUM0, wheelCh: STR, wheelDriven: BOOL, cvtCh: STR, tAmb: NUM, tCvtMax: NUM,
     endurance: NUM0, crr: NUM0, cda: NUM0, rho: NUM0, power: NUM0,
+    batCh: STR, batModel: STR, batWh: NUM0, batOffset: NUM, batReserve: NUM0,
     susp: {
       type: 'object', additionalProperties: true,
       properties: {

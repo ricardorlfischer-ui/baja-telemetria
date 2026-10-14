@@ -15,7 +15,7 @@
  * Tudo que muda a conta incrementa `rev`; a store da sessão assina `rev` e recalcula. */
 import { create } from 'zustand';
 import {
-  DEMO_CAR, type AnalysisConfigInput, type CarConfig, type Formula, type Pt, type SuspConfig, type TrackConfig,
+  DEMO_CAR, DEMO_CENTER, type AnalysisConfigInput, type CarConfig, type Formula, type Pt, type SuspConfig, type TrackConfig,
 } from '@baja/core';
 import type { CarProfile, CarProfileParams, Library, TrackProfile } from '../library/types';
 import { lsGet, lsSet } from './prefs';
@@ -249,7 +249,8 @@ export const useProfiles = create<ProfilesState>((set, get) => {
 });
 
 /** Configuração parcial para o computeSession (pipeline.normalizeConfig aplica os padrões).
- *  demo = sessão de exemplo: carro simulado e linha da memória, como setSession do antigo. */
+ *  demo = sessão de exemplo: carro do exemplo, pista na chácara e linha da memória, como
+ *  setSession do antigo. */
 export function configInput(demo: boolean): AnalysisConfigInput {
   const s = useProfiles.getState();
   const d = s.draft;
@@ -258,7 +259,7 @@ export function configInput(demo: boolean): AnalysisConfigInput {
     susp: { ...d.susp },
     car: demo ? { ...(s.demoCar || DEMO_CAR) } : { ...d.car },
   };
-  if (demo) input.line = s.demoLine;
+  if (demo) { Object.assign(input, DEMO_CENTER); input.line = s.demoLine; }
   if (s.formulas.length) input.formulas = s.formulas.map(f => ({ ...f }));
   return input;
 }

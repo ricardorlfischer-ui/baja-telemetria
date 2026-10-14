@@ -14,4 +14,6 @@ export * from './quality';
 export * from './sensors';
 export * from './explain';
 export * from './summary';
+export * from './merge';
+export * from './battery';
 export * from './reports/index';
