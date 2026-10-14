@@ -72,6 +72,7 @@ da sessão: dá para abrir um log real no navegador com
 | `src/parsers.ts` | `parsers.js` | `parseLog`, `parseCSV`, `parseBusmaster`, `prettyName`, `finishChannel`; novo: `looksBinary(text)` (NUL/caractere inválido em > 2 % do começo) — `parseLog` recusa arquivo binário (o `.ftml` do FT Manager renomeado para `.csv`) com mensagem pedindo para exportar em CSV |
 | `src/merge.ts` | novo | juntar vários CSV da FT numa sessão (3.9): `mergeLogs(files)`, `mergeOrder`, `logLabel` |
 | `src/battery.ts` | novo | bateria (3.10): `DEFAULT_BATTERY`, `batteryOf(car)`, `LFP_OCV`, `lfpSoc`, `lfpVolt`, `findBatteryCh`, `batteryReport(ctx, i0, i1)`, `fmtHours` |
+| `src/gpsclean.ts` | novo | limpeza da trajetória do GPS (3.11): `gpsClean(S, cfg)`, `gpsCleanOpts`, `GPS_CLEAN_DEFAULT`, `GPS_CLEAN_REASONS`, `GPS_CLEAN_LABEL` |
 | `src/logdate.ts` | novo | `guessDate(fileName, text?)`: data do teste pelo nome do arquivo da FT ou pelo cabeçalho do BUSMASTER (3.3) |
 | `src/gps.ts` | `gps.js` | `DEFAULT_CFG`, `WGS84`, `mPerDeg`, `spanOf`, `FMT_LABEL`, `detectFmt`, `toCode`, `guessGpsChannels` (além do antigo: sem nome óbvio e sem `Back_pressure`/`O2_General`, aceita `Contra_pressão`/`Sonda_Geral`, os nomes do FT Manager em português), `smooth`, `computeTrack`, `posAt`, `computeLaps`, `autoLine` |
 | `src/analysis.ts` | `analysis.js` | `DEFAULT_SUSP`, `CORNERS`, `findShocks`, `deriv`, `median`, `quant`, `interpAt`, `stoppedMask`, `suspPrep`, `velStats`, `hist`, `fft`, `welch`, `psd`, `findPeak`, `freeDecay`, `localPeaks`, `highpass`, `dropTests`, `psdMask`, `rideRates`, `gpsDynamics`, `lapProfile`, `bestLap`, `deltaToBest`, `compareLaps` |
@@ -187,7 +188,7 @@ com os números de projeto (duração, distância, voltas, melhor volta, v máx,
 canto, batidas no fim de curso, saltos, frequência natural e ζ, gradientes, potência máx,
 melhor largada, Crr/CdA, T máx da CVT, regime previsto...). Chaves estáveis (ex.:
 `susp.travel.FL`, `cvt.tmax`) porque a página "Comparar sessões" e o servidor guardam isso.
-Mudou a conta? Aumente `SUMMARY_VERSION` (o servidor recalcula). Hoje: **3**.
+Mudou a conta? Aumente `SUMMARY_VERSION` (o servidor recalcula). Hoje: **4** (limpeza do GPS, 3.11).
 
 Cada métrica tem também `scope: 'session' | 'range'`, `digits` (casas do `text`) e, quando a
 direção é óbvia para o projeto, `better: 'up' | 'down'` (ex.: melhor volta `down`, v máx `up`;
@@ -295,6 +296,35 @@ em `CarConfig` com campos opcionais fora do `DEFAULT_CAR` do antigo (`batCh`, `b
 `battery.life`, `battery.soc`, `battery.drain`, `battery.endurance`, `battery.voltageTrend` e
 `sensor.battery`.
 
+### 3.11 Limpeza da trajetória do GPS (`gpsclean.ts`)
+
+Novo. No log da FT, antes do `computeTrack` (que continua o porte fiel), `recompute` chama
+`gpsClean(S, cfg)`: devolve uma cópia da sessão com NaN nos canais X/Y onde a posição não é
+o carro, a trajetória dela e um relatório (`ctx.gpsClean`). Só tira pontos, com motivo;
+nunca inventa nem move posição. `cfg.gpsClean === false` desliga (trajetória do antigo); os
+testes de equivalência com o app antigo rodam assim. BUSMASTER (lat/lon com fix 3D) não passa
+por aqui. Regras, na ordem (`bad[i]` = 1..5):
+
+1. `edge`: código ≤ 0 ou ≥ 255 em qualquer eixo (fora da área do `track_config.h`);
+2. `noPos`: centro exato (128, 128) parado ≥ 1 s com salto (> 6 passos) para entrar ou sair e,
+   do outro lado, outro salto ou a ponta do log — o PIC manda X = Y = 128 antes de ter posição
+   e repete a última sem fix (`gps_pos.c`); o log inteiro parado no centro fica;
+3. `jump`: entre amostras seguidas, distância > `gpsVmax`·max(Δt, 0,25 s) + 3 passos corta a
+   trajetória; saem 0,5 s de cada lado do corte (a velocidade de ±0,5 s não atravessa) e
+   trechos de menos de 2 s entre cortes;
+4. `once`: além de `gpsCore` m do centro, só ficam pontos numa célula de 5 m (+ 8 vizinhas)
+   com `gpsMinPasses` passagens ou mais (visitas separadas por > 10 s);
+5. `speed`: se a velocidade da trajetória ainda passar de `gpsVmax`, o ponto sai e a
+   trajetória é refeita (até 4 vezes).
+
+Padrões (`GPS_CLEAN_DEFAULT`): `gpsVmax` 70 km/h, `gpsCore` 50 m, `gpsMinPasses` 2; campos
+opcionais do `TrackConfig` (perfil de pista, fora do `DEFAULT_CFG` do antigo). Relatório:
+`{ opts, bad, counts por motivo, total, removed, pct, breaks, vmaxRaw, vmax }`. A qualidade
+avisa `gps.clean` (o que saiu, e a v máx sem limpeza) e o `gps.border` continua contando as
+posições na borda do log cru. Card: `track.gpsClean`. Nos logs de 14/10 juntados: v máx 558 →
+41,6 km/h, aceleração longitudinal 26,8 → 0,96 g, 14 % das posições fora (8.931 na borda);
+no exemplo e nos logs limpos não sai nada.
+
 ## 4. `@baja/web`
 
 ### 4.1 Pilha
@@ -339,7 +369,7 @@ GitHub Pages sem configuração).
 | Projeto | **Ficha do carro** | `#/projeto` | `designReport` agrupado + pontos de atenção, exportar CSV, imprimir/PDF |
 | Projeto | **Comparar sessões** | `#/comparar` | escolher sessões da biblioteca → tabela de métricas lado a lado (diferença para a primeira), gráficos por métrica ao longo das datas, histogramas de velocidade do amortecedor sobrepostos |
 | Configuração | **Carro** | `#/carro` | perfis do carro (ex.: "BJ26 — setup A"): massa, geometria, suspensão, roda/CVT, resistências, bateria |
-| Configuração | **Pista e GPS** | `#/pista` | perfis de pista (track_config.h, canais X/Y, formato, linha de largada) |
+| Configuração | **Pista e GPS** | `#/pista` | perfis de pista (track_config.h, canais X/Y, formato, linha de largada, limpeza do GPS) |
 | Configuração | **Equipe** | `#/equipe` | só com servidor: usuários, convites, papéis |
 | Configuração | **Preferências** | `#/config` | tema, endereço do servidor da equipe, sair |
 

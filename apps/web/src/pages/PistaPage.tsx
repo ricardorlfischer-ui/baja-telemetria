@@ -9,7 +9,7 @@ import {
   IconArrowsExchange, IconPencil, IconRefresh, IconRoute, IconSparkles, IconTrash,
 } from '@tabler/icons-react';
 import {
-  DEFAULT_CFG, FMT_LABEL, autoLine, spanOf, trackConfigInfo,
+  DEFAULT_CFG, FMT_LABEL, GPS_CLEAN_LABEL, GPS_CLEAN_REASONS, autoLine, gpsCleanOpts, spanOf, trackConfigInfo,
   type QualityIssue, type TrackConfig,
 } from '@baja/core';
 import {
@@ -55,6 +55,15 @@ export default function PistaPage() {
   const bm = !!S?.gps;          /* BUSMASTER: posição direto da lat/lon, sem canais X/Y */
 
   const set = (p: Partial<TrackConfig>) => updateConfig(p);
+
+  /* limpeza do GPS: opções efetivas e o que saiu neste log (ctx.gpsClean do core) */
+  const clean = gpsCleanOpts(cfg);
+  const gc = ctx?.gpsClean ?? null;
+  const cleanText = gc
+    ? (gc.removed
+      ? `saíram ${gc.pct.toFixed(1)} % das posições (${GPS_CLEAN_REASONS.filter(k => gc.counts[k]).map(k => `${GPS_CLEAN_LABEL[k]}: ${gc.counts[k]}`).join('; ')}). Velocidade máxima pelo GPS: ${gc.vmaxRaw.toFixed(0)} km/h sem a limpeza → ${gc.vmax.toFixed(1)} km/h com ela.`
+      : 'nada precisou sair.')
+    : '';
 
   /* textos do diálogo antigo (cfgInfo): vão, resolução, de onde vem a posição, calibração */
   const info = useMemo(() => trackConfigInfo({ S, cfg, track: ctx?.track ?? null }), [S, cfg, ctx]);
@@ -183,6 +192,21 @@ export default function PistaPage() {
             note="A suavização é uma média móvel da posição reconstruída (os degraus de ~0,86 m do código 0–255): mais suave = velocidade e raio com menos ruído, mas curvas fechadas um pouco “cortadas”. Volta mínima evita contar duas voltas quando o carro cruza a linha duas vezes seguidas.">
             <NumField label="Suavização da posição" unit="s" value={cfg.smooth} min={0} max={3} disabled={locked} onCommit={v => set({ smooth: v })} />
             <NumField label="Volta mínima" unit="s" value={cfg.minLap} min={1} disabled={locked} onCommit={v => set({ minLap: v })} />
+          </FieldGroup>
+
+          <FieldGroup title="Limpeza do GPS" explain="track.gpsClean" sensors={['gps', 'logger']}
+            usedIn={['channel.gps_speed', 'track.distance', 'laps.lapTimes', 'dyn.gg']}
+            note={bm
+              ? 'Log do BUSMASTER: a posição vem da latitude/longitude com fix 3D e não passa pela limpeza.'
+              : <>Tira da trajetória o que não é o carro: GPS travado na borda, o “sem posição” do PIC (centro exato), saltos mais rápidos que a velocidade máxima e, longe do centro, pontos por onde o carro passou uma vez só. Só tira pontos, nunca inventa posição.{gc ? <> <b>Neste log:</b> {cleanText}</> : null}</>}>
+            <Switch size="md" disabled={locked || bm} checked={cfg.gpsClean !== false} style={{ gridColumn: '1 / -1' }}
+              label="Limpar a trajetória (recomendado)" onChange={e => set({ gpsClean: e.currentTarget.checked })} />
+            <NumField label="Velocidade máxima aceitável" unit="km/h" value={clean.vmax} min={10} max={300} disabled={locked || bm || cfg.gpsClean === false}
+              onCommit={v => set({ gpsVmax: v })} />
+            <NumField label="Raio do centro (fica tudo)" unit="m" value={clean.core} min={0} max={100000} disabled={locked || bm || cfg.gpsClean === false}
+              onCommit={v => set({ gpsCore: v })} />
+            <NumField label="Passagens mínimas longe do centro" value={clean.minPasses} min={1} max={20} disabled={locked || bm || cfg.gpsClean === false}
+              onCommit={v => set({ gpsMinPasses: Math.round(v) })} />
           </FieldGroup>
         </div>
 

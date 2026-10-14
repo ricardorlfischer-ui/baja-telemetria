@@ -87,7 +87,9 @@ function mkCase(label: string, csv: string, cfg: any, demo = true): Case {
   } catch (e) { c.errO = String((e as Error).message); }
   try {
     const Sn = parseCSV(csv, 'sintetico.csv'); Sn.demo = demo;
-    c.N = computeSession(Sn, clone(cfg), { autoLine: true });
+    /* equivalência com o antigo: sem a limpeza do GPS (novo, gpsclean.ts) */
+    c.N = computeSession(Sn, { ...clone(cfg), gpsClean: false }, { autoLine: true });
+    delete c.N.cfg.gpsClean;   /* campo novo, o antigo não tem */
   } catch (e) { c.errN = String((e as Error).message); }
   return c;
 }
@@ -414,7 +416,7 @@ for (const [f, cfg] of [['ft_log3_gps.csv', {}], ['ft_log3_gps.csv', { centerFix
   const txt = readFixture(f);
   if (txt === null) continue;
   const So = BT.parseLog(txt, f), Sn = parseLog(txt, f);
-  APP_CASES.push({ label: `${f} ${JSON.stringify(cfg)}`, O: legacyCompute(BT, So, clone(cfg), { autoLine: true }), N: computeSession(Sn, clone(cfg), { autoLine: true }) });
+  APP_CASES.push({ label: `${f} ${JSON.stringify(cfg)}`, O: legacyCompute(BT, So, clone(cfg), { autoLine: true }), N: (n => { delete n.cfg.gpsClean; return n; })(computeSession(Sn, { ...clone(cfg), gpsClean: false }, { autoLine: true })) });
 }
 
 describe('revisão: exportCSV e cfgInfo de app.js', () => {

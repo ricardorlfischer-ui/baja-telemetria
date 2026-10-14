@@ -91,7 +91,8 @@ const active0 = readJSON<{ car?: string | null; track?: string | null }>(K_ACTIV
 const formulas0 = readJSON<Formula[]>(K_FORMULAS, []);
 
 /* chaves da configuração da pista (o resto do patch é car/susp/formulas) */
-const TRACK_KEYS: (keyof TrackConfig)[] = ['lat0', 'lon0', 'centerFixed', 'sizeX', 'sizeY', 'margin', 'chX', 'chY', 'chStatus', 'fmt', 'smooth', 'minLap', 'line'];
+const TRACK_KEYS: (keyof TrackConfig)[] = ['lat0', 'lon0', 'centerFixed', 'sizeX', 'sizeY', 'margin', 'chX', 'chY', 'chStatus', 'fmt', 'smooth', 'minLap', 'line',
+  'gpsClean', 'gpsVmax', 'gpsCore', 'gpsMinPasses'];
 
 /** separa os parâmetros de um perfil de carro em carro + suspensão */
 function splitCar(p: CarProfileParams): { car: Partial<CarConfig>; susp: Partial<SuspConfig> } {

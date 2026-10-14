@@ -13,6 +13,7 @@ import { guessGpsChannels, detectFmt, toCode, spanOf } from './gps';
 import { findShocks, CORNERS } from './analysis';
 import { findWheelCh, findCvtCh } from './vehicle';
 import { findBatteryCh } from './battery';
+import { GPS_CLEAN_LABEL, GPS_CLEAN_REASONS } from './gpsclean';
 
 /** Papel de um canal do log. */
 export type ChannelRole =
@@ -263,7 +264,7 @@ function jumpEvents(t: Float64Array, d: Float64Array, limit: (dt: number) => num
 
 /* ---------------------------------------------------------------- qualidade da sessão */
 /** Qualidade dos dados de uma sessão já calculada (ctx de computeSession). */
-export function dataQuality(S: Session, ctx: Pick<SessionContext, 'cfg' | 'track' | 'stopped' | 'veh' | 'susp'>): DataQuality {
+export function dataQuality(S: Session, ctx: Pick<SessionContext, 'cfg' | 'track' | 'stopped' | 'veh' | 'susp'> & Partial<Pick<SessionContext, 'gpsClean'>>): DataQuality {
   const t = S.t, n = t.length, cfg = ctx.cfg, car = cfg.car, tr = ctx.track;
   const roles = detectRoles(S, cfg);
   const roleOf = new Map<string, ChannelRole>();
@@ -405,6 +406,21 @@ export function dataQuality(S: Session, ctx: Pick<SessionContext, 'cfg' | 'track
   if (tr.ok) {
     let nv = 0, ns = 0, ts = NaN;
     for (let i = 0; i < n; i++) if (tr.valid[i]) { nv++; if (tr.sat[i]) { ns++; if (ts !== ts) ts = t[i]; } }
+    /* com a limpeza do GPS as posições na borda saem da trajetória: conta como no log cru */
+    const gc = ctx.gpsClean;
+    if (gc && gc.removed) {
+      const parts = GPS_CLEAN_REASONS.filter(r => gc.counts[r]).map(r => `${GPS_CLEAN_LABEL[r]} ${f1(gc.counts[r] * (n > 1 ? (t[n - 1] - t[0]) / (n - 1) : 0))} s`);
+      add({
+        id: 'gps.clean', level: gc.pct > 20 ? 'warn' : 'info',
+        text: `A limpeza do GPS tirou ${f1(gc.pct)} % das posições da trajetória (${parts.join('; ')})${gc.vmaxRaw > gc.opts.vmax ? `; sem ela a velocidade máxima pelo GPS daria ${f0(gc.vmaxRaw)} km/h` : ''}.`,
+        action: 'Nada a fazer se o mapa ficou certo. Para ver tudo sem limpeza, ou mudar a velocidade máxima aceitável e o raio do centro, use Pista e GPS → Limpeza do GPS.',
+        explain: 'track.gpsClean', sensors: ['gps', 'logger'],
+      });
+    }
+    if (gc && gc.counts.edge) {
+      ns += gc.counts.edge; nv += gc.counts.edge;
+      for (let i = 0; i < n; i++) if (gc.bad[i] === 1) { if (!(t[i] >= ts)) ts = t[i]; break; }
+    }
     gpsBorderPct = pct(ns, nv);
     if (ns) {
       const sp = spanOf(cfg);

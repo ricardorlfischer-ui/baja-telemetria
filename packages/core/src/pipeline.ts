@@ -4,7 +4,7 @@
  * os textos do diálogo de Pista e GPS (cfgInfo()).
  *
  * Ordem do recompute (a mesma do app antigo, os números não mudam):
- *   trajetória → voltas → parado → dinâmica pelo GPS → veículo (roda/GPS)
+ *   (limpeza do GPS, novo: gpsclean.ts) → trajetória → voltas → parado → dinâmica pelo GPS → veículo (roda/GPS)
  *   → parado pela velocidade (sem GPS) → acelerações → suspensão → ângulos
  *   → canais susp:pitch/rollF/rollR/rough → derivados do GPS
  *   all = derivados do GPS + veículo + suspensão + log (+ fórmulas do usuário no fim). */
@@ -18,6 +18,7 @@ import { DEFAULT_CAR, vehPrep, bodyAngles, roughness } from './vehicle';
 import { finishChannel } from './parsers';
 import { idxAt, decimalsFor } from './util';
 import { applyFormulas, type FormulaIssue } from './formulas';
+import { gpsClean, type GpsCleanReport } from './gpsclean';
 
 /** Configuração como vem da interface/armazenamento: qualquer campo pode faltar (e as
  *  antigas ainda podem trazer curso/massa/MR dentro de susp). */
@@ -42,6 +43,7 @@ export interface SessionContext {
   ang: Angles;
   all: Channel[];                  /* derivados do GPS, veículo, suspensão, log, fórmulas */
   formulaErrors: FormulaIssue[];   /* fórmulas que não entraram (erro de sintaxe, canal inexistente) */
+  gpsClean?: GpsCleanReport;       /* o que a limpeza do GPS tirou (sem o campo: desligada, BUSMASTER ou sem X/Y) */
 }
 
 export type RangeMode = 'session' | 'lap' | 'view';
@@ -99,7 +101,9 @@ function buildDerived(S: Session, tr: Track, laps: Lap[], dyn: Dyn | null, veh: 
 
 /* recompute() do app antigo, com a configuração já normalizada */
 function recompute(S: Session, cfg: AnalysisConfig): SessionContext {
-  const track = computeTrack(S, cfg);
+  /* novo: posições que não são o carro saem antes da trajetória (cfg.gpsClean = false: como o antigo) */
+  const clean = cfg.gpsClean === false ? null : gpsClean(S, cfg);
+  const track = clean ? clean.track : computeTrack(S, cfg);
   const laps = computeLaps(S, track, cfg.line || null, +cfg.minLap || 10);
   let stopped = stoppedMask(S, track);
   const dyn = track.ok ? gpsDynamics(S, track) : null;
@@ -121,7 +125,7 @@ function recompute(S: Session, cfg: AnalysisConfig): SessionContext {
   const derived = buildDerived(S, track, laps, dyn, veh);
   const all = derived.concat(veh.channels, susp.channels, S.channels);
   all.forEach(c => { c.group = c.group || (c.src === 'gps' ? GPS_GROUP : 'Do log'); });
-  const ctx: SessionContext = { S, cfg, track, laps, stopped, dyn, veh, acc, susp, ang, all, formulaErrors: [] };
+  const ctx: SessionContext = { S, cfg, track, laps, stopped, dyn, veh, acc, susp, ang, all, formulaErrors: [], ...(clean ? { gpsClean: clean.report } : {}) };
   /* fórmulas do usuário: no fim, em ordem (uma pode usar a anterior) */
   if (cfg.formulas && cfg.formulas.length) ctx.all = all.concat(applyFormulas(ctx, cfg.formulas, ctx.formulaErrors));
   return ctx;

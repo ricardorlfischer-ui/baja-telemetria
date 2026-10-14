@@ -685,6 +685,25 @@ canais guardam 3 casas decimais em 16 bits (máx. ±32,767). O mesmo texto está
 
 ![Aba Calibração e testes](img/aquisicao-calibracao.png)
 
+### Limpeza do GPS
+
+O GPS às vezes manda posições que não são o carro: fica travado na borda da área (código 0
+ou 255), manda o centro exato (2,51 V) enquanto não tem posição, ou "salta" entre um log e
+outro. Sem limpeza isso vira velocidade de centenas de km/h e acelerações absurdas. Por
+isso o app limpa a trajetória antes de qualquer conta (**ligado por padrão**, em **Pista e
+GPS → Limpeza do GPS**):
+
+- tira o GPS travado na borda e o "sem posição" do PIC;
+- corta saltos mais rápidos que a **velocidade máxima aceitável** (padrão 70 km/h);
+- perto do centro (raio padrão 50 m) fica tudo; **longe do centro, só fica onde o carro
+  passou 2 vezes ou mais** — o que passou uma vez só é tratado como ruído;
+- garantia final: nenhuma velocidade pelo GPS acima da máxima aceitável.
+
+Ele só **tira** pontos (nunca inventa posição) e diz quanto tirou e por quê, no grupo
+**Limpeza do GPS** e no aviso da **Aquisição → Qualidade**. Um trecho real feito uma vez só
+longe do centro (ex.: ida aos boxes) some do mapa: aumente o raio do centro ou desligue a
+limpeza para ver tudo.
+
 ### Linha de largada e voltas
 
 Em **Pista e GPS → Prévia e linha de largada** ou no **Mapa**: **Desenhar (2 cliques)** no

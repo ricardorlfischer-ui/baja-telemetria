@@ -16,4 +16,5 @@ export * from './explain';
 export * from './summary';
 export * from './merge';
 export * from './battery';
+export * from './gpsclean';
 export * from './reports/index';

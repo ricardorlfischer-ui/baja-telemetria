@@ -62,7 +62,7 @@ function checkShape(s: SessionSummary, label: string) {
 
 describe('sessionSummary no exemplo', () => {
   it('formato, chaves estáveis, explain e sensores', () => {
-    expect(SUMMARY_VERSION).toBe(3);
+    expect(SUMMARY_VERSION).toBe(4);
     checkShape(SUM, 'exemplo');
     expect(SUM.range).toBeUndefined();
     expect(KEYS).toContain('susp.travel.FL');

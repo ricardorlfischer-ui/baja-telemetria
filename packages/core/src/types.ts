@@ -56,6 +56,11 @@ export interface TrackConfig {
   smooth: number;          /* s, média móvel da posição */
   minLap: number;          /* s, volta mínima */
   line: Pt[] | null;       /* linha de largada (2 pontos) */
+  /* limpeza da trajetória (novo, gpsclean.ts; fora do DEFAULT_CFG do antigo) */
+  gpsClean?: boolean;      /* false = trajetória com todas as posições, como o app antigo */
+  gpsVmax?: number;        /* km/h, velocidade máxima aceitável */
+  gpsCore?: number;        /* m, raio em torno do centro onde todo ponto fica */
+  gpsMinPasses?: number;   /* passagens mínimas longe do centro */
 }
 
 /** Suspensão (campos de DEFAULT_SUSP). Curso/massa/MR migraram para o carro: aqui só

@@ -1543,6 +1543,22 @@ const MORE: ExplainEntry[] = [
     related: ['quality.carData', 'susp.naturalFreq', 'power.wheelPower', 'cvt.thermalModel'],
   },
 
+  /* ---------------------------------------------------------------- limpeza do GPS (gpsclean.ts) */
+  {
+    id: 'track.gpsClean',
+    title: 'Limpeza da trajetória do GPS',
+    what: 'Antes de montar a trajetória, o app tira as posições que não são o carro: o GPS travado na borda da área, o “sem posição” do PIC (centro exato), saltos mais rápidos que o carro consegue andar e pontos longe do centro por onde o carro passou uma vez só. Só tira pontos, com o motivo; nunca inventa nem move posição. Velocidade, distância, voltas, mapa e acelerações pelo GPS saem do que ficou.',
+    sensors: [
+      sn('gps', 'required', 'os códigos X/Y do PIC (entradas 7 e 8) que são conferidos'),
+      sn('logger', 'required', 'o tempo entre as amostras: velocidade de cada salto e as passagens'),
+    ],
+    how: 'Na ordem: (1) código ≤ 0 ou ≥ 255 em qualquer eixo sai (fora da área, a posição real é desconhecida); (2) centro exato (128, 128) parado ≥ 1 s com salto para entrar ou sair sai (o PIC manda X = Y = 128 antes de ter posição, gps_pos.c); (3) entre amostras seguidas, distância > v máx × Δt (Δt ≥ 0,25 s) + 3 passos = salto: a trajetória é cortada, saem 0,5 s de cada lado e trechos de menos de 2 s entre cortes; (4) além do raio do centro (padrão 50 m) só ficam pontos numa região (célula de 5 m + 8 vizinhas) com 2 ou mais passagens (visitas separadas por > 10 s); (5) se ainda sobrar velocidade acima da máxima aceitável (padrão 70 km/h), o ponto sai e a trajetória é refeita.',
+    design: 'Sem a limpeza, um salto de 160 m entre duas amostras vira 500 km/h, acelerações de dezenas de g e voltas que não fecham — números que não podem ir para o projeto nem para os juízes. Com ela, v máx, distância, voltas e g-g saem só de posições que o carro de fato percorreu.',
+    limits: 'Um trecho real feito uma vez só longe do centro (ex.: ida aos boxes) sai do mapa; aumente o raio do centro ou desligue a limpeza em Pista e GPS para ver tudo. A velocidade máxima aceitável tem que ficar acima da máxima real do carro (o padrão de 70 km/h está bem acima dos ~50 km/h do carro). Não vale para o log do BUSMASTER (lat/lon com fix 3D).',
+    test: 'Compare o mapa com e sem limpeza (Pista e GPS) num log com volta conhecida; o aviso “A limpeza do GPS tirou …” na Aquisição diz quanto saiu e por quê. Muita coisa na borda: aumente a área no track_config.h.',
+    related: ['track.gpsPosition', 'quality.gpsBorder', 'track.distance', 'laps.lapTimes'],
+  },
+
   /* ---------------------------------------------------------------- bateria (battery.ts) */
   {
     id: 'battery.life',

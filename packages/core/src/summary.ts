@@ -87,8 +87,10 @@ import { designReport, type DesignReport } from './reports/design';
 /** Versão das contas do resumo (o servidor recalcula resumos com versão antiga).
  *  2: power.latMax = null sem aceleração lateral (antes 0); sensores das largadas (distância
  *     do GPS com roda de tração), dos saltos (estático medido parado) e do fim de curso.
- *  3: cada métrica ganhou scope, digits e (quando óbvio) better; valores iguais aos da 2. */
-export const SUMMARY_VERSION = 3;
+ *  3: cada métrica ganhou scope, digits e (quando óbvio) better; valores iguais aos da 2.
+ *  4: limpeza da trajetória do GPS (gpsclean.ts) e nomes do GPS do FT Manager em português:
+ *     v máx, distância, voltas e acelerações pelo GPS mudam nos logs com saltos. */
+export const SUMMARY_VERSION = 4;
 
 export type SummaryGroup = 'Sessão' | 'Suspensão' | 'Trem de força' | 'CVT' | 'Qualidade';
 

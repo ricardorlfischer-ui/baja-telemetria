@@ -44,6 +44,7 @@ export const TRACK_PARAMS = {
     lat0: { type: 'number', minimum: -90, maximum: 90 }, lon0: { type: 'number', minimum: -180, maximum: 180 },
     centerFixed: BOOL, sizeX: SIZE, sizeY: SIZE, margin: SIZE, chX: STR, chY: STR, chStatus: STR,
     fmt: { type: 'string', enum: ['auto', 'V', 'mV', 'code', 'm'] }, smooth: NUM0, minLap: NUM0,
+    gpsClean: BOOL, gpsVmax: NUM0, gpsCore: NUM0, gpsMinPasses: NUM0,
     line: { type: ['array', 'null'], minItems: 2, maxItems: 2, items: PT },
   },
 } as const;
