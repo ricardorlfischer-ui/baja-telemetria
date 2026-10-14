@@ -337,6 +337,15 @@ export function dataQuality(S: Session, ctx: Pick<SessionContext, 'cfg' | 'track
       explain: 'quality.timeGaps', sensors: ['logger'],
     });
   }
+  /* novo: log curtíssimo — quase sempre uma exportação de só um pedaço do log no FT Manager */
+  if (!S.demo && n > 1 && duration < 30) {
+    add({
+      id: 'log.short', level: 'warn',
+      text: `O log tem só ${f1(duration)} s.`,
+      action: 'Se o teste foi mais longo, exporte o log inteiro de novo no FT Manager (sem zoom num trecho), com todos os canais marcados na lista da esquerda.',
+      explain: 'quality.timeGaps', sensors: ['logger'],
+    });
+  }
 
   /* ---------- GPS */
   let gpsBorderPct: number | null = null;
@@ -376,10 +385,18 @@ export function dataQuality(S: Session, ctx: Pick<SessionContext, 'cfg' | 'track
     });
   }
   if (!S.gps && !(gx && gy)) {
+    /* novo: só um dos dois eixos no CSV (o FT Manager exporta só os canais marcados na lista) */
+    const keys = S.channels.map(c => c.key);
+    const ax = keys.find(k => /^(back_pressure|contra.?press[aã]o)$/i.test(k)), ay = keys.find(k => /^(o2_general|sonda.?geral)$/i.test(k));
+    const one = !!ax !== !!ay ? (ax || ay)! : null;
     add({
       id: 'gps.missing', level: 'warn',
-      text: 'Este log não tem os canais de posição do GPS (X/Y do expander).',
-      action: 'Confira no FT Manager se as entradas 7 (X, Leste) e 8 (Y, Norte) do expander estão sendo gravadas, ou escolha os canais em Pista e GPS. Sem GPS não há mapa, voltas, aceleração lateral nem calibração da roda.',
+      text: one
+        ? `Este log tem só um eixo do GPS (${one}); falta o ${ax ? 'Y (Sonda_Geral / O2_General, entrada 8)' : 'X (Contra_pressão / Back_pressure, entrada 7)'}. Com um eixo só não há posição.`
+        : 'Este log não tem os canais de posição do GPS (X/Y do expander).',
+      action: one
+        ? 'O FT Manager exporta no CSV só os canais marcados na lista da esquerda: marque Contra pressão e Sonda Geral (e os outros que interessam, como Tensão da Bateria) e exporte de novo.'
+        : 'Confira no FT Manager se as entradas 7 (X, Leste) e 8 (Y, Norte) do expander estão sendo gravadas e marcadas na exportação do CSV, ou escolha os canais em Pista e GPS. Sem GPS não há mapa, voltas, aceleração lateral nem calibração da roda.',
       explain: 'track.gpsPosition', sensors: ['gps'],
     });
   } else if (!tr.ok && !noFix) {

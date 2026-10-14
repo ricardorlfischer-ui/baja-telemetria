@@ -81,3 +81,13 @@ describe('mergeLogs', () => {
     expect(() => parseLog(bin.text, bin.name)).toThrow(/ftml/);
   });
 });
+
+describe('avisos dos logs de 14/10 (exportação incompleta do FT Manager)', () => {
+  it('um eixo do GPS só e log curto', async () => {
+    const { dataQuality } = await import('../src/quality');
+    const S = parseLog(readFixture('teste_1410/Log 8_20261014-1038_20261014-1040.csv')!, 'Log 8.csv');
+    const ids = dataQuality(S, computeSession(S, {})).issues.map(i => i.id + ': ' + i.text);
+    expect(ids.find(x => x.startsWith('gps.missing'))).toMatch(/só um eixo do GPS \(Sonda_Geral\); falta o X/);
+    expect(ids.find(x => x.startsWith('log.short'))).toMatch(/10\.0 s/);
+  });
+});

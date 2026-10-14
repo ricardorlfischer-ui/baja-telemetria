@@ -119,8 +119,8 @@ describe('logs reais', () => {
     sane(q);
     expect(q.roles).toEqual({ gps_x: 'Back_pressure', gps_y: 'O2_General' });
     expect(q.gpsBorderPct).toBe(0);
-    expect(ids(q).sort()).toEqual(['car.data', 'cvt.none', 'log.rate', 'susp.none', 'wheel.none'].sort());
-    expect(q.issues.every(i => i.level === 'info')).toBe(true);
+    expect(ids(q).sort()).toEqual(['car.data', 'cvt.none', 'log.rate', 'log.short', 'susp.none', 'wheel.none'].sort());
+    expect(q.issues.every(i => i.level === 'info' || i.id === 'log.short')).toBe(true);   /* recorte de 4,8 s do log */
   });
   for (const f of ['ft_log3_shocks_compact.csv', 'Log 3_20261005-1648_20261005-1651.csv']) {
     it(`${f}: FL, FR e RR constantes em 0, só RL com sinal`, () => {

@@ -111,6 +111,25 @@ function Data-De([string]$arquivo) {
   return [datetime]::MinValue
 }
 
+<# Data do código mais recente do servidor e da interface (o que entra em cada montagem). #>
+function Fontes {
+  $lock = Join-Path $Repo 'package-lock.json'
+  $core = Join-Path $Repo 'packages\core\src'
+  return @{
+    Servidor = Mais-Recente @($core, (Join-Path $Repo 'packages\core\package.json'),
+      (Join-Path $Repo 'apps\server\src'), (Join-Path $Repo 'apps\server\tsup.config.ts'), (Join-Path $Repo 'apps\server\package.json'), $lock)
+    Web = Mais-Recente @($core, (Join-Path $Repo 'packages\core\package.json'),
+      (Join-Path $Repo 'apps\web\src'), (Join-Path $Repo 'apps\web\index.html'), (Join-Path $Repo 'apps\web\vite.config.ts'),
+      (Join-Path $Repo 'apps\web\postcss.config.cjs'), (Join-Path $Repo 'apps\web\package.json'), $lock)
+  }
+}
+
+<# O código mudou depois da última montagem (git pull, mudança no app)? #>
+function Montagem-Atrasada {
+  $f = Fontes
+  return ($f.Servidor -gt (Data-De $MarcaServidor)) -or ($f.Web -gt (Data-De $MarcaWeb))
+}
+
 function Ultimas-Linhas([string]$arquivo, [int]$n) {
   if (-not (Test-Path -LiteralPath $arquivo)) { return '(sem log)' }
   return ((Get-Content -LiteralPath $arquivo -Tail $n -Encoding UTF8 -ErrorAction SilentlyContinue) -join "`r`n")
@@ -168,6 +187,17 @@ try {
       while ((Get-Date) -lt $limite -and @(Quem-Escuta $Port).Count -gt 0) { Start-Sleep -Milliseconds 200 }
       $donos = @(Quem-Escuta $Port)
     }
+  }
+
+  # ---- a'') rodando com uma montagem mais velha que o código: o servidor continuaria
+  # mostrando o app antigo para sempre (ele só monta ao subir). Fecha para montar e subir de novo.
+  if ((E-Local $info) -and (Montagem-Atrasada)) {
+    Escreve "O app foi atualizado depois que a telemetria abriu: fechando o servidor para montar a versão nova (os logs guardados continuam lá)."
+    foreach ($id in $donos) { Para-Arvore $id }
+    $limite = (Get-Date).AddSeconds(10)
+    while ((Get-Date) -lt $limite -and @(Quem-Escuta $Port).Count -gt 0) { Start-Sleep -Milliseconds 200 }
+    $donos = @(Quem-Escuta $Port)
+    $info = if ($donos.Count -gt 0) { Le-Info $Port } else { $null }
   }
 
   if (E-Local $info) {
@@ -242,12 +272,9 @@ try {
   $nm = Join-Path $Repo 'node_modules'
   $lock = Join-Path $Repo 'package-lock.json'
   $precisaInstalar = (-not (Test-Path -LiteralPath $nm)) -or ((Data-De $lock) -gt (Data-De (Join-Path $nm '.package-lock.json')))
-  $core = Join-Path $Repo 'packages\core\src'
-  $fonteServidor = Mais-Recente @($core, (Join-Path $Repo 'packages\core\package.json'),
-    (Join-Path $Repo 'apps\server\src'), (Join-Path $Repo 'apps\server\tsup.config.ts'), (Join-Path $Repo 'apps\server\package.json'), $lock)
-  $fonteWeb = Mais-Recente @($core, (Join-Path $Repo 'packages\core\package.json'),
-    (Join-Path $Repo 'apps\web\src'), (Join-Path $Repo 'apps\web\index.html'), (Join-Path $Repo 'apps\web\vite.config.ts'),
-    (Join-Path $Repo 'apps\web\postcss.config.cjs'), (Join-Path $Repo 'apps\web\package.json'), $lock)
+  $f = Fontes
+  $fonteServidor = $f.Servidor
+  $fonteWeb = $f.Web
   # pela marca de montagem completa (e os arquivos que o servidor precisa), não pela data do
   # index.js/index.html: esses existem também numa montagem que parou no meio
   $servidorInteiro = (Test-Path -LiteralPath $ServerJs) -and (Test-Path -LiteralPath $ServerWorker)
