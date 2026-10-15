@@ -275,26 +275,37 @@ servidor, ou "Abrir arquivo sem salvar" com vários arquivos).
 ### 3.10 Bateria (`battery.ts`)
 
 Novo (não é porte). Bateria do carro: Aliant YLP07, LiFePO4 4S, 12,8 V, 24 Wh; o carro não tem
-carga na bateria. `batteryReport(ctx, i0, i1)`:
+carga na bateria. A carga sai da tensão de **repouso** (motor parado, tensão estável): com o
+motor ligado a tensão oscila ±0,4 V com a carga (bomba, bobina) e a curva do LiFePO4 é quase
+plana, então uma reta na tensão com carga não enxerga a descarga (nos logs de 14/10 dava
+"> 34 h"; pelo repouso, 13,18 → 12,76 V em 47 min = ~52 %/h ≈ 12 W). `batteryReport(ctx, i0, i1)`:
 
-1. canal: `car.batCh` ou `findBatteryCh` (`/batt?er[iy]|vbat|^bat/i`: `Battery_voltage`, `Tensão_da_bateria`);
+1. canal: `car.batCh` ou `findBatteryCh` (`/batt?er[iy]|vbat|^bat/i`: `Battery_voltage`,
+   `Tensão_da_bateria`); rotação: canal `/rpm|rotação|engine speed/i`;
 2. tensão real = gravada + `offset` (a FT450 lê ~0,5 V a menos que o multímetro), só 5–20 V;
-3. reta por mínimos quadrados v = a + b·t no trecho; pontas da reta → carga pela tabela
-   `LFP_OCV` ([10,0 V 0 %] … [12,0 10] [12,5 20] [12,8 30] [12,9 40] [13,0 50] [13,1 60]
-   [13,2 70] [13,3 80] [13,4 90] [13,6 100], reta entre os pontos);
-4. ritmo (%/h) = carga que caiu ÷ horas; dura ainda = (carga no fim − reserva) ÷ ritmo;
-   cheia = (100 − reserva) ÷ ritmo; W = carga que caiu × Wh ÷ horas; A ≈ W ÷ 12,8; enduro =
-   100 − ritmo × `car.endurance`.
+3. `restPoints(t, V, rpm, i0, i1)`: janelas de 3 s seguidas com rotação ≤ 50 rpm e
+   máx − mín ≤ 0,05 V viram um ponto por trecho (mediana); ponto 0,1 V abaixo de um repouso
+   mais tarde = carga ligada (`loaded`, fica fora). Constantes em `REST`;
+4. carga de cada repouso pela tabela `LFP_OCV` ([10,0 V 0 %] … [12,0 10] [12,5 20] [12,8 30]
+   [12,9 40] [13,0 50] [13,1 60] [13,2 70] [13,3 80] [13,4 90] [13,6 100], reta entre os pontos);
+5. ritmo (%/h) = −inclinação da reta de mínimos quadrados carga × tempo de log nos repousos;
+   carga agora = a do último repouso; dura ainda = (carga agora − reserva) ÷ ritmo;
+   cheia = (100 − reserva) ÷ ritmo; W = ritmo ÷ 100 × Wh; A ≈ W ÷ 12,8; enduro =
+   100 − ritmo × `car.endurance`; `sag` = mediana do repouso − mediana com o motor ligado
+   (> 300 rpm).
 
-`status`: `charging` (mediana > 13,8 V), `short` (< 60 s), `flat` (queda da reta < 1 passo de
-resolução do canal → só limite inferior, "> X h"), `ok`. `notes`: log < 20 min, queda < 5
-passos, carga < 20 %. Devolve `tiles` (`left`, `full`, `soc`, `drop`, `power`, `endurance`),
-`plot` (tensão real + reta, `battery.voltageTrend`), `curvePlot` (curva com as pontas,
-`battery.soc`), os números e `sensors` (`battery`, `logger`, `car_data`). Bateria configurável
-em `CarConfig` com campos opcionais fora do `DEFAULT_CAR` do antigo (`batCh`, `batModel`,
-`batWh`, `batOffset`, `batReserve`; `batteryOf(car)` aplica `DEFAULT_BATTERY`). Cards:
-`battery.life`, `battery.soc`, `battery.drain`, `battery.endurance`, `battery.voltageTrend` e
-`sensor.battery`.
+`status`: `charging` (repouso > 13,8 V), `short` (< 60 s), `noRpm` (sem canal de rotação),
+`noRest` (menos de 2 repousos ou menos de 5 min entre o primeiro e o último), `flat` (a carga
+de repouso caiu menos de 2 %), `ok`. Fora de `ok` não há duração nem consumo (nada de limite
+inferior): o texto diz o que gravar (FT ligada com o motor parado ~10 s no começo e no fim de
+cada teste). `notes`: repousos cobrindo < 20 min, menos de 3 repousos, carga < 20 %, repousos
+com carga ligada. Devolve `tiles` (`left`, `full`, `soc`, `rate`, `power`, `endurance`, `sag`),
+`plot` (tensão real + repousos + tendência, `battery.voltageTrend`), `curvePlot` (curva com o
+pedaço percorrido, `battery.soc`), `rest`, os números e `sensors` (`battery`, `engine_rpm`,
+`logger`, `car_data`). Bateria configurável em `CarConfig` com campos opcionais fora do
+`DEFAULT_CAR` do antigo (`batCh`, `batModel`, `batWh`, `batOffset`, `batReserve`;
+`batteryOf(car)` aplica `DEFAULT_BATTERY`). Cards: `battery.life`, `battery.soc`,
+`battery.drain`, `battery.endurance`, `battery.voltageTrend` e `sensor.battery`.
 
 ### 3.11 Limpeza da trajetória do GPS (`gpsclean.ts`)
 

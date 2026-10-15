@@ -412,19 +412,24 @@ Carro.
 ### Bateria
 
 Quanto a bateria (**Aliant YLP07**, LiFePO4 12,8 V, 24 Wh) ainda dura, pela queda da tensão
-que a FT450 grava (canal **Tensão da bateria** — precisa estar no CSV exportado). Em
-destaque, **quanto ainda dura** até a reserva (padrão 10 %) com o consumo do trecho; nos
-números, **carga cheia dura**, **carga agora** (pela tensão), **queda da tensão** (V/h),
-**consumo médio** (W e A) e **enduro** (quanto sobra saindo cheia, ou em que minuto acaba).
-Gráficos: a tensão real com a reta de tendência e a curva tensão × carga do LiFePO4.
+**em repouso** que a FT450 grava (canais **Tensão da bateria** e **RPM** — os dois precisam
+estar no CSV exportado). Em destaque, **quanto ainda dura** até a reserva (padrão 10 %) com
+o consumo do trecho; nos números, **carga cheia dura**, **carga agora** (no último repouso),
+**ritmo de descarga** (%/h), **consumo médio** (W e A), **enduro** (quanto sobra saindo
+cheia, ou em que minuto acaba) e **queda com o motor ligado**. Gráficos: a tensão real com os
+repousos e a tendência, e a curva tensão × carga do LiFePO4.
 
+- **Repouso = motor parado e tensão estável.** Com o motor ligado a tensão oscila ~0,4 V com a
+  bomba e a bobina, e a curva do LiFePO4 é quase plana (≈ 0,1 V a cada 10 % de carga): só o
+  repouso mede a carga. **Deixe a FT ligada com o motor parado uns 10 s no começo e no fim de
+  cada teste** (e entre um log e outro). Sem dois repousos com 5 min entre eles o app não dá
+  número e diz o que gravar — em vez de chutar.
+- Nos logs de 14/10 juntados: repouso de 13,18 V (68 %) no começo a 12,76 V (29 %) depois de
+  47 min de log → ~52 %/h, **~12 W (≈ 1 A)**: cheia dura ~1 h 45 min.
 - A FT450 lê **~0,5 V a menos** que o multímetro: o app soma essa correção antes de tudo.
   O valor, a energia da bateria (Wh), a reserva e o canal ficam na página **Carro → Bateria**.
-- A curva do LiFePO4 é muito plana (≈ 0,1 V a cada 10 % de carga): log curto dá só a ordem de
-  grandeza, e o app avisa. Para um número firme, grave **20 min ou mais** com o carro ligado.
-  Sem queda medível o app mostra só um limite (“mais de …”); acima de 13,8 V entende que a
-  bateria está no carregador.
-- Logs juntados contam só o tempo de carro ligado — o que gasta a bateria.
+- Acima de 13,8 V em repouso o app entende que a bateria está no carregador. Logs juntados
+  contam só o tempo com a FT ligada.
 
 ### Dinâmica
 

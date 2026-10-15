@@ -111,7 +111,7 @@ function Content({ label, rep }: { label: string; rep: BatteryReport }) {
         <Grid2>
           <RepChart
             plot={rep.plot} title="Tensão real da bateria" height={320} onClickX={t => seek(t)}
-            subtitle="Leitura da FT + correção, com a reta de tendência usada nas contas. Clique para ir ao instante."
+            subtitle="Leitura da FT + correção. Em destaque, os trechos de repouso (motor parado, tensão estável) e a tendência da carga que entra nas contas: com o motor ligado a tensão oscila com a carga e não mede a descarga. Clique para ir ao instante."
           />
           <RepChart
             plot={rep.curvePlot} title="Curva tensão × carga (LiFePO4 12,8 V)" height={320}
@@ -126,12 +126,21 @@ function Content({ label, rep }: { label: string; rep: BatteryReport }) {
 /* Destaque: a frase principal com a cor do status. */
 function Verdict({ rep }: { rep: BatteryReport }) {
   const left = rep.tiles.find(t => t.key === 'left');
-  const st: Status = rep.status === 'ok' ? (rep.socEnd < 20 ? 'crit' : 'good') : rep.status === 'flat' ? 'good' : 'warn';
+  /* com a descarga medida: crítico abaixo de 20 % de carga, atenção com menos de 30 min */
+  const st: Status = rep.status === 'ok'
+    ? (rep.socEnd < 20 ? 'crit' : (rep.hoursLeft ?? 0) < 0.5 ? 'warn' : 'good')
+    : 'warn';
   const color = STATUS_COLOR[st];
   const Ico = st === 'good' ? IconCircleCheck : st === 'crit' ? IconAlertTriangle : IconInfoCircle;
-  const title = rep.status === 'ok' || rep.status === 'flat'
-    ? `${left?.text ?? '—'} até ${rep.bat.reserve} % de carga`
-    : rep.status === 'charging' ? 'Bateria sendo carregada' : 'Log curto demais';
+  const TITLE: Record<NonNullable<BatteryReport['status']>, string> = {
+    ok: `${left?.text ?? '—'} até ${rep.bat.reserve} % de carga`,
+    flat: 'Descarga pequena demais para medir neste log',
+    noRest: 'Sem estimativa: faltam trechos de repouso',
+    noRpm: 'Sem estimativa: falta o canal de rotação',
+    charging: 'Bateria sendo carregada',
+    short: 'Log curto demais',
+  };
+  const title = rep.status ? TITLE[rep.status] : '—';
   return (
     <Paper withBorder radius="md" p="lg" style={{ borderLeft: `6px solid ${color}` }}>
       <Group justify="space-between" align="flex-start" wrap="nowrap" gap="md">
